@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { titleForPathname } from './lib/pageTitles'
+import { syncSocialMetaForRoute } from './lib/socialMeta'
 
 const Layout = lazy(() =>
   import('./components/Layout').then((m) => ({ default: m.Layout })),
@@ -80,10 +82,23 @@ function ScrollToTopOnRouteChange() {
   return null
 }
 
+function DocumentTitleSync() {
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    const title = titleForPathname(pathname)
+    document.title = title
+    syncSocialMetaForRoute(pathname)
+  }, [pathname])
+
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTopOnRouteChange />
+      <DocumentTitleSync />
       <Suspense fallback={<div className="min-h-screen bg-eon-bg" />}>
         <Routes>
           <Route element={<Layout />}>
