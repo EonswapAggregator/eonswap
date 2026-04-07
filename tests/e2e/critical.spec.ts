@@ -48,3 +48,50 @@ test('status page supports URL-prefill for swap mode', async ({ page }) => {
   await expect(page.getByText('Swap mode uses source chain only')).toBeVisible()
   await expect(page.locator('input[placeholder="0x... transaction hash"]')).toHaveValue(hash)
 })
+
+test('admin dashboard filters and search operate with seeded data', async ({ page }) => {
+  const now = Date.now()
+  await page.addInitScript((ts) => {
+    const payload = {
+      state: {
+        history: [
+          {
+            id: 'a1',
+            status: 'success',
+            createdAt: ts,
+            summary: 'Swap 10 USDC → ~0.003 ETH',
+            txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            chainId: 1,
+            from: '0x114629C43Fa2528E5295b2982765733Acf3aCadA',
+          },
+          {
+            id: 'b1',
+            status: 'failed',
+            createdAt: ts - 32 * 24 * 60 * 60 * 1000,
+            summary: 'Bridge 25 USDC → ~24.8 USDC (failed)',
+            txHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            chainId: 42161,
+            from: '0x114629C43Fa2528E5295b2982765733Acf3aCadA',
+          },
+        ],
+      },
+      version: 0,
+    }
+    window.localStorage.setItem('eonswap-session', JSON.stringify(payload))
+  }, now)
+
+  await page.goto('/admin?e2eAdmin=1')
+  await expect(page.getByRole('heading', { name: 'Transaction dashboard' })).toBeVisible()
+
+  await page.getByRole('button', { name: /success/i }).click()
+  await expect(page.getByText('Rows: 1')).toBeVisible()
+
+  await page.getByPlaceholder('Search hash, wallet, summary, chain...').fill('bridge')
+  await expect(page.getByText('Rows: 0')).toBeVisible()
+
+  await page.getByPlaceholder('Search hash, wallet, summary, chain...').fill('')
+  await page.getByRole('button', { name: /^all$/i }).first().click()
+  await page.getByRole('button', { name: /all time/i }).click()
+  await expect(page.getByText('Rows: 2')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Export CSV' })).toBeVisible()
+})

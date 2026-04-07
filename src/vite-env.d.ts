@@ -19,6 +19,7 @@ interface ImportMetaEnv {
   readonly VITE_HEALTH_WARN_LIFI_MS?: string
   readonly VITE_HEALTH_WARN_COINGECKO_MS?: string
   readonly VITE_HEALTH_WARN_ETHERSCAN_MS?: string
+  readonly VITE_E2E_ADMIN_BYPASS?: string
 }
 
 interface ImportMeta {

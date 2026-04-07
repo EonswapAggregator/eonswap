@@ -151,7 +151,7 @@ export const useEonSwapStore = create<EonSwapState>()(
               blockNumber: item.blockNumber,
             },
             ...s.history,
-          ].slice(0, 50),
+          ].slice(0, 5000),
         }))
       },
 
@@ -167,7 +167,7 @@ export const useEonSwapStore = create<EonSwapState>()(
     }),
     {
       name: 'eonswap-session',
-      storage: createJSONStorage(() => sessionStorage),
+      storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         history: s.history,
         sellToken: s.sellToken,

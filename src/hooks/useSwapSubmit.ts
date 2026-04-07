@@ -16,6 +16,7 @@ import {
 import { formatTokenAmountUi } from '../lib/format'
 import { isNativeToken } from '../lib/tokens'
 import { toUserFacingErrorMessage } from '../lib/errors'
+import { sendTxEventToRelay } from '../lib/txEvents'
 import { wagmiConfig } from '../wagmi'
 import { useEonSwapStore } from '../store/useEonSwapStore'
 
@@ -141,6 +142,17 @@ export function useSwapSubmit() {
         status: receipt.status === 'success' ? 'success' : 'failed',
         blockNumber: Number(receipt.blockNumber),
       })
+      if (receipt.status === 'success') {
+        void sendTxEventToRelay({
+          kind: 'swap',
+          status: 'success',
+          txHash: hash,
+          chainId,
+          wallet: address,
+          summary,
+          at: Date.now(),
+        })
+      }
     } catch (e) {
       if (e instanceof UserRejectedRequestError) {
         patchActivity(activityId, {

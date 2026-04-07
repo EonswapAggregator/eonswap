@@ -6,6 +6,10 @@ const CHECK_TIMEOUT_MS = 12_000
 const POLL_MS = 60_000
 const ALERT_WEBHOOK_URL = process.env.RELAY_ALERT_WEBHOOK_URL?.trim() || ''
 const ALERT_COOLDOWN_MS = Number(process.env.RELAY_ALERT_COOLDOWN_MS || 180_000)
+const TELEGRAM_BOT_TOKEN = process.env.RELAY_TELEGRAM_BOT_TOKEN?.trim() || ''
+const TELEGRAM_CHAT_ID = process.env.RELAY_TELEGRAM_CHAT_ID?.trim() || ''
+const ALLOWED_ORIGIN = process.env.RELAY_ALLOWED_ORIGIN?.trim() || '*'
+const EVENT_RATE_LIMIT_PER_MIN = Number(process.env.RELAY_EVENTS_RATE_LIMIT_PER_MIN || 60)
 const WARN_LATENCY_MS = {
   kyber: Number(process.env.RELAY_WARN_KYBER_MS || 2500),
   lifi: Number(process.env.RELAY_WARN_LIFI_MS || 3500),
@@ -35,6 +39,8 @@ const status = {
   },
 }
 let lastAlertAt = 0
+const eventRateMap = new Map()
+const recentTxEvents = new Map()
 
 function classifyError(error) {
   const msg = String(error?.message || error || '')
@@ -81,6 +87,35 @@ function updateSla(provider, ok) {
   status.providers[provider].h24 = h24
 }
 
+function getClientIp(req) {
+  const xff = String(req.headers['x-forwarded-for'] || '')
+  return xff.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown'
+}
+
+function isRateLimited(req) {
+  const now = Date.now()
+  const key = getClientIp(req)
+  const entry = eventRateMap.get(key) || { count: 0, resetAt: now + 60_000 }
+  if (now > entry.resetAt) {
+    entry.count = 0
+    entry.resetAt = now + 60_000
+  }
+  entry.count += 1
+  eventRateMap.set(key, entry)
+  return entry.count > EVENT_RATE_LIMIT_PER_MIN
+}
+
+function alreadyProcessedTx(hash) {
+  if (!hash) return false
+  const now = Date.now()
+  for (const [h, t] of recentTxEvents.entries()) {
+    if (now - t > 15 * 60_000) recentTxEvents.delete(h)
+  }
+  if (recentTxEvents.has(hash)) return true
+  recentTxEvents.set(hash, now)
+  return false
+}
+
 async function sendAlert(message) {
   if (!ALERT_WEBHOOK_URL) return
   const now = Date.now()
@@ -97,6 +132,23 @@ async function sendAlert(message) {
     })
   } catch {
     // swallow webhook errors to keep relay non-blocking
+  }
+}
+
+async function sendTelegramMessage(message) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return
+  try {
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
+        disable_web_page_preview: true,
+      }),
+    })
+  } catch {
+    // non-blocking
   }
 }
 
@@ -222,7 +274,7 @@ async function runChecks() {
 function json(res, code, payload) {
   res.writeHead(code, {
     'content-type': 'application/json; charset=utf-8',
-    'access-control-allow-origin': '*',
+    'access-control-allow-origin': ALLOWED_ORIGIN,
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
@@ -234,6 +286,51 @@ function json(res, code, payload) {
 
 createServer(async (req, res) => {
   const u = new URL(req.url || '/', `http://${req.headers.host}`)
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'access-control-allow-origin': ALLOWED_ORIGIN,
+      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'access-control-allow-headers': 'content-type,accept',
+    })
+    res.end()
+    return
+  }
+  if (req.method === 'POST' && u.pathname === '/events/tx') {
+    if (isRateLimited(req)) return json(res, 429, { ok: false, error: 'Rate limited' })
+    let body = ''
+    req.on('data', (chunk) => {
+      body += String(chunk)
+    })
+    await new Promise((resolve) => req.on('end', resolve))
+    try {
+      const payload = JSON.parse(body || '{}')
+      const kind = payload?.kind === 'bridge' ? 'Bridge' : 'Swap'
+      const txHash = String(payload?.txHash || '')
+      if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+        return json(res, 400, { ok: false, error: 'Invalid tx hash' })
+      }
+      if (alreadyProcessedTx(txHash)) return json(res, 200, { ok: true, dedup: true })
+      const shortHash =
+        txHash.length > 14 ? `${txHash.slice(0, 10)}...${txHash.slice(-6)}` : txHash || 'unknown'
+      const chainId = Number(payload?.chainId || 0)
+      const wallet = String(payload?.wallet || '')
+      const summary = String(payload?.summary || '')
+      const msg = [
+        '✅ EonSwap transaction success',
+        `Type: ${kind}`,
+        `Chain: ${chainId || 'unknown'}`,
+        `Tx: ${shortHash}`,
+        wallet ? `Wallet: ${wallet}` : '',
+        summary ? `Summary: ${summary}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+      await sendTelegramMessage(msg)
+      return json(res, 200, { ok: true })
+    } catch {
+      return json(res, 400, { ok: false, error: 'Invalid payload' })
+    }
+  }
   if (u.pathname === '/healthz') {
     return json(res, 200, { ok: true, service: 'eonswap-monitor-relay' })
   }

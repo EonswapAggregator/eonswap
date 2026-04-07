@@ -62,6 +62,9 @@ const DisclaimerPage = lazy(() =>
 const AmlPolicyPage = lazy(() =>
   import('./pages/AmlPolicyPage').then((m) => ({ default: m.AmlPolicyPage })),
 )
+const AdminPage = lazy(() =>
+  import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })),
+)
 
 function ScrollToTopOnRouteChange() {
   const { pathname, hash } = useLocation()
@@ -99,6 +102,7 @@ export default function App() {
             <Route path="/risk-disclosure" element={<RiskDisclosurePage />} />
             <Route path="/disclaimer" element={<DisclaimerPage />} />
             <Route path="/aml-policy" element={<AmlPolicyPage />} />
+            <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

@@ -31,6 +31,8 @@ import { formatTokenAmountUi } from '../lib/format'
 import { toUserFacingErrorMessage } from '../lib/errors'
 import { isNativeToken, tokensForChain } from '../lib/tokens'
 import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
+import { useEonSwapStore } from '../store/useEonSwapStore'
+import { sendTxEventToRelay } from '../lib/txEvents'
 
 const BRIDGE_PENDING_STORAGE_KEY = 'eonswap.bridge.pending.v1'
 const BRIDGE_RECOVERY_TTL_MS = 24 * 60 * 60 * 1000
@@ -178,6 +180,10 @@ export function BridgePage() {
     toChainId: number
     bridge?: string
   } | null>(null)
+  const [bridgeActivityId, setBridgeActivityId] = useState<string | null>(null)
+  const bridgeReportedRef = useRef<string | null>(null)
+  const addActivity = useEonSwapStore((s) => s.addActivity)
+  const patchActivity = useEonSwapStore((s) => s.patchActivity)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -492,6 +498,16 @@ export function BridgePage() {
     })
     setBridgeStatus({ status: 'PENDING', substatus: 'WAIT_SOURCE_CONFIRMATION' })
     setBridgeStatusError(null)
+    const activityId = crypto.randomUUID()
+    setBridgeActivityId(activityId)
+    addActivity({
+      id: activityId,
+      status: 'pending',
+      summary: `Bridge ${amountInput.trim() || '0'} ${fromToken.symbol} → ~${receiveLabel}`,
+      txHash: hash,
+      chainId: fromChainId,
+      from: address,
+    })
   }
 
   const approveToken = async () => {
@@ -572,6 +588,43 @@ export function BridgePage() {
       window.localStorage.removeItem(BRIDGE_PENDING_STORAGE_KEY)
     }
   }, [bridgeStatus?.status])
+
+  useEffect(() => {
+    if (!bridgeActivityId) return
+    if (bridgeStatus?.status === 'DONE') {
+      patchActivity(bridgeActivityId, {
+        status: 'success',
+        summary: `Bridge ${amountInput.trim() || '0'} ${fromToken.symbol} → ~${receiveLabel} (done)`,
+      })
+      if (bridgeSource?.txHash && bridgeReportedRef.current !== bridgeSource.txHash) {
+        bridgeReportedRef.current = bridgeSource.txHash
+        void sendTxEventToRelay({
+          kind: 'bridge',
+          status: 'success',
+          txHash: bridgeSource.txHash,
+          chainId: fromChainId,
+          wallet: address,
+          summary: `Bridge ${amountInput.trim() || '0'} ${fromToken.symbol} → ~${receiveLabel}`,
+          at: Date.now(),
+        })
+      }
+    } else if (bridgeStatus?.status === 'FAILED') {
+      patchActivity(bridgeActivityId, {
+        status: 'failed',
+        summary: `Bridge ${amountInput.trim() || '0'} ${fromToken.symbol} → ~${receiveLabel} (failed)`,
+      })
+    }
+  }, [
+    bridgeActivityId,
+    bridgeStatus?.status,
+    bridgeSource?.txHash,
+    fromChainId,
+    address,
+    amountInput,
+    fromToken.symbol,
+    receiveLabel,
+    patchActivity,
+  ])
 
   return (
     <section className="relative scroll-mt-24 overflow-hidden border-t border-white/[0.08] py-16 md:py-24">
