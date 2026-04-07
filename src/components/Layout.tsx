@@ -17,6 +17,7 @@ import {
 import { useEffect, useState } from 'react'
 import { useActivityReceiptSync } from '../hooks/useActivityReceiptSync'
 import { ChainTokenSync } from './ChainTokenSync'
+import { GdprConsentBanner } from './GdprConsentBanner'
 import { Header } from './Header'
 
 const footerHeading =
@@ -75,6 +76,10 @@ export function Layout() {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  const openCookieSettings = () => {
+    window.dispatchEvent(new Event('eonswap:open-cookie-consent'))
+  }
 
   return (
     <motion.div
@@ -279,6 +284,13 @@ export function Layout() {
               >
                 AML Policy
               </Link>
+              <button
+                type="button"
+                onClick={openCookieSettings}
+                className="text-slate-500 transition hover:text-eon-blue"
+              >
+                Manage Cookies
+              </button>
             </nav>
           </div>
         </div>
@@ -291,6 +303,7 @@ export function Layout() {
       >
         <ArrowUp className="h-4.5 w-4.5" aria-hidden />
       </button>
+      <GdprConsentBanner />
     </motion.div>
   )
 }

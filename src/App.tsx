@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 const Layout = lazy(() =>
   import('./components/Layout').then((m) => ({ default: m.Layout })),
@@ -65,6 +65,9 @@ const AmlPolicyPage = lazy(() =>
 const AdminPage = lazy(() =>
   import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })),
 )
+const NotFoundPage = lazy(() =>
+  import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
+)
 
 function ScrollToTopOnRouteChange() {
   const { pathname, hash } = useLocation()
@@ -103,7 +106,7 @@ export default function App() {
             <Route path="/disclaimer" element={<DisclaimerPage />} />
             <Route path="/aml-policy" element={<AmlPolicyPage />} />
             <Route path="/admin" element={<AdminPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
       </Suspense>
