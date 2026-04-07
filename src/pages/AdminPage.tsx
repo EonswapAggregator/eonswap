@@ -289,7 +289,7 @@ export function AdminPage() {
             className="h-9 rounded-lg border border-white/[0.12] bg-white/[0.03] px-2 text-xs text-slate-200 outline-none"
           >
             {monthOptions.map((m, idx) => (
-              <option key={m} value={idx + 1}>
+              <option key={m} value={idx + 1} className="bg-[#0c1027] text-slate-100">
                 {m}
               </option>
             ))}
@@ -303,7 +303,7 @@ export function AdminPage() {
             className="h-9 rounded-lg border border-white/[0.12] bg-white/[0.03] px-2 text-xs text-slate-200 outline-none"
           >
             {yearOptions.map((y) => (
-              <option key={y} value={y}>
+              <option key={y} value={y} className="bg-[#0c1027] text-slate-100">
                 {y}
               </option>
             ))}
@@ -424,9 +424,9 @@ export function AdminPage() {
                 onChange={(e) => setMonthlyYearFilter(e.target.value)}
                 className="h-8 rounded-lg border border-white/[0.12] bg-white/[0.03] px-2 text-xs text-slate-200 outline-none"
               >
-                <option value="all">All</option>
+                <option value="all" className="bg-[#0c1027] text-slate-100">All</option>
                 {availableYears.map((y) => (
-                  <option key={y} value={y}>
+                  <option key={y} value={y} className="bg-[#0c1027] text-slate-100">
                     {y}
                   </option>
                 ))}
