@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 const Layout = lazy(() =>
   import('./components/Layout').then((m) => ({ default: m.Layout })),
@@ -63,9 +63,21 @@ const AmlPolicyPage = lazy(() =>
   import('./pages/AmlPolicyPage').then((m) => ({ default: m.AmlPolicyPage })),
 )
 
+function ScrollToTopOnRouteChange() {
+  const { pathname, hash } = useLocation()
+
+  useEffect(() => {
+    if (hash) return
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [pathname, hash])
+
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTopOnRouteChange />
       <Suspense fallback={<div className="min-h-screen bg-eon-bg" />}>
         <Routes>
           <Route element={<Layout />}>

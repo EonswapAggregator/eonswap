@@ -449,7 +449,7 @@ export function BridgePage() {
     ((allowanceValue as bigint | undefined) ?? 0n) < fromAmountWei
 
   const preflightError = !isConnected
-    ? 'Connect wallet in header'
+    ? 'Connect wallet'
     : wrongNetwork
       ? 'Switch source chain in wallet'
       : missingAmount
