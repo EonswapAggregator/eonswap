@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Keep sensitive/backend paths out of indexing.
+Disallow: /relay/
+Disallow: /.well-known/
+
+Sitemap: /sitemap.xml

@@ -1,0 +1,296 @@
+import { motion } from 'framer-motion'
+import { Link, Outlet } from 'react-router-dom'
+import {
+  ArrowUp,
+  Briefcase,
+  Droplets,
+  FileText,
+  HelpCircle,
+  Info,
+  Newspaper,
+  Route,
+  Send,
+  ShieldCheck,
+  Twitter,
+  Waves,
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useActivityReceiptSync } from '../hooks/useActivityReceiptSync'
+import { ChainTokenSync } from './ChainTokenSync'
+import { Header } from './Header'
+
+const footerHeading =
+  'text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500'
+const footerItemClass =
+  'group inline-flex items-center gap-2 text-sm text-slate-400 transition duration-200 hover:text-eon-blue'
+
+const supportedNetworks = [
+  {
+    id: 'ethereum',
+    name: 'Ethereum',
+    iconUrl:
+      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
+  },
+  {
+    id: 'arbitrum',
+    name: 'Arbitrum',
+    iconUrl:
+      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png',
+  },
+  {
+    id: 'base',
+    name: 'Base',
+    iconUrl:
+      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png',
+  },
+  {
+    id: 'optimism',
+    name: 'Optimism',
+    iconUrl:
+      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png',
+  },
+  {
+    id: 'polygon',
+    name: 'Polygon',
+    iconUrl:
+      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png',
+  },
+  {
+    id: 'bnb',
+    name: 'BNB Chain',
+    iconUrl:
+      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png',
+  },
+] as const
+
+export function Layout() {
+  useActivityReceiptSync()
+  const [showJumpTop, setShowJumpTop] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => {
+      setShowJumpTop(window.scrollY > 320)
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  return (
+    <motion.div
+      className="min-h-screen min-w-0 overflow-x-hidden bg-eon-bg"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4 }}
+    >
+      <Header />
+      <ChainTokenSync />
+      <main className="min-w-0">
+        <Outlet />
+      </main>
+      <footer className="relative border-t border-white/[0.09] bg-gradient-to-b from-[#0c0e24] to-[#05060f]">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-eon-blue/25 to-transparent"
+          aria-hidden
+        />
+        <div className="mx-auto max-w-7xl px-4 py-14 md:px-6 md:py-16">
+          <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-12 lg:gap-10">
+            <div className="lg:col-span-4">
+              <Link
+                to="/"
+                className="inline-flex items-center gap-2.5 text-left text-white transition hover:opacity-90"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-eon-blue/25 to-cyan-500/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] ring-1 ring-eon-blue/25">
+                  <Droplets className="h-5 w-5 text-eon-blue" aria-hidden />
+                </span>
+                <span className="flex flex-col leading-none">
+                  <span className="text-lg font-semibold tracking-tight text-white">
+                    EonSwap
+                  </span>
+                  <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">
+                    Execution desk
+                  </span>
+                </span>
+              </Link>
+              <p className="mt-4 max-w-sm text-sm leading-relaxed text-slate-500">
+                EonSwap is a non-custodial multi-chain swap interface that helps
+                you find efficient routes and execute trades directly from your
+                wallet.
+              </p>
+              <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                Supported networks
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {supportedNetworks.map((network) => (
+                  <span
+                    key={network.id}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] transition hover:border-white/[0.2]"
+                    title={network.name}
+                  >
+                    <img
+                      src={network.iconUrl}
+                      alt={network.name}
+                      className="h-5 w-5 rounded-full object-contain"
+                    />
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-7 sm:grid-cols-3 lg:col-span-8 lg:gap-7">
+              <div>
+                <h3 className={footerHeading}>Quick Links</h3>
+                <ul className="mt-2.5 space-y-1.5">
+                  <li>
+                    <Link to="/swap" className={footerItemClass}>
+                      <Route className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
+                      Swap
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/bridge" className={footerItemClass}>
+                      <Waves className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
+                      Bridge
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/earn" className={footerItemClass}>
+                      <Droplets className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
+                      Pool / Earn
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/activity" className={footerItemClass}>
+                      <FileText className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
+                      Activity
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/status" className={footerItemClass}>
+                      <ShieldCheck className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
+                      Status
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h3 className={footerHeading}>Resources</h3>
+                <ul className="mt-2.5 space-y-1.5">
+                  <li>
+                    <Link to="/docs" className={footerItemClass}>
+                      <FileText className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
+                      Docs
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/faq" className={footerItemClass}>
+                      <HelpCircle className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
+                      FAQ
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/contact-support" className={footerItemClass}>
+                      <Send className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
+                      Contact Support
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h3 className={footerHeading}>Company</h3>
+                <ul className="mt-2.5 space-y-1.5">
+                  <li>
+                    <Link to="/about" className={footerItemClass}>
+                      <Info className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
+                      About
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/careers" className={footerItemClass}>
+                      <Briefcase className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
+                      Careers
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/press-kit" className={footerItemClass}>
+                      <Newspaper className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
+                      Press Kit
+                    </Link>
+                  </li>
+                </ul>
+                <div className="mt-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                    Follow
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                  <a
+                    href="https://x.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Twitter"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] text-slate-400 transition hover:border-white/[0.18] hover:text-white"
+                  >
+                    <Twitter className="h-4 w-4" aria-hidden />
+                  </a>
+                  <a
+                    href="https://t.me"
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Telegram"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] text-slate-400 transition hover:border-white/[0.18] hover:text-white"
+                  >
+                    <Send className="h-4 w-4" aria-hidden />
+                  </a>
+                </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-11 flex flex-col gap-4 border-t border-white/[0.08] pt-7 md:flex-row md:items-center md:justify-between">
+            <p className="text-xs text-slate-600">
+              © {new Date().getFullYear()} EonSwap. All rights reserved.
+            </p>
+            <nav
+              className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs"
+              aria-label="Legalitas"
+            >
+              <Link to="/terms" className="text-slate-500 transition hover:text-eon-blue">
+                Terms of Use
+              </Link>
+              <Link to="/privacy" className="text-slate-500 transition hover:text-eon-blue">
+                Privacy Policy
+              </Link>
+              <Link
+                to="/risk-disclosure"
+                className="text-slate-500 transition hover:text-eon-blue"
+              >
+                Risk Disclosure
+              </Link>
+              <Link
+                to="/disclaimer"
+                className="text-slate-500 transition hover:text-eon-blue"
+              >
+                Disclaimer
+              </Link>
+              <Link
+                to="/aml-policy"
+                className="text-slate-500 transition hover:text-eon-blue"
+              >
+                AML Policy
+              </Link>
+            </nav>
+          </div>
+        </div>
+      </footer>
+      <button
+        type="button"
+        aria-label="Jump to top"
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        className={`fixed bottom-5 right-5 z-[120] inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.14] bg-[#111329]/85 text-slate-200 shadow-[0_10px_28px_-14px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl transition duration-200 hover:border-eon-blue/45 hover:text-white ${showJumpTop ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0'}`}
+      >
+        <ArrowUp className="h-4.5 w-4.5" aria-hidden />
+      </button>
+    </motion.div>
+  )
+}

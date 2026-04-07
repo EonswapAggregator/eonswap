@@ -1,0 +1,6 @@
+Contact: mailto:security@eonswap.us
+Contact: mailto:support@eonswap.us
+Expires: 2027-04-07T00:00:00.000Z
+Preferred-Languages: en, id
+Canonical: https://eonswap.us/.well-known/security.txt
+Policy: https://eonswap.us/aml-policy
