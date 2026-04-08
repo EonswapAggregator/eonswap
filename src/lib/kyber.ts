@@ -3,6 +3,7 @@ import { KYBER_CHAIN_SLUG } from './chains'
 import type { Token } from './tokens'
 
 const AGGREGATOR_BASE = 'https://aggregator-api.kyberswap.com'
+const KYBER_TIMEOUT_MS = 15_000
 
 export type KyberPoolStep = {
   pool: string
@@ -62,6 +63,22 @@ function clientHeaders(): HeadersInit {
   }
 }
 
+async function kyberFetch(url: string, init?: RequestInit): Promise<Response> {
+  const ctrl = new AbortController()
+  const timer = window.setTimeout(() => ctrl.abort(), KYBER_TIMEOUT_MS)
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal })
+  } catch (e) {
+    const msg = String(e instanceof Error ? e.message : e ?? '')
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new Error('Kyber request timeout')
+    }
+    throw new Error(msg || 'Kyber request failed')
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
 function appendFeeParams(q: URLSearchParams) {
   const receiver = import.meta.env.VITE_KYBER_FEE_RECEIVER?.trim()
   const bps = import.meta.env.VITE_KYBER_FEE_BPS?.trim()
@@ -89,7 +106,7 @@ export async function fetchKyberRoute(params: {
   appendFeeParams(q)
 
   const url = `${AGGREGATOR_BASE}/${chainSlug(params.chainId)}/api/v1/routes?${q}`
-  const res = await fetch(url, { headers: clientHeaders() })
+  const res = await kyberFetch(url, { headers: clientHeaders() })
   const json = (await res.json()) as KyberApiEnvelope<{
     routeSummary: KyberRouteSummary
     routerAddress: string
@@ -139,7 +156,7 @@ export async function fetchKyberTokensByIds(
   for (const batch of chunks) {
     const q = new URLSearchParams({ ids: batch.join(',') })
     const url = `${AGGREGATOR_BASE}/${slug}/api/v1/tokens?${q}`
-    const res = await fetch(url, { headers: clientHeaders() })
+  const res = await kyberFetch(url, { headers: clientHeaders() })
     const json = (await res.json()) as KyberApiEnvelope<{ tokens: KyberTokenRow[] }>
     if (!res.ok || json.code !== 0 || !json.data?.tokens) continue
     rows.push(...json.data.tokens)
@@ -180,7 +197,7 @@ export async function buildKyberSwap(params: {
   }
 
   const url = `${AGGREGATOR_BASE}/${chainSlug(params.chainId)}/api/v1/route/build`
-  const res = await fetch(url, {
+  const res = await kyberFetch(url, {
     method: 'POST',
     headers: clientHeaders(),
     body: JSON.stringify(body),

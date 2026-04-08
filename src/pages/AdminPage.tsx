@@ -336,11 +336,8 @@ export function AdminPage() {
           </h1>
           <p className="mt-2 text-sm text-slate-300">
             Local view uses this browser&apos;s saved activity. Relay view aggregates events from all
-            users when the monitoring relay logs them (set{' '}
-            <code className="rounded bg-white/[0.08] px-1 text-xs text-cyan-200/90">
-              RELAY_ADMIN_SECRET
-            </code>{' '}
-            on the relay and refresh below).
+            users when the monitoring relay logs them (configure an admin access key on the relay,
+            then refresh below).
           </p>
         </motion.div>
 

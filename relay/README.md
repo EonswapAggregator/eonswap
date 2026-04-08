@@ -33,6 +33,7 @@ Optional env:
 - `RELAY_TELEGRAM_CHAT_ID` (optional; target chat/channel id)
 - `RELAY_ALLOWED_ORIGIN` (default `*`; in production set your frontend origin(s), **comma-separated** if you use Admin from prod and from `http://localhost:5173` / Netlify previews — must match the browser `Origin` header exactly)
 - `RELAY_EVENTS_RATE_LIMIT_PER_MIN` (default `60`)
+- `RELAY_EVENTS_MAX_BODY_BYTES` (default `262144`)
 - `RELAY_ADMIN_SECRET` (optional; required for `GET /admin/activities`)
 - `RELAY_ACTIVITY_LOG_PATH` (optional; default `relay/data/activities.jsonl`)
 
@@ -40,7 +41,7 @@ Optional env:
 
 - `GET /healthz` – relay process health
 - `GET /monitor/status` – latest provider status + latency + SLA windows
-- `GET /monitor/check-now` – trigger immediate checks
+- `GET /monitor/check-now` – trigger immediate checks (**requires** `Authorization: Bearer <RELAY_ADMIN_SECRET>` when admin secret is configured)
 - `POST /events/tx` – receive tx success event and forward to Telegram (if configured)
 - `POST /events/activity` – append one activity row (swap/bridge lifecycle) for aggregated admin reporting (rate-limited per IP)
 - `GET /admin/activities` – return merged activity rows (latest row per `id`); header `Authorization: Bearer <RELAY_ADMIN_SECRET>`

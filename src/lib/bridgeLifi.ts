@@ -1,6 +1,7 @@
 import type { Address } from 'viem'
 
 const LIFI_BASE = 'https://li.quest/v1'
+const LIFI_TIMEOUT_MS = 15_000
 
 export type LifiToken = {
   address: string
@@ -69,6 +70,22 @@ function getIntegratorParams() {
   return { integrator, fee }
 }
 
+async function lifiFetch(url: string, init?: RequestInit): Promise<Response> {
+  const ctrl = new AbortController()
+  const timer = window.setTimeout(() => ctrl.abort(), LIFI_TIMEOUT_MS)
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal })
+  } catch (e) {
+    const msg = String(e instanceof Error ? e.message : e ?? '')
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new Error('LI.FI request timeout')
+    }
+    throw new Error(msg || 'LI.FI request failed')
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
 export async function fetchLifiBridgeQuote(params: {
   fromChainId: number
   toChainId: number
@@ -93,7 +110,7 @@ export async function fetchLifiBridgeQuote(params: {
   if (extra.fee) q.set('fee', extra.fee)
   const apiKey = import.meta.env.VITE_LIFI_API_KEY?.trim()
 
-  const res = await fetch(`${LIFI_BASE}/quote?${q}`, {
+  const res = await lifiFetch(`${LIFI_BASE}/quote?${q}`, {
     headers: {
       Accept: 'application/json',
       ...(apiKey ? { 'x-lifi-api-key': apiKey } : {}),
@@ -120,7 +137,7 @@ export async function fetchLifiBridgeStatus(params: {
   if (params.bridge) q.set('bridge', params.bridge)
   const apiKey = import.meta.env.VITE_LIFI_API_KEY?.trim()
 
-  const res = await fetch(`${LIFI_BASE}/status?${q}`, {
+  const res = await lifiFetch(`${LIFI_BASE}/status?${q}`, {
     headers: {
       Accept: 'application/json',
       ...(apiKey ? { 'x-lifi-api-key': apiKey } : {}),

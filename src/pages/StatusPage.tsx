@@ -40,7 +40,7 @@ type ApiHealth = {
 type ApiSla = Record<ApiHealth['id'], { h1: number; h24: number }>
 type HealthSample = { at: number; ok: boolean }
 
-const HEALTH_REFRESH_MS = 60_000
+const HEALTH_REFRESH_MS = 300_000
 const HEALTH_RETRY_DELAYS_MS = [400, 900, 1800]
 const HEALTH_ALERT_COOLDOWN_MS = 120_000
 const parseLatencyThreshold = (value: string | undefined, fallback: number) => {

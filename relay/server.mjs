@@ -12,7 +12,7 @@ const PORT = Number(process.env.PORT || process.env.RELAY_PORT || 8787)
 /** Railway/Render/Fly expect HTTP on $PORT and often require binding all interfaces. */
 const LISTEN_HOST = process.env.HOST?.trim() || '0.0.0.0'
 const CHECK_TIMEOUT_MS = 12_000
-const POLL_MS = 60_000
+const POLL_MS = 300_000
 const ALERT_WEBHOOK_URL = process.env.RELAY_ALERT_WEBHOOK_URL?.trim() || ''
 const ALERT_COOLDOWN_MS = Number(process.env.RELAY_ALERT_COOLDOWN_MS || 180_000)
 const TELEGRAM_BOT_TOKEN = process.env.RELAY_TELEGRAM_BOT_TOKEN?.trim() || ''
@@ -39,6 +39,7 @@ function corsOriginHeader(req) {
   return null
 }
 const EVENT_RATE_LIMIT_PER_MIN = Number(process.env.RELAY_EVENTS_RATE_LIMIT_PER_MIN || 60)
+const EVENT_MAX_BODY_BYTES = Number(process.env.RELAY_EVENTS_MAX_BODY_BYTES || 262_144)
 const WARN_LATENCY_MS = {
   kyber: Number(process.env.RELAY_WARN_KYBER_MS || 2500),
   lifi: Number(process.env.RELAY_WARN_LIFI_MS || 3500),
@@ -132,6 +133,26 @@ function isRateLimited(req) {
   entry.count += 1
   eventRateMap.set(key, entry)
   return entry.count > EVENT_RATE_LIMIT_PER_MIN
+}
+
+async function readJsonBody(req, maxBytes = EVENT_MAX_BODY_BYTES) {
+  let body = ''
+  let size = 0
+  await new Promise((resolve, reject) => {
+    req.on('data', (chunk) => {
+      const text = String(chunk)
+      size += Buffer.byteLength(text, 'utf8')
+      if (size > maxBytes) {
+        reject(new Error('Payload too large'))
+        req.destroy()
+        return
+      }
+      body += text
+    })
+    req.on('end', resolve)
+    req.on('error', reject)
+  })
+  return JSON.parse(body || '{}')
 }
 
 function validateActivityPayload(payload) {
@@ -427,30 +448,23 @@ createServer(async (req, res) => {
   }
   if (req.method === 'POST' && u.pathname === '/events/activity') {
     if (isRateLimited(req)) return json(req, res, 429, { ok: false, error: 'Rate limited' })
-    let body = ''
-    req.on('data', (chunk) => {
-      body += String(chunk)
-    })
-    await new Promise((resolve) => req.on('end', resolve))
     try {
-      const payload = JSON.parse(body || '{}')
+      const payload = await readJsonBody(req)
       const checked = validateActivityPayload(payload)
       if (checked.error) return json(req, res, 400, { ok: false, error: checked.error })
       await appendActivityRecord({ ...checked.record, serverAt: Date.now() })
       return json(req, res, 200, { ok: true })
-    } catch {
+    } catch (e) {
+      if (String(e instanceof Error ? e.message : e).includes('Payload too large')) {
+        return json(req, res, 413, { ok: false, error: 'Payload too large' })
+      }
       return json(req, res, 400, { ok: false, error: 'Invalid payload' })
     }
   }
   if (req.method === 'POST' && u.pathname === '/events/tx') {
     if (isRateLimited(req)) return json(req, res, 429, { ok: false, error: 'Rate limited' })
-    let body = ''
-    req.on('data', (chunk) => {
-      body += String(chunk)
-    })
-    await new Promise((resolve) => req.on('end', resolve))
     try {
-      const payload = JSON.parse(body || '{}')
+      const payload = await readJsonBody(req)
       const kind = payload?.kind === 'bridge' ? 'Bridge' : 'Swap'
       const txHash = String(payload?.txHash || '')
       if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
@@ -474,7 +488,10 @@ createServer(async (req, res) => {
         .join('\n')
       await sendTelegramMessage(msg)
       return json(req, res, 200, { ok: true })
-    } catch {
+    } catch (e) {
+      if (String(e instanceof Error ? e.message : e).includes('Payload too large')) {
+        return json(req, res, 413, { ok: false, error: 'Payload too large' })
+      }
       return json(req, res, 400, { ok: false, error: 'Invalid payload' })
     }
   }
@@ -485,6 +502,12 @@ createServer(async (req, res) => {
     return json(req, res, 200, status)
   }
   if (u.pathname === '/monitor/check-now') {
+    if (RELAY_ADMIN_SECRET) {
+      const auth = String(req.headers.authorization || '')
+      if (auth !== `Bearer ${RELAY_ADMIN_SECRET}`) {
+        return json(req, res, 401, { ok: false, error: 'Unauthorized' })
+      }
+    }
     await runChecks()
     return json(req, res, 200, status)
   }

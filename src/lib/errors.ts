@@ -2,6 +2,15 @@ export function toUserFacingErrorMessage(input: unknown, fallback: string): stri
   const raw = input instanceof Error ? input.message : String(input ?? '')
   const s = raw.toLowerCase()
 
+  if (s.includes('429') || s.includes('rate limit')) {
+    return 'Rate limit reached. Please wait a moment and retry.'
+  }
+  if (s.includes('timeout') || s.includes('aborted')) {
+    return 'Request timed out. Please try again.'
+  }
+  if (s.includes('failed to fetch') || s.includes('networkerror')) {
+    return 'Network request failed. Check your connection and retry.'
+  }
   if (s.includes('user rejected') || s.includes('rejected') || s.includes('denied')) {
     return 'Transaction was rejected in your wallet.'
   }
