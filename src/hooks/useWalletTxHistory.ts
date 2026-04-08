@@ -8,6 +8,18 @@ const API_KEY = import.meta.env.VITE_ETHERSCAN_API_KEY as string | undefined
 const RELAY_BASE = getMonitorRelayBaseUrl()
 const RELAY_ONLY = String(import.meta.env.VITE_WALLET_TX_RELAY_ONLY ?? '1') === '1'
 
+function normalizeExplorerErrorMessage(raw: string, status: number): string {
+  const msg = String(raw || '').trim()
+  if (!msg) return `Unable to load on-chain history (${status}).`
+  if (/free api access|upgrade your api plan/i.test(msg)) {
+    return 'On-chain history is currently unavailable for this network.'
+  }
+  if (/unauthorized explorer token|forbidden origin|unauthorized|forbidden/i.test(msg)) {
+    return 'On-chain history service is temporarily unavailable.'
+  }
+  return msg.length > 160 ? `${msg.slice(0, 157)}...` : msg
+}
+
 async function fetchViaRelay(params: {
   chainId: number
   address: `0x${string}`
@@ -26,7 +38,12 @@ async function fetchViaRelay(params: {
     | { ok?: boolean; result?: ExplorerNormalTx[]; error?: string }
     | null
   if (!res.ok || !json?.ok) {
-    throw new Error(json?.error || `Explorer proxy failed (${res.status})`)
+    throw new Error(
+      normalizeExplorerErrorMessage(
+        json?.error || `Explorer proxy failed (${res.status})`,
+        res.status,
+      ),
+    )
   }
   return Array.isArray(json.result) ? json.result : []
 }
