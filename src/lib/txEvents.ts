@@ -1,3 +1,5 @@
+import { getMonitorRelayBaseUrl } from './monitorRelayUrl'
+
 export type TxEventPayload = {
   kind: 'swap' | 'bridge'
   status: 'success'
@@ -9,9 +11,8 @@ export type TxEventPayload = {
 }
 
 export async function sendTxEventToRelay(payload: TxEventPayload): Promise<void> {
-  const relay = import.meta.env.VITE_MONITOR_RELAY_URL?.trim()
-  if (!relay) return
-  const relayUrl = relay.replace(/\/$/u, '')
+  const relayUrl = getMonitorRelayBaseUrl()
+  if (!relayUrl) return
 
   try {
     await fetch(`${relayUrl}/events/tx`, {

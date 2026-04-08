@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { sendActivityLogToRelay } from '../lib/activityRelay'
 import { DEFAULT_SLIPPAGE_BPS, clampSlippageBps } from '../lib/slippage'
 import { MAINNET_TOKENS, type Token } from '../lib/tokens'
 
@@ -138,29 +139,31 @@ export const useEonSwapStore = create<EonSwapState>()(
 
       addActivity: (item) => {
         const id = item.id ?? crypto.randomUUID()
+        const row: ActivityItem = {
+          id,
+          createdAt: Date.now(),
+          status: item.status,
+          summary: item.summary,
+          txHash: item.txHash,
+          chainId: item.chainId,
+          from: item.from,
+          blockNumber: item.blockNumber,
+        }
         set((s) => ({
-          history: [
-            {
-              id,
-              createdAt: Date.now(),
-              status: item.status,
-              summary: item.summary,
-              txHash: item.txHash,
-              chainId: item.chainId,
-              from: item.from,
-              blockNumber: item.blockNumber,
-            },
-            ...s.history,
-          ].slice(0, 5000),
+          history: [row, ...s.history].slice(0, 5000),
         }))
+        sendActivityLogToRelay(row)
       },
 
-      patchActivity: (id, patch) =>
+      patchActivity: (id, patch) => {
         set((s) => ({
           history: s.history.map((h) =>
             h.id === id ? { ...h, ...patch } : h,
           ),
-        })),
+        }))
+        const next = get().history.find((h) => h.id === id)
+        if (next) sendActivityLogToRelay(next)
+      },
 
       setSlippageToleranceBps: (bps) =>
         set({ slippageToleranceBps: clampSlippageBps(bps) }),

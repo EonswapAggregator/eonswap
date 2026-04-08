@@ -19,6 +19,7 @@ import { truncateAddress } from '../lib/format'
 import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
 import { NATIVE_AGGREGATOR } from '../lib/tokens'
 import { toUserFacingErrorMessage } from '../lib/errors'
+import { getMonitorRelayBaseUrl } from '../lib/monitorRelayUrl'
 
 type Mode = 'bridge' | 'swap'
 
@@ -362,10 +363,9 @@ export function StatusPage() {
       prev.map((item) => ({ ...item, status: 'checking', detail: 'Checking...', latencyMs: undefined })),
     )
     try {
-      const relay = import.meta.env.VITE_MONITOR_RELAY_URL?.trim()
+      const relayUrl = getMonitorRelayBaseUrl()
       let usedRelay = false
-      if (relay) {
-        const relayUrl = relay.replace(/\/$/u, '')
+      if (relayUrl) {
         try {
           const res = await fetch(`${relayUrl}/monitor/status`, {
             headers: { Accept: 'application/json' },

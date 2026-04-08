@@ -2,11 +2,23 @@
 
 Minimal backend relay for provider health checks and uptime windows.
 
-## Run
+## Run (local)
 
 ```bash
 npm run monitor:relay
 ```
+
+Listen port: **`PORT`** (Render/Railway/Fly) if set, else **`RELAY_PORT`**, else `8787`.
+
+## Production (outline)
+
+1. Deploy this repo (or only the `relay/` folder + `package.json` if you split) as a **Node web service**.
+2. **Start command** (from repo root): `node relay/server.mjs`  
+   (Ensure Node 20+; use the same `package.json` `type: "module"` context, or run from project root.)
+3. **Health check URL:** `GET /healthz`
+4. Set **environment variables** on the host (not on Netlify): `RELAY_ALLOWED_ORIGIN`, `RELAY_ADMIN_SECRET`, `ETHERSCAN_API_KEY` / `VITE_ETHERSCAN_API_KEY`, Telegram vars if used, etc.
+5. Point the frontend **`VITE_MONITOR_RELAY_URL`** to the public **HTTPS** URL of this service (no trailing slash).
+6. **Activity log file** defaults to `relay/data/activities.jsonl`. On ephemeral disks (free tiers), logs can reset on redeploy — use a **persistent disk** / volume mounted at `relay/data` if you need retention.
 
 Optional env:
 
@@ -21,6 +33,8 @@ Optional env:
 - `RELAY_TELEGRAM_CHAT_ID` (optional; target chat/channel id)
 - `RELAY_ALLOWED_ORIGIN` (default `*`; set your frontend origin in production)
 - `RELAY_EVENTS_RATE_LIMIT_PER_MIN` (default `60`)
+- `RELAY_ADMIN_SECRET` (optional; required for `GET /admin/activities`)
+- `RELAY_ACTIVITY_LOG_PATH` (optional; default `relay/data/activities.jsonl`)
 
 ## Endpoints
 
@@ -28,6 +42,8 @@ Optional env:
 - `GET /monitor/status` – latest provider status + latency + SLA windows
 - `GET /monitor/check-now` – trigger immediate checks
 - `POST /events/tx` – receive tx success event and forward to Telegram (if configured)
+- `POST /events/activity` – append one activity row (swap/bridge lifecycle) for aggregated admin reporting (rate-limited per IP)
+- `GET /admin/activities` – return merged activity rows (latest row per `id`); header `Authorization: Bearer <RELAY_ADMIN_SECRET>`
 
 `/events/tx` includes basic hardening:
 - request rate limiting per IP
@@ -43,6 +59,8 @@ VITE_MONITOR_RELAY_URL=http://127.0.0.1:8787
 ```
 
 When configured, `Status` page health panel prefers relay data for Kyber/LI.FI/CoinGecko/Etherscan.
+
+Activity rows are written when users trigger `addActivity` / `patchActivity` in the app (if `VITE_MONITOR_RELAY_URL` is set). On the **Admin** page, use **Refresh from relay** with the same secret as `RELAY_ADMIN_SECRET` to load all logged activity.
 
 ## Added reliability hardening
 

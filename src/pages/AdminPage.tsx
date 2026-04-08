@@ -2,11 +2,51 @@ import { motion } from 'framer-motion'
 import { useMemo, useState } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
 import { useAccount } from 'wagmi'
+import { fetchRelayActivities } from '../lib/activityRelay'
+import { getMonitorRelayBaseUrl } from '../lib/monitorRelayUrl'
 import { eonChains } from '../lib/chains'
 import { truncateAddress } from '../lib/format'
-import { type TxStatus, useEonSwapStore } from '../store/useEonSwapStore'
+import {
+  type ActivityItem,
+  type TxStatus,
+  useEonSwapStore,
+} from '../store/useEonSwapStore'
 
 const ADMIN_WALLET = '0x114629C43Fa2528E5295b2982765733Acf3aCadA'.toLowerCase()
+const RELAY_SECRET_KEY = 'eonswap_relay_admin_secret'
+
+function parseRelayActivities(raw: unknown[]): ActivityItem[] {
+  const out: ActivityItem[] = []
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue
+    const o = row as Record<string, unknown>
+    const id = String(o.id ?? '')
+    const status = o.status
+    if (status !== 'pending' && status !== 'success' && status !== 'failed') continue
+    const createdAt = Number(o.createdAt)
+    if (!Number.isFinite(createdAt)) continue
+    out.push({
+      id,
+      status,
+      createdAt,
+      summary: String(o.summary ?? ''),
+      chainId: Number(o.chainId) || 0,
+      txHash:
+        typeof o.txHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(o.txHash)
+          ? (o.txHash as `0x${string}`)
+          : undefined,
+      from:
+        typeof o.from === 'string' && /^0x[a-fA-F0-9]{40}$/.test(o.from)
+          ? (o.from as `0x${string}`)
+          : undefined,
+      blockNumber:
+        o.blockNumber != null && Number.isFinite(Number(o.blockNumber))
+          ? Number(o.blockNumber)
+          : undefined,
+    })
+  }
+  return out
+}
 
 function fmtTime(ts: number): string {
   return new Date(ts).toLocaleString()
@@ -48,6 +88,15 @@ export function AdminPage() {
   const [searchParams] = useSearchParams()
   const { address, isConnected } = useAccount()
   const history = useEonSwapStore((s) => s.history)
+  const [dataSource, setDataSource] = useState<'local' | 'relay'>('local')
+  const [relayRows, setRelayRows] = useState<ActivityItem[]>([])
+  const [relayStatus, setRelayStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [relayMessage, setRelayMessage] = useState('')
+  const [adminSecretDraft, setAdminSecretDraft] = useState(() =>
+    typeof sessionStorage !== 'undefined'
+      ? sessionStorage.getItem(RELAY_SECRET_KEY) ?? ''
+      : '',
+  )
   const [statusFilter, setStatusFilter] = useState<'all' | TxStatus>('all')
   const [periodFilter, setPeriodFilter] = useState<'all' | 'custom'>('custom')
   const [periodMonth, setPeriodMonth] = useState<number>(() => new Date().getMonth() + 1)
@@ -60,18 +109,54 @@ export function AdminPage() {
     e2eBypass ||
     isConnected && typeof address === 'string' && address.toLowerCase() === ADMIN_WALLET
 
+  const reportHistory = dataSource === 'relay' ? relayRows : history
+
+  const saveRelaySecret = () => {
+    sessionStorage.setItem(RELAY_SECRET_KEY, adminSecretDraft.trim())
+    setRelayMessage('Admin key saved for this browser.')
+  }
+
+  const loadFromRelay = async () => {
+    const relay = getMonitorRelayBaseUrl()
+    if (!relay) {
+      setRelayStatus('error')
+      setRelayMessage('Set VITE_MONITOR_RELAY_URL in the app environment.')
+      return
+    }
+    const secret =
+      sessionStorage.getItem(RELAY_SECRET_KEY)?.trim() || adminSecretDraft.trim()
+    if (!secret) {
+      setRelayStatus('error')
+      setRelayMessage('Enter the relay admin secret.')
+      return
+    }
+    setRelayStatus('loading')
+    setRelayMessage('')
+    const result = await fetchRelayActivities(relay, secret)
+    if (!result.ok) {
+      setRelayStatus('error')
+      setRelayMessage(result.error)
+      return
+    }
+    const rows = parseRelayActivities(result.activities)
+    setRelayRows(rows)
+    setDataSource('relay')
+    setRelayStatus('idle')
+    setRelayMessage(`Loaded ${rows.length} activity rows from relay.`)
+  }
+
   const metrics = useMemo(() => {
-    const total = history.length
-    const pending = history.filter((h) => h.status === 'pending').length
-    const success = history.filter((h) => h.status === 'success').length
-    const failed = history.filter((h) => h.status === 'failed').length
+    const total = reportHistory.length
+    const pending = reportHistory.filter((h) => h.status === 'pending').length
+    const success = reportHistory.filter((h) => h.status === 'success').length
+    const failed = reportHistory.filter((h) => h.status === 'failed').length
     const successRate = total ? Math.round((success / total) * 100) : 0
     const swapFeeRate = Number(import.meta.env.VITE_KYBER_FEE_BPS ?? '0') / 10_000
     const bridgeFeeRate = Number(import.meta.env.VITE_LIFI_FEE_PERCENT ?? '0')
     const swapFeeByToken = new Map<string, number>()
     const bridgeFeeByToken = new Map<string, number>()
 
-    for (const item of history) {
+    for (const item of reportHistory) {
       if (item.status !== 'success') continue
       const swapParsed = parseAmountAndToken(item.summary, 'Swap')
       if (swapParsed && swapFeeRate > 0) {
@@ -100,14 +185,14 @@ export function AdminPage() {
       swapFeeByToken,
       bridgeFeeByToken,
     }
-  }, [history])
+  }, [reportHistory])
 
   const monthlyRows = useMemo<MonthlyRow[]>(() => {
     const swapFeeRate = Number(import.meta.env.VITE_KYBER_FEE_BPS ?? '0') / 10_000
     const bridgeFeeRate = Number(import.meta.env.VITE_LIFI_FEE_PERCENT ?? '0')
     const rows = new Map<string, MonthlyRow>()
 
-    for (const item of history) {
+    for (const item of reportHistory) {
       const d = new Date(item.createdAt)
       const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       const row = rows.get(month) ?? {
@@ -133,13 +218,15 @@ export function AdminPage() {
     }
 
     return [...rows.values()].sort((a, b) => b.month.localeCompare(a.month))
-  }, [history])
+  }, [reportHistory])
 
   const availableYears = useMemo(() => {
-    const years = new Set(history.map((item) => String(new Date(item.createdAt).getFullYear())))
+    const years = new Set(
+      reportHistory.map((item) => String(new Date(item.createdAt).getFullYear())),
+    )
     years.add(String(new Date().getFullYear()))
     return [...years].sort((a, b) => b.localeCompare(a))
-  }, [history])
+  }, [reportHistory])
 
   const monthOptions = useMemo(
     () => [
@@ -186,7 +273,7 @@ export function AdminPage() {
 
   const filteredHistory = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return history
+    return reportHistory
       .filter((item) => (statusFilter === 'all' ? true : item.status === statusFilter))
       .filter((item) => {
         if (periodFilter === 'all') return true
@@ -202,7 +289,7 @@ export function AdminPage() {
           (item.from ?? '').toLowerCase().includes(q)
         )
       })
-  }, [history, periodFilter, periodMonth, periodYear, query, statusFilter])
+  }, [reportHistory, periodFilter, periodMonth, periodYear, query, statusFilter])
 
   const exportCsv = () => {
     const header = ['createdAt', 'status', 'chainId', 'summary', 'txHash', 'from', 'blockNumber']
@@ -225,7 +312,7 @@ export function AdminPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `eonswap-admin-report-${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `eonswap-admin-${dataSource}-${new Date().toISOString().slice(0, 10)}.csv`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -248,8 +335,87 @@ export function AdminPage() {
             Transaction dashboard
           </h1>
           <p className="mt-2 text-sm text-slate-300">
-            Internal monitoring for transaction activity captured by the app session.
+            Local view uses this browser&apos;s saved activity. Relay view aggregates events from all
+            users when the monitoring relay logs them (set{' '}
+            <code className="rounded bg-white/[0.08] px-1 text-xs text-cyan-200/90">
+              RELAY_ADMIN_SECRET
+            </code>{' '}
+            on the relay and refresh below).
           </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="mb-4 rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            Data source
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-lg border border-white/[0.1] bg-white/[0.02] p-1">
+              <button
+                type="button"
+                onClick={() => setDataSource('local')}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                  dataSource === 'local'
+                    ? 'bg-white/[0.14] text-white'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                This device
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (relayRows.length === 0) {
+                    setRelayMessage('Load from relay first.')
+                    setRelayStatus('error')
+                    return
+                  }
+                  setDataSource('relay')
+                }}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                  dataSource === 'relay'
+                    ? 'bg-white/[0.14] text-white'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Relay (all users)
+              </button>
+            </div>
+            <input
+              type="password"
+              autoComplete="off"
+              placeholder="Relay admin secret"
+              value={adminSecretDraft}
+              onChange={(e) => setAdminSecretDraft(e.target.value)}
+              className="h-9 min-w-[180px] flex-1 rounded-lg border border-white/[0.12] bg-[#0c1027] px-3 text-sm text-slate-100 placeholder:text-slate-500 md:max-w-xs"
+            />
+            <button
+              type="button"
+              onClick={saveRelaySecret}
+              className="h-9 rounded-lg border border-white/[0.14] bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.08]"
+            >
+              Save key
+            </button>
+            <button
+              type="button"
+              disabled={relayStatus === 'loading'}
+              onClick={() => void loadFromRelay()}
+              className="h-9 rounded-lg bg-gradient-to-r from-cyan-400 via-cyan-500 to-eon-blue px-3 text-xs font-semibold text-[#05060f] disabled:opacity-50"
+            >
+              {relayStatus === 'loading' ? 'Loading…' : 'Refresh from relay'}
+            </button>
+          </div>
+          {relayMessage ? (
+            <p
+              className={`mt-2 text-xs ${relayStatus === 'error' ? 'text-amber-200/90' : 'text-slate-400'}`}
+            >
+              {relayMessage}
+            </p>
+          ) : null}
         </motion.div>
 
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.1] bg-white/[0.02] p-3 md:flex-nowrap">
