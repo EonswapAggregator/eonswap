@@ -1,7 +1,16 @@
+import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
-import { URL } from 'node:url'
+import { dirname, join } from 'node:path'
+import { URL, fileURLToPath } from 'node:url'
 
-const PORT = Number(process.env.RELAY_PORT || 8787)
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const ACTIVITY_LOG_PATH =
+  process.env.RELAY_ACTIVITY_LOG_PATH?.trim() || join(__dirname, 'data', 'activities.jsonl')
+const RELAY_ADMIN_SECRET = process.env.RELAY_ADMIN_SECRET?.trim() || ''
+
+const PORT = Number(process.env.PORT || process.env.RELAY_PORT || 8787)
+/** Railway/Render/Fly expect HTTP on $PORT and often require binding all interfaces. */
+const LISTEN_HOST = process.env.HOST?.trim() || '0.0.0.0'
 const CHECK_TIMEOUT_MS = 12_000
 const POLL_MS = 60_000
 const ALERT_WEBHOOK_URL = process.env.RELAY_ALERT_WEBHOOK_URL?.trim() || ''
@@ -103,6 +112,83 @@ function isRateLimited(req) {
   entry.count += 1
   eventRateMap.set(key, entry)
   return entry.count > EVENT_RATE_LIMIT_PER_MIN
+}
+
+function validateActivityPayload(payload) {
+  const id = String(payload?.id || '')
+  if (id.length < 4 || id.length > 128) return { error: 'Invalid id' }
+  const status = payload?.status
+  if (!['pending', 'success', 'failed'].includes(status)) return { error: 'Invalid status' }
+  const createdAt = Number(payload?.createdAt)
+  if (!Number.isFinite(createdAt) || createdAt < 0) return { error: 'Invalid createdAt' }
+  const summary = String(payload?.summary ?? '')
+  if (summary.length > 4000) return { error: 'Summary too long' }
+  const chainId = Number(payload?.chainId)
+  if (!Number.isInteger(chainId) || chainId < 1 || chainId > 99_999_999) {
+    return { error: 'Invalid chainId' }
+  }
+  const out = { id, status, createdAt, summary, chainId }
+  if (payload?.txHash) {
+    const h = String(payload.txHash)
+    if (!/^0x[a-fA-F0-9]{64}$/.test(h)) return { error: 'Invalid txHash' }
+    out.txHash = h
+  }
+  if (payload?.from) {
+    const f = String(payload.from)
+    if (!/^0x[a-fA-F0-9]{40}$/.test(f)) return { error: 'Invalid from' }
+    out.from = f
+  }
+  if (payload?.blockNumber != null && payload.blockNumber !== '') {
+    const b = Number(payload.blockNumber)
+    if (!Number.isFinite(b)) return { error: 'Invalid blockNumber' }
+    out.blockNumber = Math.floor(b)
+  }
+  return { record: out }
+}
+
+function normalizeActivityFromLine(obj) {
+  if (!obj || typeof obj.id !== 'string') return null
+  if (!['pending', 'success', 'failed'].includes(obj.status)) return null
+  const createdAt = Number(obj.createdAt)
+  if (!Number.isFinite(createdAt)) return null
+  const row = {
+    id: obj.id,
+    status: obj.status,
+    createdAt,
+    summary: String(obj.summary ?? ''),
+    chainId: Number(obj.chainId) || 0,
+  }
+  if (obj.txHash) row.txHash = String(obj.txHash)
+  if (obj.from) row.from = String(obj.from)
+  if (obj.blockNumber != null) row.blockNumber = Number(obj.blockNumber)
+  return row
+}
+
+async function appendActivityRecord(record) {
+  await mkdir(dirname(ACTIVITY_LOG_PATH), { recursive: true })
+  await appendFile(ACTIVITY_LOG_PATH, `${JSON.stringify(record)}\n`, 'utf8')
+}
+
+async function readActivitiesMerged(maxLines = 20_000) {
+  let raw = ''
+  try {
+    raw = await readFile(ACTIVITY_LOG_PATH, 'utf8')
+  } catch {
+    return []
+  }
+  const lines = raw.split('\n').filter((l) => l.trim())
+  const slice = lines.length > maxLines ? lines.slice(-maxLines) : lines
+  const byId = new Map()
+  for (const line of slice) {
+    try {
+      const obj = JSON.parse(line)
+      const row = normalizeActivityFromLine(obj)
+      if (row) byId.set(row.id, row)
+    } catch {
+      // skip corrupt line
+    }
+  }
+  return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt)
 }
 
 function alreadyProcessedTx(hash) {
@@ -290,10 +376,38 @@ createServer(async (req, res) => {
     res.writeHead(204, {
       'access-control-allow-origin': ALLOWED_ORIGIN,
       'access-control-allow-methods': 'GET,POST,OPTIONS',
-      'access-control-allow-headers': 'content-type,accept',
+      'access-control-allow-headers': 'content-type,accept,authorization',
     })
     res.end()
     return
+  }
+  if (req.method === 'GET' && u.pathname === '/admin/activities') {
+    if (!RELAY_ADMIN_SECRET) {
+      return json(res, 503, { ok: false, error: 'Admin export not configured' })
+    }
+    const auth = String(req.headers.authorization || '')
+    if (auth !== `Bearer ${RELAY_ADMIN_SECRET}`) {
+      return json(res, 401, { ok: false, error: 'Unauthorized' })
+    }
+    const activities = await readActivitiesMerged()
+    return json(res, 200, { ok: true, activities })
+  }
+  if (req.method === 'POST' && u.pathname === '/events/activity') {
+    if (isRateLimited(req)) return json(res, 429, { ok: false, error: 'Rate limited' })
+    let body = ''
+    req.on('data', (chunk) => {
+      body += String(chunk)
+    })
+    await new Promise((resolve) => req.on('end', resolve))
+    try {
+      const payload = JSON.parse(body || '{}')
+      const checked = validateActivityPayload(payload)
+      if (checked.error) return json(res, 400, { ok: false, error: checked.error })
+      await appendActivityRecord({ ...checked.record, serverAt: Date.now() })
+      return json(res, 200, { ok: true })
+    } catch {
+      return json(res, 400, { ok: false, error: 'Invalid payload' })
+    }
   }
   if (req.method === 'POST' && u.pathname === '/events/tx') {
     if (isRateLimited(req)) return json(res, 429, { ok: false, error: 'Rate limited' })
@@ -342,8 +456,10 @@ createServer(async (req, res) => {
     return json(res, 200, status)
   }
   return json(res, 404, { error: 'Not found' })
-}).listen(PORT, () => {
-  console.log(`[relay] monitoring relay started on :${PORT}`)
+}).listen(PORT, LISTEN_HOST, () => {
+  console.log(
+    `[relay] listening http://${LISTEN_HOST}:${PORT} (env PORT=${process.env.PORT ?? 'unset'} RELAY_PORT=${process.env.RELAY_PORT ?? 'unset'})`,
+  )
   void runChecks()
   setInterval(() => void runChecks(), POLL_MS)
 })
