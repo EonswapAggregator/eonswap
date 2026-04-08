@@ -17,7 +17,27 @@ const ALERT_WEBHOOK_URL = process.env.RELAY_ALERT_WEBHOOK_URL?.trim() || ''
 const ALERT_COOLDOWN_MS = Number(process.env.RELAY_ALERT_COOLDOWN_MS || 180_000)
 const TELEGRAM_BOT_TOKEN = process.env.RELAY_TELEGRAM_BOT_TOKEN?.trim() || ''
 const TELEGRAM_CHAT_ID = process.env.RELAY_TELEGRAM_CHAT_ID?.trim() || ''
-const ALLOWED_ORIGIN = process.env.RELAY_ALLOWED_ORIGIN?.trim() || '*'
+/** Comma-separated list, or `*` when unset / empty (dev). Entries match after trimming trailing `/`. */
+const RELAY_CORS_RAW = process.env.RELAY_ALLOWED_ORIGIN?.trim() || '*'
+const CORS_ALLOW_ALL = RELAY_CORS_RAW === '*'
+function normalizeCorsOrigin(s) {
+  return String(s).trim().replace(/\/+$/u, '')
+}
+const CORS_ALLOWED_NORMALIZED = CORS_ALLOW_ALL
+  ? new Set()
+  : new Set(
+      RELAY_CORS_RAW.split(',')
+        .map((s) => normalizeCorsOrigin(s))
+        .filter(Boolean),
+    )
+
+function corsOriginHeader(req) {
+  if (CORS_ALLOW_ALL) return '*'
+  const o = String(req.headers.origin ?? '').trim()
+  if (!o) return null
+  if (CORS_ALLOWED_NORMALIZED.has(normalizeCorsOrigin(o))) return o
+  return null
+}
 const EVENT_RATE_LIMIT_PER_MIN = Number(process.env.RELAY_EVENTS_RATE_LIMIT_PER_MIN || 60)
 const WARN_LATENCY_MS = {
   kyber: Number(process.env.RELAY_WARN_KYBER_MS || 2500),
@@ -357,43 +377,47 @@ async function runChecks() {
   }
 }
 
-function json(res, code, payload) {
-  res.writeHead(code, {
+function json(req, res, code, payload) {
+  const acao = corsOriginHeader(req)
+  const headers = {
     'content-type': 'application/json; charset=utf-8',
-    'access-control-allow-origin': ALLOWED_ORIGIN,
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
     'permissions-policy': 'camera=(), microphone=(), geolocation=()',
-  })
+  }
+  if (acao) headers['access-control-allow-origin'] = acao
+  res.writeHead(code, headers)
   res.end(JSON.stringify(payload))
 }
 
 createServer(async (req, res) => {
   const u = new URL(req.url || '/', `http://${req.headers.host}`)
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'access-control-allow-origin': ALLOWED_ORIGIN,
+    const acao = corsOriginHeader(req)
+    const h = {
       'access-control-allow-methods': 'GET,POST,OPTIONS',
       'access-control-allow-headers': 'content-type,accept,authorization',
-    })
+    }
+    if (acao) h['access-control-allow-origin'] = acao
+    res.writeHead(204, h)
     res.end()
     return
   }
   if (req.method === 'GET' && u.pathname === '/admin/activities') {
     if (!RELAY_ADMIN_SECRET) {
-      return json(res, 503, { ok: false, error: 'Admin export not configured' })
+      return json(req, res, 503, { ok: false, error: 'Admin export not configured' })
     }
     const auth = String(req.headers.authorization || '')
     if (auth !== `Bearer ${RELAY_ADMIN_SECRET}`) {
-      return json(res, 401, { ok: false, error: 'Unauthorized' })
+      return json(req, res, 401, { ok: false, error: 'Unauthorized' })
     }
     const activities = await readActivitiesMerged()
-    return json(res, 200, { ok: true, activities })
+    return json(req, res, 200, { ok: true, activities })
   }
   if (req.method === 'POST' && u.pathname === '/events/activity') {
-    if (isRateLimited(req)) return json(res, 429, { ok: false, error: 'Rate limited' })
+    if (isRateLimited(req)) return json(req, res, 429, { ok: false, error: 'Rate limited' })
     let body = ''
     req.on('data', (chunk) => {
       body += String(chunk)
@@ -402,15 +426,15 @@ createServer(async (req, res) => {
     try {
       const payload = JSON.parse(body || '{}')
       const checked = validateActivityPayload(payload)
-      if (checked.error) return json(res, 400, { ok: false, error: checked.error })
+      if (checked.error) return json(req, res, 400, { ok: false, error: checked.error })
       await appendActivityRecord({ ...checked.record, serverAt: Date.now() })
-      return json(res, 200, { ok: true })
+      return json(req, res, 200, { ok: true })
     } catch {
-      return json(res, 400, { ok: false, error: 'Invalid payload' })
+      return json(req, res, 400, { ok: false, error: 'Invalid payload' })
     }
   }
   if (req.method === 'POST' && u.pathname === '/events/tx') {
-    if (isRateLimited(req)) return json(res, 429, { ok: false, error: 'Rate limited' })
+    if (isRateLimited(req)) return json(req, res, 429, { ok: false, error: 'Rate limited' })
     let body = ''
     req.on('data', (chunk) => {
       body += String(chunk)
@@ -421,9 +445,9 @@ createServer(async (req, res) => {
       const kind = payload?.kind === 'bridge' ? 'Bridge' : 'Swap'
       const txHash = String(payload?.txHash || '')
       if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
-        return json(res, 400, { ok: false, error: 'Invalid tx hash' })
+        return json(req, res, 400, { ok: false, error: 'Invalid tx hash' })
       }
-      if (alreadyProcessedTx(txHash)) return json(res, 200, { ok: true, dedup: true })
+      if (alreadyProcessedTx(txHash)) return json(req, res, 200, { ok: true, dedup: true })
       const shortHash =
         txHash.length > 14 ? `${txHash.slice(0, 10)}...${txHash.slice(-6)}` : txHash || 'unknown'
       const chainId = Number(payload?.chainId || 0)
@@ -440,22 +464,22 @@ createServer(async (req, res) => {
         .filter(Boolean)
         .join('\n')
       await sendTelegramMessage(msg)
-      return json(res, 200, { ok: true })
+      return json(req, res, 200, { ok: true })
     } catch {
-      return json(res, 400, { ok: false, error: 'Invalid payload' })
+      return json(req, res, 400, { ok: false, error: 'Invalid payload' })
     }
   }
   if (u.pathname === '/healthz') {
-    return json(res, 200, { ok: true, service: 'eonswap-monitor-relay' })
+    return json(req, res, 200, { ok: true, service: 'eonswap-monitor-relay' })
   }
   if (u.pathname === '/monitor/status') {
-    return json(res, 200, status)
+    return json(req, res, 200, status)
   }
   if (u.pathname === '/monitor/check-now') {
     await runChecks()
-    return json(res, 200, status)
+    return json(req, res, 200, status)
   }
-  return json(res, 404, { error: 'Not found' })
+  return json(req, res, 404, { error: 'Not found' })
 }).listen(PORT, LISTEN_HOST, () => {
   console.log(
     `[relay] listening http://${LISTEN_HOST}:${PORT} (env PORT=${process.env.PORT ?? 'unset'} RELAY_PORT=${process.env.RELAY_PORT ?? 'unset'})`,

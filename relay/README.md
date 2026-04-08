@@ -31,7 +31,7 @@ Optional env:
 - `RELAY_WARN_ETHERSCAN_MS` (default `3000`)
 - `RELAY_TELEGRAM_BOT_TOKEN` (optional; bot token for tx success alerts)
 - `RELAY_TELEGRAM_CHAT_ID` (optional; target chat/channel id)
-- `RELAY_ALLOWED_ORIGIN` (default `*`; set your frontend origin in production)
+- `RELAY_ALLOWED_ORIGIN` (default `*`; in production set your frontend origin(s), **comma-separated** if you use Admin from prod and from `http://localhost:5173` / Netlify previews — must match the browser `Origin` header exactly)
 - `RELAY_EVENTS_RATE_LIMIT_PER_MIN` (default `60`)
 - `RELAY_ADMIN_SECRET` (optional; required for `GET /admin/activities`)
 - `RELAY_ACTIVITY_LOG_PATH` (optional; default `relay/data/activities.jsonl`)
