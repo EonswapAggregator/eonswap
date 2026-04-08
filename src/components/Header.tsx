@@ -96,6 +96,8 @@ export function Header() {
                     ))}
                     <a
                       href={docsHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       onClick={() => setMobileOpen(false)}
                       className="rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
                     >
@@ -160,7 +162,12 @@ export function Header() {
                 {item.label}
               </NavLink>
             ))}
-            <a href={docsHref} className={navTextClass}>
+            <a
+              href={docsHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={navTextClass}
+            >
               Docs
             </a>
           </div>

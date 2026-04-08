@@ -182,10 +182,15 @@ export function Layout() {
                 <h3 className={footerHeading}>Resources</h3>
                 <ul className="mt-2.5 space-y-1.5">
                   <li>
-                    <Link to="/docs" className={footerItemClass}>
+                    <a
+                      href="/docs/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={footerItemClass}
+                    >
                       <FileText className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
                       Docs
-                    </Link>
+                    </a>
                   </li>
                   <li>
                     <Link to="/faq" className={footerItemClass}>
