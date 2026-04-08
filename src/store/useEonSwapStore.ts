@@ -5,9 +5,11 @@ import { DEFAULT_SLIPPAGE_BPS, clampSlippageBps } from '../lib/slippage'
 import { MAINNET_TOKENS, type Token } from '../lib/tokens'
 
 export type TxStatus = 'pending' | 'success' | 'failed'
+export type ActivityKind = 'swap' | 'bridge'
 
 export type ActivityItem = {
   id: string
+  kind: ActivityKind
   status: TxStatus
   createdAt: number
   summary: string
@@ -141,6 +143,7 @@ export const useEonSwapStore = create<EonSwapState>()(
         const id = item.id ?? crypto.randomUUID()
         const row: ActivityItem = {
           id,
+          kind: item.kind,
           createdAt: Date.now(),
           status: item.status,
           summary: item.summary,

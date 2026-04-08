@@ -15,6 +15,7 @@ import {
   useAccount,
   useBalance,
   useChainId,
+  useEstimateFeesPerGas,
   useReadContract,
   useSendTransaction,
   useWaitForTransactionReceipt,
@@ -36,6 +37,23 @@ import { sendTxEventToRelay } from '../lib/txEvents'
 
 const BRIDGE_PENDING_STORAGE_KEY = 'eonswap.bridge.pending.v1'
 const BRIDGE_RECOVERY_TTL_MS = 24 * 60 * 60 * 1000
+const BRIDGE_GAS_LIMIT_ESTIMATE = 450_000n
+const DEFAULT_RESERVE_WEI = 1_500_000_000_000_000n // 0.0015
+
+function nativeReserveFloorWei(chainId?: number): bigint {
+  switch (chainId) {
+    case 56: // BSC
+    case 137: // Polygon
+      return 300_000_000_000_000n // 0.0003
+    case 8453: // Base
+    case 42161: // Arbitrum
+    case 10: // Optimism
+      return 500_000_000_000_000n // 0.0005
+    case 1: // Ethereum
+    default:
+      return DEFAULT_RESERVE_WEI
+  }
+}
 
 type PersistedBridgePending = {
   txHash: string
@@ -171,6 +189,7 @@ export function BridgePage() {
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [quoteFetchedAt, setQuoteFetchedAt] = useState<number>(0)
+  const [nowMs, setNowMs] = useState<number>(() => Date.now())
   const [bridgeTxHash, setBridgeTxHash] = useState<`0x${string}` | null>(null)
   const [bridgeStatus, setBridgeStatus] = useState<LifiStatus | null>(null)
   const [bridgeStatusError, setBridgeStatusError] = useState<string | null>(null)
@@ -289,7 +308,12 @@ export function BridgePage() {
     [toChainId, toTokens],
   )
   const isFromNative = isNativeToken(fromToken.address)
-  const staleQuote = quoteFetchedAt > 0 && Date.now() - quoteFetchedAt > 60_000
+  const staleQuote = quoteFetchedAt > 0 && nowMs - quoteFetchedAt > 60_000
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNowMs(Date.now()), 1000)
+    return () => window.clearInterval(t)
+  }, [])
 
   const fromAmountWei = useMemo(() => {
     const raw = amountInput.trim()
@@ -311,6 +335,10 @@ export function BridgePage() {
     chainId: fromChainId,
     token: isFromNative ? undefined : (fromToken.address as `0x${string}`),
     query: { enabled: Boolean(address && isConnected && !isFromNative) },
+  })
+  const { data: feeData } = useEstimateFeesPerGas({
+    chainId: fromChainId,
+    query: { enabled: Boolean(isConnected && address) },
   })
 
   const allowanceSpender = quote?.estimate.approvalAddress
@@ -407,24 +435,20 @@ export function BridgePage() {
   const wrongNetwork =
     !isSupportedChain(walletChainId) || walletChainId !== fromChainId
 
-  const quotedGasWei = useMemo(
-    () =>
-      (quote?.estimate.gasCosts ?? []).reduce((sum, g) => {
-        try {
-          return sum + BigInt(g.amount)
-        } catch {
-          return sum
-        }
-      }, 0n),
-    [quote],
-  )
-  const minNativeReserveWei = 1500000000000000n // 0.0015 native reserve
-  const neededNativeWei = quotedGasWei + minNativeReserveWei
+  const neededNativeWei = useMemo(() => {
+    const floor = nativeReserveFloorWei(fromChainId)
+    const feePerGas = feeData?.maxFeePerGas ?? feeData?.gasPrice ?? 0n
+    if (feePerGas <= 0n) return floor
+    const estimated = (feePerGas * BRIDGE_GAS_LIMIT_ESTIMATE * 12n) / 10n // +20% buffer
+    return estimated > floor ? estimated : floor
+  }, [feeData?.gasPrice, feeData?.maxFeePerGas, fromChainId])
   const nativeWei = nativeBalance?.value ?? 0n
+  const nativeGasSymbol = nativeBalance?.symbol ?? fromChain.nativeCurrency.symbol
   const tokenWei = isFromNative ? nativeWei : (fromTokenBalance?.value ?? 0n)
+  const effectiveNativeReserveWei = neededNativeWei
   const maxSendableWei = isFromNative
-    ? tokenWei > minNativeReserveWei
-      ? tokenWei - minNativeReserveWei
+    ? tokenWei > effectiveNativeReserveWei
+      ? tokenWei - effectiveNativeReserveWei
       : 0n
     : tokenWei
   const maxDisabled = !isConnected || wrongNetwork || maxSendableWei <= 0n
@@ -463,7 +487,7 @@ export function BridgePage() {
         : insufficientTokenBalance
           ? `Insufficient ${fromToken.symbol} balance`
           : insufficientNativeGas
-            ? 'Insufficient native token for gas'
+            ? `Insufficient ${nativeGasSymbol} for gas`
             : staleOrMissingQuote
               ? 'Refresh quote before bridging'
               : amountTooSmall
@@ -502,6 +526,7 @@ export function BridgePage() {
     setBridgeActivityId(activityId)
     addActivity({
       id: activityId,
+      kind: 'bridge',
       status: 'pending',
       summary: `Bridge ${amountInput.trim() || '0'} ${fromToken.symbol} → ~${receiveLabel}`,
       txHash: hash,
@@ -712,7 +737,7 @@ export function BridgePage() {
                         type="button"
                         disabled={maxDisabled}
                         onClick={applyMaxAmount}
-                        className="rounded-md border border-cyan-500/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-cyan-300 transition hover:border-cyan-400/50 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:border-white/[0.06] disabled:text-slate-600"
+                        className="rounded-md border border-cyan-500/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-cyan-300 transition hover:border-cyan-400/50 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:border-white/[0.06] disabled:bg-transparent disabled:text-slate-600 disabled:hover:border-white/[0.06] disabled:hover:bg-transparent disabled:hover:text-slate-600"
                       >
                         Max
                       </button>

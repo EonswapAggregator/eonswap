@@ -1,0 +1,37 @@
+:root {
+  --eonswap-sidebar-active: #3b82f6;
+}
+
+.VPSidebar {
+  width: 272px;
+}
+
+.VPSidebarItem.level-0 > .item > .text {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.VPSidebarItem .item {
+  border-left: 2px solid transparent;
+  border-radius: 8px;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.VPSidebarItem .item:hover {
+  background-color: var(--vp-c-default-soft);
+}
+
+.VPSidebarItem .item:hover .link {
+  color: var(--vp-c-text-1);
+}
+
+.VPSidebarItem.is-active > .item {
+  border-left-color: var(--eonswap-sidebar-active);
+  background-color: color-mix(in srgb, var(--eonswap-sidebar-active) 12%, transparent);
+}
+
+.VPSidebarItem .item .link {
+  font-weight: 500;
+}

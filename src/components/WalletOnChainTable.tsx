@@ -82,9 +82,10 @@ export function WalletOnChainTable() {
         </p>
         <p className="mt-2 leading-relaxed text-amber-100/80">
           Full address activity needs a block-explorer API key configured by
-          whoever hosts this app. Keys stay server-side / in build config and
-          are never displayed here. Self-hosters can obtain a free multichain
-          key from{' '}
+          whoever hosts this app. In this client-side mode, the key is used by
+          the app runtime and should be treated as public. For strict secret
+          handling, route explorer requests through your own backend relay.
+          Self-hosters can obtain a free multichain key from{' '}
           <a
             href="https://etherscan.io/apis"
             target="_blank"

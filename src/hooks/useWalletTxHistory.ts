@@ -1,15 +1,43 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAccount } from 'wagmi'
 import { isSupportedChain } from '../lib/chains'
-import { fetchAddressTxList } from '../lib/explorerTxHistory'
+import { fetchAddressTxList, type ExplorerNormalTx } from '../lib/explorerTxHistory'
+import { getMonitorRelayBaseUrl } from '../lib/monitorRelayUrl'
 
 const API_KEY = import.meta.env.VITE_ETHERSCAN_API_KEY as string | undefined
+const RELAY_BASE = getMonitorRelayBaseUrl()
+const RELAY_ONLY = String(import.meta.env.VITE_WALLET_TX_RELAY_ONLY ?? '1') === '1'
+
+async function fetchViaRelay(params: {
+  chainId: number
+  address: `0x${string}`
+  offset?: number
+}): Promise<ExplorerNormalTx[]> {
+  if (!RELAY_BASE) return []
+  const q = new URLSearchParams({
+    chainId: String(params.chainId),
+    address: params.address,
+    offset: String(params.offset ?? 35),
+  })
+  const res = await fetch(`${RELAY_BASE}/explorer/txlist?${q}`, {
+    headers: { accept: 'application/json' },
+  })
+  const json = (await res.json().catch(() => null)) as
+    | { ok?: boolean; result?: ExplorerNormalTx[]; error?: string }
+    | null
+  if (!res.ok || !json?.ok) {
+    throw new Error(json?.error || `Explorer proxy failed (${res.status})`)
+  }
+  return Array.isArray(json.result) ? json.result : []
+}
 
 export function useWalletTxHistory(chainId: number | undefined) {
   const { address } = useAccount()
+  const hasRelay = Boolean(RELAY_BASE)
+  const hasClientKey = Boolean(API_KEY?.trim())
 
   const enabled = Boolean(
-    API_KEY?.trim() &&
+    (hasRelay || (!RELAY_ONLY && hasClientKey)) &&
       address &&
       chainId != null &&
       isSupportedChain(chainId),
@@ -18,7 +46,16 @@ export function useWalletTxHistory(chainId: number | undefined) {
   return useQuery({
     queryKey: ['wallet-txlist', address, chainId],
     queryFn: async () => {
-      if (!address || chainId == null || !API_KEY) return []
+      if (!address || chainId == null) return []
+      if (hasRelay) {
+        return fetchViaRelay({
+          chainId,
+          address: address as `0x${string}`,
+          offset: 35,
+        })
+      }
+      if (RELAY_ONLY) return []
+      if (!API_KEY) return []
       return fetchAddressTxList({
         chainId,
         address: address as `0x${string}`,
@@ -33,5 +70,5 @@ export function useWalletTxHistory(chainId: number | undefined) {
 }
 
 export function hasEtherscanApiKey(): boolean {
-  return Boolean(API_KEY && String(API_KEY).trim().length > 0)
+  return Boolean(RELAY_BASE || (!RELAY_ONLY && API_KEY && String(API_KEY).trim().length > 0))
 }

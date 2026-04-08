@@ -53,6 +53,7 @@ const HEALTH_LATENCY_WARN_MS: Record<ApiHealth['id'], number> = {
   coingecko: parseLatencyThreshold(import.meta.env.VITE_HEALTH_WARN_COINGECKO_MS, 2500),
   etherscan: parseLatencyThreshold(import.meta.env.VITE_HEALTH_WARN_ETHERSCAN_MS, 3000),
 }
+const HEALTH_RELAY_ONLY = String(import.meta.env.VITE_STATUS_HEALTH_RELAY_ONLY ?? '1') === '1'
 
 function LogoBadge({ src, alt }: { src: string | null; alt: string }) {
   return src ? (
@@ -438,6 +439,21 @@ export function StatusPage() {
         }
       }
       if (usedRelay) return
+      if (HEALTH_RELAY_ONLY) {
+        const relayMissingDetail = relayUrl
+          ? 'Relay health endpoint unavailable'
+          : 'Relay URL not configured'
+        setApiHealth((prev) =>
+          prev.map((item) => ({
+            ...item,
+            status: 'degraded',
+            detail: relayMissingDetail,
+            latencyMs: undefined,
+          })),
+        )
+        setHealthCheckedAt(Date.now())
+        return
+      }
 
       const etherscanKey = import.meta.env.VITE_ETHERSCAN_API_KEY?.trim()
 

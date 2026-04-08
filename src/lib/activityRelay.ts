@@ -3,6 +3,7 @@ import { getMonitorRelayBaseUrl, normalizeMonitorRelayBaseUrl } from './monitorR
 /** Fire-and-forget log to monitoring relay (aggregated admin view). */
 export function sendActivityLogToRelay(item: {
   id: string
+  kind: 'swap' | 'bridge'
   status: string
   createdAt: number
   summary: string

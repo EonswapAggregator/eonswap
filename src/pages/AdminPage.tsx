@@ -23,10 +23,12 @@ function parseRelayActivities(raw: unknown[]): ActivityItem[] {
     const id = String(o.id ?? '')
     const status = o.status
     if (status !== 'pending' && status !== 'success' && status !== 'failed') continue
+    const kind = o.kind === 'bridge' ? 'bridge' : o.kind === 'swap' ? 'swap' : 'swap'
     const createdAt = Number(o.createdAt)
     if (!Number.isFinite(createdAt)) continue
     out.push({
       id,
+      kind,
       status,
       createdAt,
       summary: String(o.summary ?? ''),
@@ -103,8 +105,8 @@ export function AdminPage() {
   const [periodYear, setPeriodYear] = useState<number>(() => new Date().getFullYear())
   const [monthlyYearFilter, setMonthlyYearFilter] = useState<string>('all')
   const [query, setQuery] = useState('')
-  const e2eBypass =
-    import.meta.env.VITE_E2E_ADMIN_BYPASS === '1' && searchParams.get('e2eAdmin') === '1'
+  const e2eBypassEnabled = import.meta.env.VITE_E2E_ADMIN_BYPASS === '1' || import.meta.env.DEV
+  const e2eBypass = e2eBypassEnabled && searchParams.get('e2eAdmin') === '1'
   const authorized =
     e2eBypass ||
     isConnected && typeof address === 'string' && address.toLowerCase() === ADMIN_WALLET
@@ -292,11 +294,12 @@ export function AdminPage() {
   }, [reportHistory, periodFilter, periodMonth, periodYear, query, statusFilter])
 
   const exportCsv = () => {
-    const header = ['createdAt', 'status', 'chainId', 'summary', 'txHash', 'from', 'blockNumber']
+    const header = ['createdAt', 'kind', 'status', 'chainId', 'summary', 'txHash', 'from', 'blockNumber']
     const escapeCell = (value: string) => `"${value.replace(/"/g, '""')}"`
     const rows = filteredHistory.map((item) =>
       [
         new Date(item.createdAt).toISOString(),
+        item.kind,
         item.status,
         String(item.chainId),
         item.summary,

@@ -1,11 +1,12 @@
 import { motion } from 'framer-motion'
 import { ArrowDownUp, ChevronDown, Loader2 } from 'lucide-react'
-import { useCallback, useState } from 'react'
-import { useAccount, useBalance, useChainId } from 'wagmi'
+import { useCallback, useMemo, useState } from 'react'
+import { parseUnits } from 'viem'
+import { useAccount, useBalance, useChainId, useEstimateFeesPerGas } from 'wagmi'
 import { useKyberQuote } from '../hooks/useKyberQuote'
 import { useSwapSubmit } from '../hooks/useSwapSubmit'
 import { formatBalanceLabel, formatMaxSellInput } from '../lib/format'
-import { isSupportedChain } from '../lib/chains'
+import { getEonChain, isSupportedChain } from '../lib/chains'
 import { isNativeToken } from '../lib/tokens'
 import { mainnet } from 'wagmi/chains'
 import { useEonSwapStore } from '../store/useEonSwapStore'
@@ -15,6 +16,24 @@ import { SwapConfirmModal } from './SwapConfirmModal'
 import { SwapQuoteDetails } from './SwapQuoteDetails'
 import { TokenLogo } from './TokenLogo'
 import { TokenSelector } from './TokenSelector'
+
+const SWAP_GAS_LIMIT_ESTIMATE = 300_000n
+const DEFAULT_RESERVE_WEI = 1_500_000_000_000_000n // 0.0015
+
+function nativeReserveFloorWei(chainId?: number): bigint {
+  switch (chainId) {
+    case 56: // BSC
+    case 137: // Polygon
+      return 300_000_000_000_000n // 0.0003
+    case 8453: // Base
+    case 42161: // Arbitrum
+    case 10: // Optimism
+      return 500_000_000_000_000n // 0.0005
+    case 1: // Ethereum
+    default:
+      return DEFAULT_RESERVE_WEI
+  }
+}
 
 export function SwapWidget() {
   useKyberQuote()
@@ -54,6 +73,7 @@ export function SwapWidget() {
       : undefined
 
   const sellIsNative = isNativeToken(sellToken.address)
+  const activeChain = balanceChainId != null ? getEonChain(balanceChainId) : null
 
   const { data: walletBalance, isFetching: balanceLoading } = useBalance({
     address,
@@ -67,19 +87,51 @@ export function SwapWidget() {
     },
   })
 
+  const { data: nativeGasBalance, isFetching: nativeGasLoading } = useBalance({
+    address,
+    chainId: balanceChainId,
+    token: undefined,
+    query: {
+      enabled:
+        Boolean(address) && balanceChainId != null && !wrongNetwork,
+    },
+  })
+
+  const { data: feeData } = useEstimateFeesPerGas({
+    chainId: balanceChainId,
+    query: {
+      enabled: Boolean(isConnected && balanceChainId != null && !wrongNetwork),
+    },
+  })
+
+  const dynamicNativeReserveWei = useMemo(() => {
+    const floor = nativeReserveFloorWei(balanceChainId)
+    const feePerGas = feeData?.maxFeePerGas ?? feeData?.gasPrice ?? 0n
+    if (feePerGas <= 0n) return floor
+    const estimated = (feePerGas * SWAP_GAS_LIMIT_ESTIMATE * 12n) / 10n // +20% buffer
+    return estimated > floor ? estimated : floor
+  }, [balanceChainId, feeData?.gasPrice, feeData?.maxFeePerGas])
+
+  const maxInputWei =
+    sellIsNative && walletBalance?.value
+      ? walletBalance.value > dynamicNativeReserveWei
+        ? walletBalance.value - dynamicNativeReserveWei
+        : 0n
+      : (walletBalance?.value ?? 0n)
+
   const applyMaxSell = useCallback(() => {
-    if (!walletBalance?.value) return
+    if (!walletBalance?.value || maxInputWei <= 0n) return
     setSellAmountInput(
-      formatMaxSellInput(walletBalance.value, walletBalance.decimals),
+      formatMaxSellInput(maxInputWei, walletBalance.decimals),
     )
-  }, [walletBalance, setSellAmountInput])
+  }, [walletBalance, maxInputWei, setSellAmountInput])
 
   const maxDisabled =
     !isConnected ||
     wrongNetwork ||
     balanceLoading ||
     !walletBalance?.value ||
-    walletBalance.value === 0n
+    maxInputWei <= 0n
 
   const maxBtnClass = maxDisabled
     ? 'cursor-not-allowed border-white/[0.06] text-slate-600'
@@ -103,6 +155,46 @@ export function SwapWidget() {
     !!receiveFormatted &&
     !!sellAmountInput.trim()
 
+  const sellAmountWei = (() => {
+    const raw = sellAmountInput.trim()
+    if (!raw) return null
+    try {
+      return parseUnits(raw, sellToken.decimals)
+    } catch {
+      return null
+    }
+  })()
+
+  const tokenBalanceWei = walletBalance?.value ?? 0n
+  const gasBalanceWei = nativeGasBalance?.value ?? 0n
+  const missingAmount = !sellAmountInput.trim() || sellAmountWei == null || sellAmountWei <= 0n
+  const insufficientTokenBalance =
+    !missingAmount && sellAmountWei != null && tokenBalanceWei < sellAmountWei
+  const insufficientGasFee = sellIsNative
+    ? !missingAmount &&
+      sellAmountWei != null &&
+      gasBalanceWei < sellAmountWei + dynamicNativeReserveWei
+    : gasBalanceWei < dynamicNativeReserveWei
+
+  const gasSymbol =
+    nativeGasBalance?.symbol ??
+    activeChain?.nativeCurrency.symbol ??
+    'native token'
+
+  const preflightError = !isConnected
+    ? 'Connect wallet'
+    : wrongNetwork
+      ? 'Wrong network'
+      : missingAmount
+        ? 'Enter amount'
+        : insufficientTokenBalance
+          ? `Insufficient ${sellToken.symbol} balance`
+          : insufficientGasFee
+            ? `Insufficient ${gasSymbol} for gas`
+            : null
+
+  const canSwapFinal = canSwap && !preflightError && !nativeGasLoading
+
   /** Fixed size so pay / receive selectors match regardless of symbol length */
   const tokenSelectorBtnClass =
     'group flex h-10 w-[7.25rem] shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.05] px-1.5 text-[13px] font-semibold text-white transition hover:border-cyan-500/30 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40'
@@ -118,9 +210,9 @@ export function SwapWidget() {
   ) : null
 
   const openConfirm = useCallback(() => {
-    if (!canSwap || isWorking) return
+    if (!canSwapFinal || isWorking) return
     setConfirmOpen(true)
-  }, [canSwap, isWorking])
+  }, [canSwapFinal, isWorking])
 
   const handleConfirmSwap = useCallback(() => {
     setConfirmOpen(false)
@@ -293,7 +385,7 @@ export function SwapWidget() {
 
           <button
             type="button"
-            disabled={!canSwap || isWorking}
+            disabled={!canSwapFinal || isWorking}
             onClick={openConfirm}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 via-cyan-500 to-eon-blue py-2.5 text-sm font-semibold text-[#05060f] shadow-[0_0_24px_-4px_rgba(34,211,238,0.3)] transition enabled:hover:brightness-[1.05] enabled:active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
           >
@@ -306,6 +398,8 @@ export function SwapWidget() {
               'Connect wallet'
             ) : wrongNetwork ? (
               'Wrong network'
+            ) : preflightError ? (
+              preflightError
             ) : (
               'Swap'
             )}

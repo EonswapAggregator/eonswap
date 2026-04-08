@@ -54,8 +54,8 @@ export function ActivityPage() {
               Activity command center
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300 md:text-[15px]">
-              Monitor session swaps and wallet activity in one place, then drill
-              into transaction-level details when needed.
+              Monitor session swap/bridge activity and wallet history in one
+              place, then drill into transaction-level details when needed.
             </p>
           </div>
           <Link
@@ -98,7 +98,7 @@ export function ActivityPage() {
               </h1>
               <p className="mt-3 text-pretty text-[15px] leading-relaxed text-slate-500 md:text-base">
                 On-chain history from the explorer API for your address, plus
-                session swaps from this tab. Wallet-wide transactions load when
+                session activity from this tab. Wallet-wide transactions load when
                 the host has configured a block-explorer API key — not listed on
                 this page.
               </p>
@@ -117,7 +117,7 @@ export function ActivityPage() {
               {
                 label: 'Total',
                 value: stats.total,
-                sub: 'Recorded swaps',
+                sub: 'Recorded events',
                 icon: History,
                 tone: 'text-slate-200',
               },
@@ -190,7 +190,7 @@ export function ActivityPage() {
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-white">Session swaps</h2>
               <p className="mt-0.5 text-pretty text-sm text-slate-500">
-                Trades via EonSwap in this browser · newest first ·{' '}
+                Swaps and bridges via EonSwap in this browser · newest first ·{' '}
                 {stats.total} total · scroll table sideways on small screens
               </p>
             </div>

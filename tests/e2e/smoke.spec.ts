@@ -13,6 +13,11 @@ test('core routes render without crash', async ({ page }) => {
 
   for (const route of routes) {
     await page.goto(route)
+    if (route === '/docs') {
+      await expect(page).toHaveURL(/\/docs\/?$/)
+      await expect(page.locator('body')).toBeVisible()
+      continue
+    }
     await expect(page.locator('main')).toBeVisible()
     await expect(page.locator('h1').first()).toBeVisible()
   }

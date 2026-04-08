@@ -14,9 +14,9 @@ const navItems = [
   { to: '/earn', label: 'Pool / Earn', end: false },
   { to: '/activity', label: 'Activity', end: false },
   { to: '/status', label: 'Status', end: false },
-  { to: '/docs', label: 'Docs', end: false },
   { to: '/contact-support', label: 'Support', end: false },
 ] as const
+const docsHref = '/docs/'
 
 export function Header() {
   const { pathname, hash } = useLocation()
@@ -94,6 +94,13 @@ export function Header() {
                         {item.label}
                       </NavLink>
                     ))}
+                    <a
+                      href={docsHref}
+                      onClick={() => setMobileOpen(false)}
+                      className="rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
+                    >
+                      Docs
+                    </a>
                   </div>
                   <div className="mt-1 border-t border-white/[0.08] px-3 py-2">
                     <p className="text-[11px] text-slate-500">EonSwap interface menu</p>
@@ -153,6 +160,9 @@ export function Header() {
                 {item.label}
               </NavLink>
             ))}
+            <a href={docsHref} className={navTextClass}>
+              Docs
+            </a>
           </div>
         </nav>
 

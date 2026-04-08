@@ -33,6 +33,8 @@ Optional env:
 - `RELAY_TELEGRAM_CHAT_ID` (optional; target chat/channel id)
 - `RELAY_ALLOWED_ORIGIN` (default `*`; in production set your frontend origin(s), **comma-separated** if you use Admin from prod and from `http://localhost:5173` / Netlify previews — must match the browser `Origin` header exactly)
 - `RELAY_EVENTS_RATE_LIMIT_PER_MIN` (default `60`)
+- `RELAY_EXPLORER_RATE_LIMIT_PER_MIN` (default `20`, for `GET /explorer/txlist`)
+- `RELAY_EXPLORER_ACCESS_TOKEN` (optional; when set, `/explorer/txlist` requires header `x-relay-explorer-token` from your trusted caller/proxy)
 - `RELAY_EVENTS_MAX_BODY_BYTES` (default `262144`)
 - `RELAY_ADMIN_SECRET` (optional; required for `GET /admin/activities`)
 - `RELAY_ACTIVITY_LOG_PATH` (optional; default `relay/data/activities.jsonl`)
@@ -45,6 +47,7 @@ Optional env:
 - `POST /events/tx` – receive tx success event and forward to Telegram (if configured)
 - `POST /events/activity` – append one activity row (swap/bridge lifecycle) for aggregated admin reporting (rate-limited per IP)
 - `GET /admin/activities` – return merged activity rows (latest row per `id`); header `Authorization: Bearer <RELAY_ADMIN_SECRET>`
+- `GET /explorer/txlist?chainId=<id>&address=<0x...>&offset=<n>` – proxy Etherscan V2 txlist using relay API key (keeps key out of frontend). Optional token auth via `x-relay-explorer-token` (recommended when called via your own trusted proxy/server path).
 
 `/events/tx` includes basic hardening:
 - request rate limiting per IP

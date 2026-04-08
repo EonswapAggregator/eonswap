@@ -20,6 +20,9 @@ import { sendTxEventToRelay } from '../lib/txEvents'
 import { wagmiConfig } from '../wagmi'
 import { useEonSwapStore } from '../store/useEonSwapStore'
 
+const APPROVAL_MODE = String(import.meta.env.VITE_SWAP_APPROVAL_MODE ?? 'exact').toLowerCase()
+const USE_MAX_APPROVAL = APPROVAL_MODE === 'max'
+
 export function useSwapSubmit() {
   const { address, chainId } = useAccount()
   const { sendTransactionAsync } = useSendTransaction()
@@ -67,6 +70,7 @@ export function useSwapSubmit() {
 
     addActivity({
       id: activityId,
+      kind: 'swap',
       status: 'pending',
       summary,
       chainId,
@@ -96,13 +100,14 @@ export function useSwapSubmit() {
         if (allowance < amountInWei) {
           const walletClient = await getWalletClient(wagmiConfig)
           if (!walletClient) throw new Error('Wallet not available')
+          const approvalAmount = USE_MAX_APPROVAL ? maxUint256 : amountInWei
 
           const approveHash = await walletClient.writeContract({
             chain,
             address: sellToken.address as `0x${string}`,
             abi: erc20Abi,
             functionName: 'approve',
-            args: [initial.routerAddress, maxUint256],
+            args: [initial.routerAddress, approvalAmount],
           })
 
           await publicClient.waitForTransactionReceipt({ hash: approveHash })

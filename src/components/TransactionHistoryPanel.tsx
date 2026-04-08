@@ -67,6 +67,11 @@ function txExplorerHref(item: ActivityItem) {
   return explorerTxUrl(item.chainId, item.txHash)
 }
 
+function sessionMethodLabel(item: ActivityItem): 'Swap' | 'Bridge' {
+  if (item.kind === 'bridge') return 'Bridge'
+  return 'Swap'
+}
+
 type PanelVariant = 'sidebar' | 'page'
 
 type Props = {
@@ -121,7 +126,7 @@ export function TransactionHistoryPanel({
 
       {variant === 'page' && filtered.length > 0 && (
         <div className={activityTableToolbarClass}>
-          <span className={activityToolbarTitleClass}>Session swaps</span>
+          <span className={activityToolbarTitleClass}>Session activity</span>
           <span
             className={`${activityToolbarMetaClass} min-w-0 max-w-full truncate`}
             title="Status · Txn hash · Method · Block · Age · From · Network · Details"
@@ -161,7 +166,7 @@ export function TransactionHistoryPanel({
           {filtered.length > 0 && (
             <table className={activityTableClass}>
               <caption className="sr-only">
-                Session swap transactions, newest first
+                Session activity transactions, newest first
               </caption>
               <thead>
                 <tr className={activityTheadRowClass}>
@@ -300,7 +305,9 @@ export function TransactionHistoryPanel({
                         )}
                       </td>
                       <td className={`hidden ${activityTdClass} lg:table-cell`}>
-                        <span className={methodPillClass()}>Swap</span>
+                        <span className={methodPillClass()}>
+                          {sessionMethodLabel(item)}
+                        </span>
                       </td>
                       <td className={`${activityTdClass} text-right tabular-nums`}>
                         {blockCell}
@@ -348,7 +355,7 @@ export function TransactionHistoryPanel({
         <ul className="mt-4 max-h-[min(60vh,480px)] space-y-3 overflow-y-auto pr-1">
           {history.length === 0 && (
             <li className="rounded-xl border border-dashed border-white/10 py-10 text-center text-sm text-slate-500">
-              No swaps yet. Execute a trade to see it here.
+              No activity yet. Execute a swap or bridge to see it here.
             </li>
           )}
           {history.length > 0 && filtered.length === 0 && (

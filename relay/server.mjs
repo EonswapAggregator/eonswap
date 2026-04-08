@@ -39,7 +39,9 @@ function corsOriginHeader(req) {
   return null
 }
 const EVENT_RATE_LIMIT_PER_MIN = Number(process.env.RELAY_EVENTS_RATE_LIMIT_PER_MIN || 60)
+const EXPLORER_RATE_LIMIT_PER_MIN = Number(process.env.RELAY_EXPLORER_RATE_LIMIT_PER_MIN || 20)
 const EVENT_MAX_BODY_BYTES = Number(process.env.RELAY_EVENTS_MAX_BODY_BYTES || 262_144)
+const EXPLORER_ACCESS_TOKEN = process.env.RELAY_EXPLORER_ACCESS_TOKEN?.trim() || ''
 const WARN_LATENCY_MS = {
   kyber: Number(process.env.RELAY_WARN_KYBER_MS || 2500),
   lifi: Number(process.env.RELAY_WARN_LIFI_MS || 3500),
@@ -70,6 +72,7 @@ const status = {
 }
 let lastAlertAt = 0
 const eventRateMap = new Map()
+const explorerRateMap = new Map()
 const recentTxEvents = new Map()
 
 function classifyError(error) {
@@ -135,6 +138,19 @@ function isRateLimited(req) {
   return entry.count > EVENT_RATE_LIMIT_PER_MIN
 }
 
+function isExplorerRateLimited(req) {
+  const now = Date.now()
+  const key = getClientIp(req)
+  const entry = explorerRateMap.get(key) || { count: 0, resetAt: now + 60_000 }
+  if (now > entry.resetAt) {
+    entry.count = 0
+    entry.resetAt = now + 60_000
+  }
+  entry.count += 1
+  explorerRateMap.set(key, entry)
+  return entry.count > EXPLORER_RATE_LIMIT_PER_MIN
+}
+
 async function readJsonBody(req, maxBytes = EVENT_MAX_BODY_BYTES) {
   let body = ''
   let size = 0
@@ -158,6 +174,14 @@ async function readJsonBody(req, maxBytes = EVENT_MAX_BODY_BYTES) {
 function validateActivityPayload(payload) {
   const id = String(payload?.id || '')
   if (id.length < 4 || id.length > 128) return { error: 'Invalid id' }
+  const kind =
+    payload?.kind === 'bridge'
+      ? 'bridge'
+      : payload?.kind === 'swap'
+        ? 'swap'
+        : String(payload?.summary ?? '').toLowerCase().startsWith('bridge ')
+          ? 'bridge'
+          : 'swap'
   const status = payload?.status
   if (!['pending', 'success', 'failed'].includes(status)) return { error: 'Invalid status' }
   const createdAt = Number(payload?.createdAt)
@@ -168,7 +192,7 @@ function validateActivityPayload(payload) {
   if (!Number.isInteger(chainId) || chainId < 1 || chainId > 99_999_999) {
     return { error: 'Invalid chainId' }
   }
-  const out = { id, status, createdAt, summary, chainId }
+  const out = { id, kind, status, createdAt, summary, chainId }
   if (payload?.txHash) {
     const h = String(payload.txHash)
     if (!/^0x[a-fA-F0-9]{64}$/.test(h)) return { error: 'Invalid txHash' }
@@ -192,8 +216,10 @@ function normalizeActivityFromLine(obj) {
   if (!['pending', 'success', 'failed'].includes(obj.status)) return null
   const createdAt = Number(obj.createdAt)
   if (!Number.isFinite(createdAt)) return null
+  const kind = obj.kind === 'bridge' ? 'bridge' : obj.kind === 'swap' ? 'swap' : 'swap'
   const row = {
     id: obj.id,
+    kind,
     status: obj.status,
     createdAt,
     summary: String(obj.summary ?? ''),
@@ -203,6 +229,33 @@ function normalizeActivityFromLine(obj) {
   if (obj.from) row.from = String(obj.from)
   if (obj.blockNumber != null) row.blockNumber = Number(obj.blockNumber)
   return row
+}
+
+async function fetchEtherscanTxListForRelay({ chainId, address, offset = 35 }) {
+  const apiKey = etherscanApiKeyForRelay()
+  if (!apiKey) {
+    throw new Error(
+      'Missing API key: set ETHERSCAN_API_KEY or RELAY_ETHERSCAN_API_KEY on the relay',
+    )
+  }
+  const q = new URLSearchParams({
+    chainid: String(chainId),
+    module: 'account',
+    action: 'txlist',
+    address,
+    startblock: '0',
+    endblock: '99999999',
+    page: '1',
+    offset: String(offset),
+    sort: 'desc',
+    apikey: apiKey,
+  })
+  const { res, json } = await fetchJson(`https://api.etherscan.io/v2/api?${q}`)
+  if (!res.ok) throw new Error(`Explorer HTTP ${res.status}`)
+  if (Array.isArray(json?.result)) return json.result
+  const msg = String(json?.result || json?.message || '')
+  if (/no transactions found|no records found/i.test(msg)) return []
+  throw new Error(msg || 'Explorer API error')
 }
 
 async function appendActivityRecord(record) {
@@ -445,6 +498,38 @@ createServer(async (req, res) => {
     }
     const activities = await readActivitiesMerged()
     return json(req, res, 200, { ok: true, activities })
+  }
+  if (req.method === 'GET' && u.pathname === '/explorer/txlist') {
+    if (isExplorerRateLimited(req)) return json(req, res, 429, { ok: false, error: 'Rate limited' })
+    // Require browser Origin to match allowlist when allowlist is configured.
+    if (!CORS_ALLOW_ALL && !corsOriginHeader(req)) {
+      return json(req, res, 403, { ok: false, error: 'Forbidden origin' })
+    }
+    if (EXPLORER_ACCESS_TOKEN) {
+      const token = String(req.headers['x-relay-explorer-token'] || '').trim()
+      if (!token || token !== EXPLORER_ACCESS_TOKEN) {
+        return json(req, res, 401, { ok: false, error: 'Unauthorized explorer token' })
+      }
+    }
+    const chainId = Number(u.searchParams.get('chainId') || '0')
+    const address = String(u.searchParams.get('address') || '').trim()
+    const offsetRaw = Number(u.searchParams.get('offset') || '35')
+    const offset = Number.isFinite(offsetRaw)
+      ? Math.min(100, Math.max(1, Math.floor(offsetRaw)))
+      : 35
+    if (!Number.isInteger(chainId) || chainId < 1) {
+      return json(req, res, 400, { ok: false, error: 'Invalid chainId' })
+    }
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return json(req, res, 400, { ok: false, error: 'Invalid address' })
+    }
+    try {
+      const txs = await fetchEtherscanTxListForRelay({ chainId, address, offset })
+      return json(req, res, 200, { ok: true, result: txs })
+    } catch (e) {
+      const msg = String(e instanceof Error ? e.message : e || 'Explorer proxy error')
+      return json(req, res, 502, { ok: false, error: msg.slice(0, 200) })
+    }
   }
   if (req.method === 'POST' && u.pathname === '/events/activity') {
     if (isRateLimited(req)) return json(req, res, 429, { ok: false, error: 'Rate limited' })
