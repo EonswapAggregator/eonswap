@@ -16,7 +16,7 @@ Listen port: **`PORT`** (Render/Railway/Fly) if set, else **`RELAY_PORT`**, else
 2. **Start command** (from repo root): `node relay/server.mjs`  
    (Ensure Node 20+; use the same `package.json` `type: "module"` context, or run from project root.)
 3. **Health check URL:** `GET /healthz`
-4. Set **environment variables** on the host (not on Netlify): `RELAY_ALLOWED_ORIGIN`, `RELAY_ADMIN_SECRET`, `ETHERSCAN_API_KEY` / `VITE_ETHERSCAN_API_KEY`, Telegram vars if used, etc.
+4. Set **environment variables** on the host (not on Netlify): `RELAY_ALLOWED_ORIGIN`, `RELAY_ADMIN_SECRET`, **`ETHERSCAN_API_KEY`** or **`RELAY_ETHERSCAN_API_KEY`** (required for Etherscan in `/monitor/status`; Netlify’s `VITE_ETHERSCAN_API_KEY` is **not** available to the relay unless you duplicate it here), Telegram vars if used, etc.
 5. Point the frontend **`VITE_MONITOR_RELAY_URL`** to the public **HTTPS** URL of this service (no trailing slash).
 6. **Activity log file** defaults to `relay/data/activities.jsonl`. On ephemeral disks (free tiers), logs can reset on redeploy — use a **persistent disk** / volume mounted at `relay/data` if you need retention.
 

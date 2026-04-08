@@ -258,8 +258,16 @@ async function sendTelegramMessage(message) {
   }
 }
 
+function etherscanApiKeyForRelay() {
+  const k =
+    process.env.RELAY_ETHERSCAN_API_KEY?.trim() ||
+    process.env.ETHERSCAN_API_KEY?.trim() ||
+    process.env.VITE_ETHERSCAN_API_KEY?.trim()
+  return k || ''
+}
+
 async function runChecks() {
-  const etherscanKey = process.env.VITE_ETHERSCAN_API_KEY || process.env.ETHERSCAN_API_KEY
+  const etherscanKey = etherscanApiKeyForRelay()
   const checks = await Promise.allSettled([
     (async () => {
       const q = new URLSearchParams({
@@ -322,7 +330,8 @@ async function runChecks() {
           ...status.providers.etherscan,
           ok: false,
           latencyMs: null,
-          detail: 'Missing API key in relay env',
+          detail:
+            'Missing API key: set ETHERSCAN_API_KEY or RELAY_ETHERSCAN_API_KEY on the relay (Railway)',
         }
         updateSla('etherscan', false)
         return
