@@ -369,12 +369,10 @@ export function AdminPage() {
               <button
                 type="button"
                 onClick={() => {
-                  if (relayRows.length === 0) {
-                    setRelayMessage('Load from relay first.')
-                    setRelayStatus('error')
-                    return
-                  }
                   setDataSource('relay')
+                  if (relayRows.length === 0 && relayStatus !== 'loading') {
+                    void loadFromRelay()
+                  }
                 }}
                 className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
                   dataSource === 'relay'
