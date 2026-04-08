@@ -5,3 +5,4 @@ dist
 .env
 .env.*.local
 relay/data/*.jsonl
+test-results/
