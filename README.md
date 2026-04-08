@@ -8,93 +8,39 @@
   <a href="https://eonswap.us/">https://eonswap.us/</a>
 </p>
 
-EonSwap is a modern swap and bridge interface built with React + Vite.
+EonSwap is a non-custodial swap and bridge experience designed for users who want speed, transparency, and control.
 
-It includes:
-- Swap routing via Kyber API
-- Bridge routing via LI.FI API
-- Transaction status tracking (swap + bridge)
-- API health panel with SLA and latency warnings
-- Optional backend monitoring relay
+You stay in control of your wallet while EonSwap helps you discover efficient routes across multiple chains.
 
-## Tech Stack
+## Why EonSwap
 
-- React 19 + TypeScript
-- Vite + Tailwind CSS
-- wagmi + RainbowKit
-- viem
-- Playwright (E2E)
+- **Non-custodial by design**: Your assets stay in your wallet until you sign.
+- **Aggregated routing**: Quotes are sourced from integrated liquidity and bridge providers.
+- **Cross-chain ready**: Move assets between supported networks from one interface.
+- **Clear execution visibility**: Track transaction lifecycle and status in real time.
+- **Operational transparency**: Check health and monitoring signals before execution.
 
-## Local Development
+## Core Product Experience
 
-1. Install dependencies:
+- **Swap**: Compare routes and execute token swaps with clear cost context.
+- **Bridge**: Transfer assets across chains with live quote feedback.
+- **Activity**: Review both on-chain history and session activity in one place.
+- **Status**: Monitor provider health, latency, and current service condition.
 
-```bash
-npm install
-```
+## Built for Trust
 
-2. Configure env:
+- Transparent fee context before confirmation.
+- User-facing safety messages to reduce avoidable mistakes.
+- Relay-first monitoring and status checks for operational consistency.
+- Security-aware defaults for secrets, endpoint access, and rate limiting.
 
-```bash
-cp .env.example .env.local
-```
+## Official Links
 
-Then set your values in `.env.local`.
-Never commit `.env.local` or real credentials to public repositories.
+- Website: [eonswap.us](https://eonswap.us/)
+- Docs: [eonswap.us/docs](https://eonswap.us/docs/)
+- Status: [eonswap.us/status](https://eonswap.us/status)
+- Support: [eonswap.us/contact-support](https://eonswap.us/contact-support)
 
-3. Start app:
+## Start Swapping
 
-```bash
-npm run dev
-```
-
-4. Build:
-
-```bash
-npm run build
-```
-
-## Monitoring Relay
-
-Run relay locally:
-
-```bash
-npm run monitor:relay
-```
-
-Endpoints:
-- `/healthz`
-- `/monitor/status`
-- `/monitor/check-now`
-
-## Testing
-
-Lint:
-
-```bash
-npm run lint
-```
-
-E2E:
-
-```bash
-npm run test:e2e
-```
-
-## Deployment Notes
-
-- Frontend deploy target: Netlify / Cloudflare Pages
-- Build command: `npm run build`
-- Publish directory: `dist`
-- For SPA routing on Netlify, use `_redirects` with:
-
-```txt
-/* /index.html 200
-```
-
-## Security
-
-- `robots.txt`, `sitemap.xml`, and `.well-known/security.txt` are included
-- Do not commit private secrets
-- Treat all `VITE_*` values as client-visible
-- Keep server-only credentials in relay/runtime env, not in frontend source
+If you want a cleaner, faster path to execute swaps and bridges without giving up custody, EonSwap is built for you.
