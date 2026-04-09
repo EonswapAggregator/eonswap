@@ -1,12 +1,39 @@
 import { motion } from 'framer-motion'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAccount, useChainId } from 'wagmi'
+import { mainnet } from 'wagmi/chains'
+import { isSupportedChain } from '../lib/chains'
 import { useEonSwapStore } from '../store/useEonSwapStore'
 import { SwapTipsCard } from './SwapTipsCard'
 import { SwapWidget } from './SwapWidget'
 import { TokenPriceChart } from './TokenPriceChart'
 
 export function SwapDashboard() {
+  const { isConnected, chainId: accountChainId } = useAccount()
+  const walletDefaultChain = useChainId()
   const sellToken = useEonSwapStore((s) => s.sellToken)
+  const buyToken = useEonSwapStore((s) => s.buyToken)
+  const sellAmountInput = useEonSwapStore((s) => s.sellAmountInput)
+  const receiveFormatted = useEonSwapStore((s) => s.receiveFormatted)
+  const quoteLoading = useEonSwapStore((s) => s.quoteLoading)
+  const quoteError = useEonSwapStore((s) => s.quoteError)
+  const [chartDays, setChartDays] = useState<7 | 30 | 90>(7)
+
+  const routePairPrice = useMemo(() => {
+    const pay = Number.parseFloat(sellAmountInput.trim())
+    const receive = Number.parseFloat(receiveFormatted.trim())
+    if (!Number.isFinite(pay) || !Number.isFinite(receive)) return null
+    if (pay <= 0 || receive <= 0) return null
+    return receive / pay
+  }, [sellAmountInput, receiveFormatted])
+
+  const chartChainId =
+    isConnected && accountChainId != null && isSupportedChain(accountChainId)
+      ? accountChainId
+      : isSupportedChain(walletDefaultChain)
+        ? walletDefaultChain
+        : mainnet.id
 
   return (
     <section
@@ -63,7 +90,20 @@ export function SwapDashboard() {
             transition={{ duration: 0.45, delay: 0.06 }}
             className="order-2 flex min-h-0 min-w-0 w-full max-w-full flex-col gap-4"
           >
-            <TokenPriceChart symbol={sellToken.symbol} days={7} />
+            <TokenPriceChart
+              baseSymbol={sellToken.symbol}
+              quoteSymbol={buyToken.symbol}
+              chainId={chartChainId}
+              baseAddress={sellToken.address}
+              quoteAddress={buyToken.address}
+              baseDecimals={sellToken.decimals}
+              quoteDecimals={buyToken.decimals}
+              routePairPrice={routePairPrice}
+              routeLoading={quoteLoading}
+              routeError={quoteError}
+              days={chartDays}
+              onDaysChange={setChartDays}
+            />
             <SwapTipsCard />
           </motion.div>
         </div>

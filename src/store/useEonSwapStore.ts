@@ -38,12 +38,14 @@ type QuoteSlice = {
 type EonSwapState = {
   sellToken: Token
   buyToken: Token
+  chartToken: Token
   sellAmountInput: string
   /** Max price movement (basis points). Kyber: 100 = 1%. */
   slippageToleranceBps: number
 } & QuoteSlice & {
     setSellToken: (t: Token) => void
     setBuyToken: (t: Token) => void
+    setChartToken: (t: Token) => void
     setSellAmountInput: (v: string) => void
     setQuoteLoading: (v: boolean) => void
     setQuoteResult: (p: {
@@ -80,6 +82,7 @@ export const useEonSwapStore = create<EonSwapState>()(
     (set, get) => ({
       sellToken: defaultSell,
       buyToken: defaultBuy,
+      chartToken: defaultSell,
       sellAmountInput: '',
       slippageToleranceBps: DEFAULT_SLIPPAGE_BPS,
       receiveFormatted: '',
@@ -94,8 +97,9 @@ export const useEonSwapStore = create<EonSwapState>()(
       quoteAmountOutWei: '',
       history: [],
 
-      setSellToken: (t) => set({ sellToken: t }),
-      setBuyToken: (t) => set({ buyToken: t }),
+      setSellToken: (t) => set({ sellToken: t, chartToken: t }),
+      setBuyToken: (t) => set({ buyToken: t, chartToken: t }),
+      setChartToken: (t) => set({ chartToken: t }),
       setSellAmountInput: (v) => set({ sellAmountInput: v }),
       setQuoteLoading: (v) => set({ quoteLoading: v }),
 
@@ -127,6 +131,7 @@ export const useEonSwapStore = create<EonSwapState>()(
         set({
           sellToken: buyToken,
           buyToken: sellToken,
+          chartToken: buyToken,
           receiveFormatted: '',
           routeSources: [],
           quoteError: null,
@@ -178,6 +183,7 @@ export const useEonSwapStore = create<EonSwapState>()(
         history: s.history,
         sellToken: s.sellToken,
         buyToken: s.buyToken,
+        chartToken: s.chartToken,
         slippageToleranceBps: s.slippageToleranceBps,
       }),
     },

@@ -125,7 +125,8 @@ export const TOKENS_BY_CHAIN: Record<number, Token[]> = {
       decimals: 18,
     },
     {
-      address: '0x3c499c542cEF5E3811e1192ce70d8e03C23edb7d',
+      // Prefer Polygon's widely-routed USDC contract for better swap compatibility.
+      address: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
       symbol: 'USDC',
       name: 'USD Coin',
       decimals: 6,

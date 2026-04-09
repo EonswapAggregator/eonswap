@@ -86,7 +86,7 @@ export async function fetchSimplePricesUsd(
 
 export async function fetchMarketChartUsd(
   coinId: string,
-  days: 7 | 30 = 7,
+  days: 7 | 30 | 90 = 7,
 ): Promise<MarketChartPoint[]> {
   const url = new URL(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart`)
   url.searchParams.set('vs_currency', 'usd')

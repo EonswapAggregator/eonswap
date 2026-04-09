@@ -2,14 +2,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { erc20Abi, formatUnits } from 'viem'
+import { erc20Abi, formatUnits, parseUnits } from 'viem'
 import { getPublicClient } from 'wagmi/actions'
 import { useAccount } from 'wagmi'
 import { useTokenCatalog } from '../hooks/useTokenCatalog'
 import { getEonChain } from '../lib/chains'
 import { coingeckoIdForToken, fetchSimplePricesUsd } from '../lib/coingecko'
 import { formatBalanceCompact } from '../lib/format'
-import { fetchKyberTokensByIds } from '../lib/kyber'
+import { fetchKyberRoute, fetchKyberTokensByIds } from '../lib/kyber'
 import { mergeTokenCatalog } from '../lib/remoteTokenList'
 import { isNativeToken, tokensForChain, type Token } from '../lib/tokens'
 import { wagmiConfig } from '../wagmi'
@@ -27,6 +27,11 @@ const ADDR_40 = /^0x[a-fA-F0-9]{40}$/
 const MAX_IDLE_ROWS = 100
 /** Avoid rendering thousands of rows when the query is very broad */
 const MAX_SEARCH_ROWS = 280
+const STABLE_USD_BY_SYMBOL: Record<string, number> = {
+  USDC: 1,
+  USDT: 1,
+  DAI: 1,
+}
 
 export function TokenSelector({
   open,
@@ -228,14 +233,71 @@ export function TokenSelector({
         const prices: Record<string, number> = await fetchSimplePricesUsd(ids).catch(
           () => ({} as Record<string, number>),
         )
+        const priceByAddress: Record<string, number> = {}
+        for (const t of current) {
+          const key = t.address.toLowerCase()
+          const stableUsd = STABLE_USD_BY_SYMBOL[t.symbol.toUpperCase()] ?? 0
+          const id = coingeckoIdForToken(t)
+          const p = id ? (prices[id] ?? stableUsd) : stableUsd
+          if (Number.isFinite(p) && p > 0) priceByAddress[key] = p
+        }
+
+        // Route-based fallback for visible tokens with balances but missing USD prices.
+        const quoteToken = current.find((t) => {
+          const sym = t.symbol.toUpperCase()
+          return sym === 'USDC' || sym === 'USDT' || sym === 'DAI'
+        })
+        const quotePriceUsd =
+          quoteToken != null
+            ? (priceByAddress[quoteToken.address.toLowerCase()] ??
+              STABLE_USD_BY_SYMBOL[quoteToken.symbol.toUpperCase()] ??
+              0)
+            : 0
+        if (quoteToken && quotePriceUsd > 0) {
+          const missingWithBalance = current
+            .filter((t) => {
+              const key = t.address.toLowerCase()
+              const bal = balanceMap[key] ?? 0n
+              return bal > 0n && (priceByAddress[key] ?? 0) <= 0
+            })
+            .sort((a, b) => {
+              const aBal = balanceMap[a.address.toLowerCase()] ?? 0n
+              const bBal = balanceMap[b.address.toLowerCase()] ?? 0n
+              if (aBal === bBal) return 0
+              return aBal > bBal ? -1 : 1
+            })
+            .slice(0, 10)
+
+          for (const t of missingWithBalance) {
+            try {
+              if (t.address.toLowerCase() === quoteToken.address.toLowerCase()) {
+                priceByAddress[t.address.toLowerCase()] = quotePriceUsd
+                continue
+              }
+              const oneUnitIn = parseUnits('1', t.decimals).toString()
+              const { routeSummary } = await fetchKyberRoute({
+                chainId,
+                tokenIn: t.address,
+                tokenOut: quoteToken.address,
+                amountIn: oneUnitIn,
+              })
+              const quoteOut = Number(
+                formatUnits(BigInt(routeSummary.amountOut), quoteToken.decimals),
+              )
+              if (Number.isFinite(quoteOut) && quoteOut > 0) {
+                priceByAddress[t.address.toLowerCase()] = quoteOut * quotePriceUsd
+              }
+            } catch {
+              // keep missing if route fallback fails for this token
+            }
+          }
+        }
         const fetchedAt = Date.now()
 
         for (const t of current) {
           const bal = balanceMap[t.address.toLowerCase()] ?? 0n
           if (bal <= 0n) continue
-          const id = coingeckoIdForToken(t)
-          if (!id) continue
-          const price = prices[id] ?? 0
+          const price = priceByAddress[t.address.toLowerCase()] ?? 0
           if (price <= 0) continue
           const uiAmount = Number(formatUnits(bal, t.decimals))
           if (!Number.isFinite(uiAmount) || uiAmount <= 0) continue
@@ -247,8 +309,7 @@ export function TokenSelector({
           setUsdByAddress(usdMap)
           const tsMap: Record<string, number> = {}
           for (const t of current) {
-            const id = coingeckoIdForToken(t)
-            if (!id || (prices[id] ?? 0) <= 0) continue
+            if ((priceByAddress[t.address.toLowerCase()] ?? 0) <= 0) continue
             tsMap[t.address.toLowerCase()] = fetchedAt
           }
           setUsdPriceFetchedAt(tsMap)
