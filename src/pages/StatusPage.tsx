@@ -909,7 +909,19 @@ export function StatusPage() {
             {mode === 'bridge' ? (
               <>
                 <p className="text-xs uppercase tracking-[0.08em] text-slate-500">
-                  Bridge status ({fromChain?.name} to {toChain?.name})
+                  <span className="inline-flex items-center gap-1.5">
+                    <LogoBadge
+                      src={trustWalletTokenLogoUrl(fromChainId, NATIVE_AGGREGATOR)}
+                      alt={fromChain?.name ?? 'Source'}
+                    />
+                    {fromChain?.name}
+                    <span className="text-slate-500">to</span>
+                    <LogoBadge
+                      src={trustWalletTokenLogoUrl(toChainId, NATIVE_AGGREGATOR)}
+                      alt={toChain?.name ?? 'Destination'}
+                    />
+                    {toChain?.name}
+                  </span>
                 </p>
                 <p className={`mt-1 text-lg font-semibold ${statusTone(bridgeStatus?.status)}`}>
                   {bridgeStatus?.status ?? '—'}
@@ -920,8 +932,18 @@ export function StatusPage() {
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-2">
                     <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Route</p>
-                    <p className="mt-1 text-xs text-slate-300">
-                      {fromChain?.name} to {toChain?.name}
+                    <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-300">
+                      <LogoBadge
+                        src={trustWalletTokenLogoUrl(fromChainId, NATIVE_AGGREGATOR)}
+                        alt={fromChain?.name ?? 'Source'}
+                      />
+                      {fromChain?.name}
+                      <span className="text-slate-500">to</span>
+                      <LogoBadge
+                        src={trustWalletTokenLogoUrl(toChainId, NATIVE_AGGREGATOR)}
+                        alt={toChain?.name ?? 'Destination'}
+                      />
+                      {toChain?.name}
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-2">
@@ -965,7 +987,13 @@ export function StatusPage() {
             ) : (
               <>
                 <p className="text-xs uppercase tracking-[0.08em] text-slate-500">
-                  Swap status ({fromChain?.name})
+                  <span className="inline-flex items-center gap-1.5">
+                    <LogoBadge
+                      src={trustWalletTokenLogoUrl(fromChainId, NATIVE_AGGREGATOR)}
+                      alt={fromChain?.name ?? 'Network'}
+                    />
+                    {fromChain?.name}
+                  </span>
                 </p>
                 <p className={`mt-1 text-lg font-semibold ${statusTone(swapStatus?.status)}`}>
                   {swapStatus?.status ?? '—'}
@@ -979,7 +1007,13 @@ export function StatusPage() {
                 )}
                 <div className="mt-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-2">
                   <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Network</p>
-                  <p className="mt-1 text-xs text-slate-300">{fromChain?.name}</p>
+                  <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-300">
+                    <LogoBadge
+                      src={trustWalletTokenLogoUrl(fromChainId, NATIVE_AGGREGATOR)}
+                      alt={fromChain?.name ?? 'Network'}
+                    />
+                    {fromChain?.name}
+                  </p>
                 </div>
                 {sourceExplorer ? (
                   <a

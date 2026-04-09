@@ -5,7 +5,7 @@ import { parseUnits } from 'viem'
 import { useAccount, useBalance, useChainId, useEstimateFeesPerGas } from 'wagmi'
 import { useKyberQuote } from '../hooks/useKyberQuote'
 import { useSwapSubmit } from '../hooks/useSwapSubmit'
-import { formatBalanceLabel, formatMaxSellInput } from '../lib/format'
+import { formatBalanceCompact, formatMaxSellInput } from '../lib/format'
 import { getEonChain, isSupportedChain } from '../lib/chains'
 import { isNativeToken } from '../lib/tokens'
 import { mainnet } from 'wagmi/chains'
@@ -145,7 +145,7 @@ export function SwapWidget() {
       return `0 ${walletBalance?.symbol ?? sellToken.symbol}`
     }
     const sym = walletBalance.symbol ?? sellToken.symbol
-    return `${formatBalanceLabel(walletBalance.value, walletBalance.decimals)} ${sym}`
+    return `${formatBalanceCompact(walletBalance.value, walletBalance.decimals)} ${sym}`
   })()
 
   const canSwap =

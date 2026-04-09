@@ -31,6 +31,26 @@ export function formatBalanceLabel(
   return formatTokenAmountUi(value, decimals, fractionDigits)
 }
 
+/**
+ * Human-friendly balance formatter:
+ * - keeps at most `maxFractionDigits`
+ * - trims trailing zeros after decimal
+ */
+export function formatBalanceCompact(
+  value: bigint,
+  decimals: number,
+  maxFractionDigits: number = BALANCE_FRACTION_DIGITS,
+): string {
+  const raw = formatUnits(value, decimals)
+  const neg = raw.startsWith('-')
+  const abs = neg ? raw.slice(1) : raw
+  const [whole, frac = ''] = abs.split('.')
+  const sliced = frac.slice(0, Math.max(0, maxFractionDigits))
+  const trimmed = sliced.replace(/0+$/u, '')
+  const out = trimmed ? `${whole}.${trimmed}` : whole
+  return neg ? `-${out}` : out
+}
+
 /** Fill swap input with wallet balance using the same fractional format. */
 export function formatMaxSellInput(
   value: bigint,

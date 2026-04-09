@@ -28,6 +28,8 @@ import {
 import { explorerTxUrl, getEonChain } from '../lib/chains'
 import { truncateAddress } from '../lib/format'
 import { useLiveClock } from '../hooks/useLiveClock'
+import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
+import { NATIVE_AGGREGATOR } from '../lib/tokens'
 import {
   useEonSwapStore,
   type ActivityItem,
@@ -332,7 +334,13 @@ export function TransactionHistoryPanel({
                         </span>
                       </td>
                       <td className={activityTdClass}>
-                        <span className={networkPillClass()}>
+                        <span className={`${networkPillClass()} inline-flex items-center gap-1.5`}>
+                          <img
+                            src={trustWalletTokenLogoUrl(item.chainId, NATIVE_AGGREGATOR) ?? undefined}
+                            alt={chainLabel}
+                            className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-white/15"
+                            loading="lazy"
+                          />
                           {chainLabel}
                         </span>
                       </td>

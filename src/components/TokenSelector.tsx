@@ -2,10 +2,17 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { erc20Abi, formatUnits } from 'viem'
+import { getPublicClient } from 'wagmi/actions'
+import { useAccount } from 'wagmi'
 import { useTokenCatalog } from '../hooks/useTokenCatalog'
+import { getEonChain } from '../lib/chains'
+import { coingeckoIdForToken, fetchSimplePricesUsd } from '../lib/coingecko'
+import { formatBalanceCompact } from '../lib/format'
 import { fetchKyberTokensByIds } from '../lib/kyber'
 import { mergeTokenCatalog } from '../lib/remoteTokenList'
 import { isNativeToken, tokensForChain, type Token } from '../lib/tokens'
+import { wagmiConfig } from '../wagmi'
 import { TokenLogo } from './TokenLogo'
 
 type Props = {
@@ -28,10 +35,14 @@ export function TokenSelector({
   exclude,
   chainId,
 }: Props) {
+  const { address } = useAccount()
   const [q, setQ] = useState('')
   const { data: remoteList, isLoading, isError } = useTokenCatalog(chainId)
   const [kyberExtra, setKyberExtra] = useState<Token | null>(null)
   const [kyberLoading, setKyberLoading] = useState(false)
+  const [balancesByAddress, setBalancesByAddress] = useState<Record<string, bigint>>({})
+  const [usdByAddress, setUsdByAddress] = useState<Record<string, number>>({})
+  const [debouncedNeedleLc, setDebouncedNeedleLc] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -50,6 +61,13 @@ export function TokenSelector({
   const needle = q.trim()
   const needleLc = needle.toLowerCase()
   const excludeLc = exclude?.toLowerCase() ?? null
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setDebouncedNeedleLc(needleLc)
+    }, 220)
+    return () => window.clearTimeout(t)
+  }, [needleLc])
 
   useEffect(() => {
     setKyberExtra(null)
@@ -153,6 +171,113 @@ export function TokenSelector({
     kyberExtra,
   ])
 
+  useEffect(() => {
+    if (!open || !address) {
+      setBalancesByAddress({})
+      setUsdByAddress({})
+      return
+    }
+
+    const chain = getEonChain(chainId)
+    if (!chain) return
+    const client = getPublicClient(wagmiConfig, { chainId: chain.id })
+    if (!client) return
+
+    const current = debouncedNeedleLc ? filtered.slice(0, 90) : filtered
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const balanceMap: Record<string, bigint> = {}
+        const usdMap: Record<string, number> = {}
+
+        const native = current.find((t) => isNativeToken(t.address))
+        if (native) {
+          const nativeBal = await client.getBalance({ address: address as `0x${string}` })
+          balanceMap[native.address.toLowerCase()] = nativeBal
+        }
+
+        const erc20Tokens = current.filter((t) => !isNativeToken(t.address))
+        if (erc20Tokens.length > 0) {
+          const calls = erc20Tokens.map((t) => ({
+            address: t.address as `0x${string}`,
+            abi: erc20Abi,
+            functionName: 'balanceOf',
+            args: [address as `0x${string}`],
+          }))
+          const results = await client.multicall({
+            contracts: calls,
+            allowFailure: true,
+          })
+          for (let i = 0; i < erc20Tokens.length; i += 1) {
+            const t = erc20Tokens[i]!
+            const r = results[i]
+            if (r?.status === 'success' && typeof r.result === 'bigint') {
+              balanceMap[t.address.toLowerCase()] = r.result
+            }
+          }
+        }
+
+        const ids = current
+          .map((t) => coingeckoIdForToken(t))
+          .filter((id): id is string => Boolean(id))
+        const prices: Record<string, number> = await fetchSimplePricesUsd(ids).catch(
+          () => ({} as Record<string, number>),
+        )
+
+        for (const t of current) {
+          const bal = balanceMap[t.address.toLowerCase()] ?? 0n
+          if (bal <= 0n) continue
+          const id = coingeckoIdForToken(t)
+          if (!id) continue
+          const price = prices[id] ?? 0
+          if (price <= 0) continue
+          const uiAmount = Number(formatUnits(bal, t.decimals))
+          if (!Number.isFinite(uiAmount) || uiAmount <= 0) continue
+          usdMap[t.address.toLowerCase()] = uiAmount * price
+        }
+
+        if (!cancelled) {
+          setBalancesByAddress(balanceMap)
+          setUsdByAddress(usdMap)
+        }
+      } catch {
+        if (!cancelled) {
+          setBalancesByAddress({})
+          setUsdByAddress({})
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [open, address, chainId, filtered, debouncedNeedleLc])
+
+  const ranked = useMemo(() => {
+    const list = [...filtered]
+    list.sort((a, b) => {
+      const aAddr = a.address.toLowerCase()
+      const bAddr = b.address.toLowerCase()
+      const aUsd = usdByAddress[aAddr] ?? 0
+      const bUsd = usdByAddress[bAddr] ?? 0
+      if (aUsd !== bUsd) return bUsd - aUsd
+
+      const aBal = balancesByAddress[aAddr] ?? 0n
+      const bBal = balancesByAddress[bAddr] ?? 0n
+      if (aBal !== bBal) {
+        const aNorm = Number(formatUnits(aBal, a.decimals))
+        const bNorm = Number(formatUnits(bBal, b.decimals))
+        if (Number.isFinite(aNorm) && Number.isFinite(bNorm) && aNorm !== bNorm) {
+          return bNorm - aNorm
+        }
+      }
+
+      return a.symbol.localeCompare(b.symbol)
+    })
+    return list
+  }, [filtered, usdByAddress, balancesByAddress])
+
   const catalogHint =
     remoteList != null
       ? `${fullCatalog.length.toLocaleString()} tokens — type to search`
@@ -219,8 +344,18 @@ export function TokenSelector({
                 <p className="px-1 text-xs text-slate-500">{catalogHint}</p>
               )}
             </div>
+            <div className="shrink-0 border-y border-white/10 bg-white/[0.02] px-5 py-1.5">
+              <div className="flex items-center">
+                <div className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Token
+                </div>
+                <div className="w-[8.5rem] text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Balance / USD
+                </div>
+              </div>
+            </div>
             <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-              {filtered.map((t) => (
+              {ranked.map((t) => (
                 <li key={t.address}>
                   <button
                     type="button"
@@ -238,6 +373,20 @@ export function TokenSelector({
                         {t.name}
                       </div>
                     </div>
+                    <div className="w-[8.5rem] shrink-0 text-right">
+                      <div className="text-xs font-semibold tabular-nums text-slate-300">
+                        {formatBalanceCompact(
+                          balancesByAddress[t.address.toLowerCase()] ?? 0n,
+                          t.decimals,
+                          8,
+                        )}
+                      </div>
+                      <div className="text-[11px] tabular-nums text-slate-500">
+                        {(usdByAddress[t.address.toLowerCase()] ?? 0) > 0
+                          ? `$${(usdByAddress[t.address.toLowerCase()] ?? 0).toFixed(2)}`
+                          : '—'}
+                      </div>
+                    </div>
                   </button>
                 </li>
               ))}
@@ -251,7 +400,7 @@ export function TokenSelector({
                   Resolving token via Kyber…
                 </li>
               )}
-              {filtered.length === 0 && !kyberLoading && (
+              {ranked.length === 0 && !kyberLoading && (
                 <li className="px-3 py-8 text-center text-sm text-slate-500">
                   {needleLc && ADDR_40.test(needle) && !kyberExtra
                     ? 'No token found for this address on this network.'

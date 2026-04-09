@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { mainnet } from 'wagmi/chains'
 import {
   Check,
+  ChevronDown,
   Copy,
   ExternalLink,
   Loader2,
@@ -32,6 +33,8 @@ import {
   txSuccess,
   type ExplorerNormalTx,
 } from '../lib/explorerTxHistory'
+import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
+import { NATIVE_AGGREGATOR } from '../lib/tokens'
 import {
   hasEtherscanApiKey,
   useWalletTxHistory,
@@ -55,6 +58,8 @@ export function WalletOnChainTable() {
   const { address, isConnected } = useAccount()
   const [viewChain, setViewChain] = useState<number>(mainnet.id)
   const [copiedHash, setCopiedHash] = useState<string | null>(null)
+  const [chainOpen, setChainOpen] = useState(false)
+  const chainRootRef = useRef<HTMLDivElement | null>(null)
   const nowMs = useLiveClock(4000)
 
   const { data, isLoading, isError, error, refetch, isFetching } =
@@ -63,6 +68,18 @@ export function WalletOnChainTable() {
   const rows = useMemo(() => data ?? [], [data])
 
   const chainLabel = getEonChain(viewChain)?.name ?? `Chain ${viewChain}`
+  const chainLogo = trustWalletTokenLogoUrl(viewChain, NATIVE_AGGREGATOR)
+
+  useEffect(() => {
+    if (!chainOpen) return
+    const onDocClick = (ev: MouseEvent) => {
+      if (!chainRootRef.current) return
+      if (chainRootRef.current.contains(ev.target as Node)) return
+      setChainOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [chainOpen])
 
   const copyHash = useCallback(async (hash: string) => {
     try {
@@ -125,21 +142,52 @@ export function WalletOnChainTable() {
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <label className="sr-only" htmlFor="wallet-history-chain">
-            Network
-          </label>
-          <select
-            id="wallet-history-chain"
-            value={viewChain}
-            onChange={(e) => setViewChain(Number(e.target.value))}
-            className="rounded-xl border border-white/[0.12] bg-[#0a0b1c] px-3 py-2 text-xs font-medium text-slate-200 outline-none ring-cyan-500/30 focus:ring-2"
-          >
-            {eonChains.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <div ref={chainRootRef} className="relative">
+            <button
+              type="button"
+              aria-label="Network"
+              onClick={() => setChainOpen((s) => !s)}
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/[0.12] bg-[#0a0b1c] px-3 text-xs font-medium text-slate-200 outline-none ring-cyan-500/30 transition hover:border-white/[0.2] focus:ring-2"
+            >
+              <img
+                src={chainLogo ?? undefined}
+                alt={chainLabel}
+                className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-white/15"
+                loading="lazy"
+              />
+              <span>{chainLabel}</span>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-500" aria-hidden />
+            </button>
+            {chainOpen ? (
+              <div className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[12rem] overflow-hidden rounded-lg border border-white/[0.14] bg-[#0c1027] p-1 shadow-[0_20px_48px_-28px_rgba(0,0,0,0.9)]">
+                {eonChains.map((c) => {
+                  const logo = trustWalletTokenLogoUrl(c.id, NATIVE_AGGREGATOR)
+                  const active = c.id === viewChain
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setViewChain(c.id)
+                        setChainOpen(false)
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs ${
+                        active ? 'bg-cyan-400/15 text-cyan-100' : 'text-slate-200 hover:bg-white/[0.06]'
+                      }`}
+                    >
+                      <img
+                        src={logo ?? undefined}
+                        alt={c.name}
+                        className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-white/15"
+                        loading="lazy"
+                      />
+                      <span className="truncate">{c.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={() => void refetch()}
@@ -321,7 +369,15 @@ export function WalletOnChainTable() {
                       </span>
                     </td>
                     <td className={activityTdClass}>
-                      <span className={networkPillClass()}>{chainLabel}</span>
+                      <span className={`${networkPillClass()} inline-flex items-center gap-1.5`}>
+                        <img
+                          src={trustWalletTokenLogoUrl(viewChain, NATIVE_AGGREGATOR) ?? undefined}
+                          alt={chainLabel}
+                          className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-white/15"
+                          loading="lazy"
+                        />
+                        {chainLabel}
+                      </span>
                     </td>
                     <td
                       className={`${activityTdClass} pr-4 text-right font-mono tabular-nums text-slate-300 md:pr-5`}
