@@ -18,6 +18,9 @@ const ALERT_COOLDOWN_MS = Number(process.env.RELAY_ALERT_COOLDOWN_MS || 180_000)
 const TELEGRAM_BOT_TOKEN = process.env.RELAY_TELEGRAM_BOT_TOKEN?.trim() || ''
 const TELEGRAM_CHAT_ID = process.env.RELAY_TELEGRAM_CHAT_ID?.trim() || ''
 const TELEGRAM_BANNER_URL = process.env.RELAY_TELEGRAM_BANNER_URL?.trim() || ''
+const TELEGRAM_BANNER_LOCAL_PATH =
+  process.env.RELAY_TELEGRAM_BANNER_LOCAL_PATH?.trim() ||
+  join(__dirname, '..', 'public', 'hero-banner.png')
 /** Comma-separated list, or `*` when unset / empty (dev). Entries match after trimming trailing `/`. */
 const RELAY_CORS_RAW = process.env.RELAY_ALLOWED_ORIGIN?.trim() || '*'
 const CORS_ALLOW_ALL = RELAY_CORS_RAW === '*'
@@ -405,6 +408,25 @@ async function sendTelegramMessage(message) {
         }),
       })
       if (photoRes.ok) return
+    }
+    try {
+      const bytes = await readFile(TELEGRAM_BANNER_LOCAL_PATH)
+      const form = new FormData()
+      form.set('chat_id', TELEGRAM_CHAT_ID)
+      form.set('parse_mode', 'HTML')
+      form.set('caption', message.slice(0, 1024))
+      form.set(
+        'photo',
+        new Blob([bytes], { type: 'image/png' }),
+        TELEGRAM_BANNER_LOCAL_PATH.split('/').pop() || 'hero-banner.png',
+      )
+      const localPhotoRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+        method: 'POST',
+        body: form,
+      })
+      if (localPhotoRes.ok) return
+    } catch {
+      // local banner fallback is best-effort
     }
     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
