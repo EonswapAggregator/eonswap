@@ -100,7 +100,26 @@ export function PressKitPage() {
             ))}
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            Contact <span className="font-medium text-slate-300">{pressEmail}</span> for media requests.
+            Official updates:{' '}
+            <a
+              href="https://x.com/eonswapus"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-slate-300 underline decoration-white/20 underline-offset-2 transition hover:text-white hover:decoration-white/40"
+            >
+              @eonswapus on X
+            </a>
+            {' · '}
+            <a
+              href="https://t.me/eonswap"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-slate-300 underline decoration-white/20 underline-offset-2 transition hover:text-white hover:decoration-white/40"
+            >
+              Telegram
+            </a>
+            . Contact <span className="font-medium text-slate-300">{pressEmail}</span> for media
+            requests.
           </p>
           <Link
             to="/contact"

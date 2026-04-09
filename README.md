@@ -37,6 +37,8 @@ You stay in control of your wallet while EonSwap helps you discover efficient ro
 ## Official Links
 
 - Website: [eonswap.us](https://eonswap.us/)
+- X (Twitter): [x.com/eonswapus](https://x.com/eonswapus)
+- Telegram: [t.me/eonswap](https://t.me/eonswap)
 - Docs: [eonswap.us/docs](https://eonswap.us/docs/)
 - Status: [eonswap.us/status](https://eonswap.us/status)
 - Support: [eonswap.us/contact-support](https://eonswap.us/contact-support)

@@ -63,6 +63,10 @@ export default defineConfig({
     logo: 'https://eonswap.us/favicon.png',
     nav,
     sidebar,
-    socialLinks: [{ icon: 'github', link: 'https://github.com/EonswapAggregator/eonswap' }],
+    socialLinks: [
+      { icon: 'github', link: 'https://github.com/EonswapAggregator/eonswap' },
+      { icon: 'x', link: 'https://x.com/eonswapus', ariaLabel: 'EonSwap on X' },
+      { icon: 'telegram', link: 'https://t.me/eonswap', ariaLabel: 'EonSwap on Telegram' },
+    ],
   },
 })

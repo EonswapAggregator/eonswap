@@ -17,6 +17,7 @@ const ALERT_WEBHOOK_URL = process.env.RELAY_ALERT_WEBHOOK_URL?.trim() || ''
 const ALERT_COOLDOWN_MS = Number(process.env.RELAY_ALERT_COOLDOWN_MS || 180_000)
 const TELEGRAM_BOT_TOKEN = process.env.RELAY_TELEGRAM_BOT_TOKEN?.trim() || ''
 const TELEGRAM_CHAT_ID = process.env.RELAY_TELEGRAM_CHAT_ID?.trim() || ''
+const TELEGRAM_BANNER_URL = process.env.RELAY_TELEGRAM_BANNER_URL?.trim() || ''
 /** Comma-separated list, or `*` when unset / empty (dev). Entries match after trimming trailing `/`. */
 const RELAY_CORS_RAW = process.env.RELAY_ALLOWED_ORIGIN?.trim() || '*'
 const CORS_ALLOW_ALL = RELAY_CORS_RAW === '*'
@@ -81,6 +82,79 @@ function classifyError(error) {
   if (/429|rate/i.test(msg)) return 'Rate limited (429)'
   if (/cors/i.test(msg)) return 'CORS blocked'
   return msg.slice(0, 120) || 'Unknown error'
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function explorerTxUrl(chainId, txHash) {
+  const prefixByChain = {
+    1: 'https://etherscan.io/tx/',
+    10: 'https://optimistic.etherscan.io/tx/',
+    56: 'https://bscscan.com/tx/',
+    137: 'https://polygonscan.com/tx/',
+    8453: 'https://basescan.org/tx/',
+    42161: 'https://arbiscan.io/tx/',
+  }
+  const prefix = prefixByChain[Number(chainId)] || 'https://etherscan.io/tx/'
+  return `${prefix}${txHash}`
+}
+
+function explorerAddressUrl(chainId, wallet) {
+  const prefixByChain = {
+    1: 'https://etherscan.io/address/',
+    10: 'https://optimistic.etherscan.io/address/',
+    56: 'https://bscscan.com/address/',
+    137: 'https://polygonscan.com/address/',
+    8453: 'https://basescan.org/address/',
+    42161: 'https://arbiscan.io/address/',
+  }
+  const prefix = prefixByChain[Number(chainId)]
+  if (!prefix) return null
+  return `${prefix}${wallet}`
+}
+
+function chainLabel(chainId) {
+  const labels = {
+    1: 'Ethereum',
+    10: 'Optimism',
+    56: 'BNB Smart Chain',
+    137: 'Polygon',
+    8453: 'Base',
+    42161: 'Arbitrum',
+  }
+  const id = Number(chainId)
+  const name = labels[id]
+  return name ? `${name} (${id})` : `Unknown (${id || 'n/a'})`
+}
+
+function shortHex(value, start = 8, end = 6) {
+  const v = String(value || '')
+  return v.length > start + end + 3 ? `${v.slice(0, start)}...${v.slice(-end)}` : v
+}
+
+function parsePriceSnapshot(summary) {
+  const s = String(summary || '').trim()
+  const arrow = s.includes('→') ? '→' : s.includes('->') ? '->' : null
+  if (!arrow) return null
+  const [leftRaw, rightRaw] = s.split(arrow)
+  const left = leftRaw
+    ?.replace(/^\s*(Swap|Bridge)\s+/iu, '')
+    .trim()
+  const right = rightRaw
+    ?.replace(/\((done|failed|rejected)\)\s*$/iu, '')
+    .trim()
+  if (!left && !right) return null
+  return {
+    from: left || '',
+    to: right || '',
+  }
 }
 
 async function fetchJson(url) {
@@ -318,12 +392,27 @@ async function sendAlert(message) {
 async function sendTelegramMessage(message) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return
   try {
+    if (TELEGRAM_BANNER_URL) {
+      const photoRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: TELEGRAM_CHAT_ID,
+          photo: TELEGRAM_BANNER_URL,
+          caption: message.slice(0, 1024),
+          parse_mode: 'HTML',
+          disable_notification: false,
+        }),
+      })
+      if (photoRes.ok) return
+    }
     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         chat_id: TELEGRAM_CHAT_ID,
         text: message,
+        parse_mode: 'HTML',
         disable_web_page_preview: true,
       }),
     })
@@ -556,18 +645,36 @@ createServer(async (req, res) => {
         return json(req, res, 400, { ok: false, error: 'Invalid tx hash' })
       }
       if (alreadyProcessedTx(txHash)) return json(req, res, 200, { ok: true, dedup: true })
-      const shortHash =
-        txHash.length > 14 ? `${txHash.slice(0, 10)}...${txHash.slice(-6)}` : txHash || 'unknown'
+      const shortHash = shortHex(txHash, 10, 6) || 'unknown'
       const chainId = Number(payload?.chainId || 0)
       const wallet = String(payload?.wallet || '')
       const summary = String(payload?.summary || '')
+      const timestampUtc = new Date().toISOString()
+      const txUrl = explorerTxUrl(chainId, txHash)
+      const walletUrl = /^0x[a-fA-F0-9]{40}$/.test(wallet) ? explorerAddressUrl(chainId, wallet) : null
+      const shortWallet = wallet ? shortHex(wallet, 8, 6) : ''
+      const price = parsePriceSnapshot(summary)
       const msg = [
-        '✅ EonSwap transaction success',
-        `Type: ${kind}`,
-        `Chain: ${chainId || 'unknown'}`,
-        `Tx: ${shortHash}`,
-        wallet ? `Wallet: ${wallet}` : '',
-        summary ? `Summary: ${summary}` : '',
+        '✅ <b>EonSwap · Execution Confirmed</b>',
+        '',
+        '<b>Overview</b>',
+        `• Product      : ${escapeHtml(kind)}`,
+        '• Status       : Success',
+        `• Network      : ${escapeHtml(chainLabel(chainId))}`,
+        `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
+        shortWallet
+          ? walletUrl
+            ? `• Wallet       : <a href="${escapeHtml(walletUrl)}"><code>${escapeHtml(shortWallet)}</code></a>`
+            : `• Wallet       : <code>${escapeHtml(shortWallet)}</code>`
+          : '',
+        `• Timestamp    : ${escapeHtml(timestampUtc)}`,
+        '',
+        '<b>Price Snapshot</b>',
+        price?.from ? `• You Send     : ${escapeHtml(price.from)}` : '',
+        price?.to ? `• You Receive  : ${escapeHtml(price.to)}` : '',
+        summary ? `• Route        : ${escapeHtml(summary)}` : '',
+        '',
+        `🔎 <a href="${escapeHtml(txUrl)}">Open transaction in explorer</a>`,
       ]
         .filter(Boolean)
         .join('\n')

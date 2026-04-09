@@ -234,19 +234,19 @@ export function Layout() {
                   </p>
                   <div className="mt-2 flex items-center gap-2">
                   <a
-                    href="https://x.com"
+                    href="https://x.com/eonswapus"
                     target="_blank"
                     rel="noreferrer"
-                    aria-label="Twitter"
+                    aria-label="EonSwap on X"
                     className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] text-slate-400 transition hover:border-white/[0.18] hover:text-white"
                   >
                     <Twitter className="h-4 w-4" aria-hidden />
                   </a>
                   <a
-                    href="https://t.me"
+                    href="https://t.me/eonswap"
                     target="_blank"
                     rel="noreferrer"
-                    aria-label="Telegram"
+                    aria-label="EonSwap on Telegram"
                     className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] text-slate-400 transition hover:border-white/[0.18] hover:text-white"
                   >
                     <Send className="h-4 w-4" aria-hidden />
