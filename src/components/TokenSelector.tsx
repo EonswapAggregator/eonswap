@@ -268,8 +268,32 @@ export function TokenSelector({
   }, [open, address, chainId, filtered, debouncedNeedleLc])
 
   const ranked = useMemo(() => {
+    const relevanceRank = (token: Token, queryLc: string): number => {
+      if (!queryLc) return 99
+      const symbolLc = token.symbol.toLowerCase()
+      const nameLc = token.name.toLowerCase()
+      const addressLc = token.address.toLowerCase()
+
+      if (symbolLc === queryLc) return 0
+      if (nameLc === queryLc) return 1
+      if (addressLc === queryLc) return 2
+      if (symbolLc.startsWith(queryLc)) return 3
+      if (nameLc.startsWith(queryLc)) return 4
+      if (addressLc.startsWith(queryLc)) return 5
+      if (symbolLc.includes(queryLc)) return 6
+      if (nameLc.includes(queryLc)) return 7
+      if (addressLc.includes(queryLc)) return 8
+      return 99
+    }
+
     const list = [...filtered]
     list.sort((a, b) => {
+      if (needleLc) {
+        const aRelevance = relevanceRank(a, needleLc)
+        const bRelevance = relevanceRank(b, needleLc)
+        if (aRelevance !== bRelevance) return aRelevance - bRelevance
+      }
+
       const aAddr = a.address.toLowerCase()
       const bAddr = b.address.toLowerCase()
       const aUsd = usdByAddress[aAddr] ?? 0
@@ -289,7 +313,7 @@ export function TokenSelector({
       return a.symbol.localeCompare(b.symbol)
     })
     return list
-  }, [filtered, usdByAddress, balancesByAddress])
+  }, [filtered, needleLc, usdByAddress, balancesByAddress])
 
   const catalogHint =
     remoteList != null
