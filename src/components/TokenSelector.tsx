@@ -42,7 +42,10 @@ export function TokenSelector({
   const [kyberLoading, setKyberLoading] = useState(false)
   const [balancesByAddress, setBalancesByAddress] = useState<Record<string, bigint>>({})
   const [usdByAddress, setUsdByAddress] = useState<Record<string, number>>({})
+  const [usdPriceFetchedAt, setUsdPriceFetchedAt] = useState<Record<string, number>>({})
   const [debouncedNeedleLc, setDebouncedNeedleLc] = useState('')
+  const stalePriceMs = Number(import.meta.env.VITE_PRICE_STALE_MS ?? 120000)
+  const nowMs = Date.now()
 
   useEffect(() => {
     if (!open) return
@@ -175,6 +178,7 @@ export function TokenSelector({
     if (!open || !address) {
       setBalancesByAddress({})
       setUsdByAddress({})
+      setUsdPriceFetchedAt({})
       return
     }
 
@@ -224,6 +228,7 @@ export function TokenSelector({
         const prices: Record<string, number> = await fetchSimplePricesUsd(ids).catch(
           () => ({} as Record<string, number>),
         )
+        const fetchedAt = Date.now()
 
         for (const t of current) {
           const bal = balanceMap[t.address.toLowerCase()] ?? 0n
@@ -240,11 +245,19 @@ export function TokenSelector({
         if (!cancelled) {
           setBalancesByAddress(balanceMap)
           setUsdByAddress(usdMap)
+          const tsMap: Record<string, number> = {}
+          for (const t of current) {
+            const id = coingeckoIdForToken(t)
+            if (!id || (prices[id] ?? 0) <= 0) continue
+            tsMap[t.address.toLowerCase()] = fetchedAt
+          }
+          setUsdPriceFetchedAt(tsMap)
         }
       } catch {
         if (!cancelled) {
           setBalancesByAddress({})
           setUsdByAddress({})
+          setUsdPriceFetchedAt({})
         }
       }
     })()
@@ -386,6 +399,16 @@ export function TokenSelector({
                           ? `$${(usdByAddress[t.address.toLowerCase()] ?? 0).toFixed(2)}`
                           : '—'}
                       </div>
+                      {(() => {
+                        const ts = usdPriceFetchedAt[t.address.toLowerCase()] ?? 0
+                        const stale = ts > 0 && nowMs - ts > stalePriceMs
+                        if (!stale) return null
+                        return (
+                          <div className="mt-0.5 inline-flex rounded-md border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-300">
+                            stale price
+                          </div>
+                        )
+                      })()}
                     </div>
                   </button>
                 </li>

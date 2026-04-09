@@ -1,7 +1,21 @@
 import { arbitrum, base, bsc, mainnet, optimism, polygon } from 'viem/chains'
 
 /** Networks enabled in the app (RainbowKit + Kyber routes) */
-export const eonChains = [mainnet, arbitrum, base, optimism, polygon, bsc] as const
+const ethereumChain = { ...mainnet, name: 'Ethereum', shortName: 'Ethereum' }
+const bnbSmartChain = { ...bsc, name: 'BNB Smart Chain', shortName: 'BNB Smart Chain' }
+const arbitrumOne = { ...arbitrum, name: 'Arbitrum One', shortName: 'Arbitrum One' }
+const baseChain = { ...base, name: 'Base', shortName: 'Base' }
+const polygonPos = { ...polygon, name: 'Polygon PoS', shortName: 'Polygon PoS' }
+const opMainnet = { ...optimism, name: 'OP Mainnet', shortName: 'OP Mainnet' }
+
+export const eonChains = [
+  ethereumChain,
+  bnbSmartChain,
+  arbitrumOne,
+  baseChain,
+  polygonPos,
+  opMainnet,
+] as const
 
 export type EonChain = (typeof eonChains)[number]
 

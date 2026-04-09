@@ -8,6 +8,8 @@ export type TxEventPayload = {
   wallet?: string
   summary?: string
   at: number
+  feeQuoteUsd?: number
+  feeRealizedUsd?: number
 }
 
 export async function sendTxEventToRelay(payload: TxEventPayload): Promise<void> {

@@ -33,6 +33,8 @@ export function useSwapSubmit() {
   const sellAmountInput = useEonSwapStore((s) => s.sellAmountInput)
   const receiveFormatted = useEonSwapStore((s) => s.receiveFormatted)
   const slippageToleranceBps = useEonSwapStore((s) => s.slippageToleranceBps)
+  const quoteGasUsd = useEonSwapStore((s) => s.quoteGasUsd)
+  const quoteL1FeeUsd = useEonSwapStore((s) => s.quoteL1FeeUsd)
   const addActivity = useEonSwapStore((s) => s.addActivity)
   const patchActivity = useEonSwapStore((s) => s.patchActivity)
 
@@ -148,6 +150,9 @@ export function useSwapSubmit() {
         blockNumber: Number(receipt.blockNumber),
       })
       if (receipt.status === 'success') {
+        const feeQuoteUsd =
+          (Number.parseFloat(quoteGasUsd || '0') || 0) +
+          (Number.parseFloat(quoteL1FeeUsd || '0') || 0)
         void sendTxEventToRelay({
           kind: 'swap',
           status: 'success',
@@ -156,6 +161,7 @@ export function useSwapSubmit() {
           wallet: address,
           summary,
           at: Date.now(),
+          feeQuoteUsd: Number.isFinite(feeQuoteUsd) ? feeQuoteUsd : undefined,
         })
       }
     } catch (e) {
@@ -188,6 +194,8 @@ export function useSwapSubmit() {
     patchActivity,
     sendTransactionAsync,
     slippageToleranceBps,
+    quoteGasUsd,
+    quoteL1FeeUsd,
   ])
 
   return { submitSwap: submit, isWorking }

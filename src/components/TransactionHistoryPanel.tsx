@@ -29,7 +29,7 @@ import { explorerTxUrl, getEonChain } from '../lib/chains'
 import { truncateAddress } from '../lib/format'
 import { useLiveClock } from '../hooks/useLiveClock'
 import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
-import { NATIVE_AGGREGATOR } from '../lib/tokens'
+import { NATIVE_AGGREGATOR, tokensForChain } from '../lib/tokens'
 import {
   useEonSwapStore,
   type ActivityItem,
@@ -72,6 +72,17 @@ function txExplorerHref(item: ActivityItem) {
 function sessionMethodLabel(item: ActivityItem): 'Swap' | 'Bridge' {
   if (item.kind === 'bridge') return 'Bridge'
   return 'Swap'
+}
+
+function summaryTokenSymbols(summary: string): string[] {
+  const parts = String(summary).match(/\b[A-Z0-9]{2,10}\b/g) ?? []
+  const unique: string[] = []
+  for (const p of parts) {
+    if (['SWAP', 'BRIDGE', 'DONE', 'FAILED'].includes(p)) continue
+    if (!unique.includes(p)) unique.push(p)
+    if (unique.length >= 2) break
+  }
+  return unique
 }
 
 type PanelVariant = 'sidebar' | 'page'
@@ -345,6 +356,35 @@ export function TransactionHistoryPanel({
                         </span>
                       </td>
                       <td className={`max-w-[280px] ${activityTdClass} pr-4 md:max-w-[340px] md:pr-5`}>
+                        {(() => {
+                          const symbols = summaryTokenSymbols(item.summary)
+                          if (!symbols.length) return null
+                          const symbolBadges = symbols.map((sym) => {
+                            const token = tokensForChain(item.chainId).find(
+                              (t) => t.symbol.toUpperCase() === sym,
+                            )
+                            if (!token) return null
+                            return (
+                              <span
+                                key={`${item.id}-${sym}`}
+                                className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.02] px-1.5 py-0.5 text-[10px] text-slate-300"
+                              >
+                                <img
+                                  src={trustWalletTokenLogoUrl(item.chainId, token.address) ?? undefined}
+                                  alt={sym}
+                                  className="h-3 w-3 rounded-full object-cover ring-1 ring-white/15"
+                                  loading="lazy"
+                                />
+                                {sym}
+                              </span>
+                            )
+                          })
+                          return (
+                            <div className="mb-1 flex flex-wrap gap-1">
+                              {symbolBadges}
+                            </div>
+                          )
+                        })()}
                         <p
                           className="truncate text-[12px] leading-snug text-slate-300"
                           title={item.summary}

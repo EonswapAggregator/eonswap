@@ -24,3 +24,17 @@ export function percentInputToBps(raw: string): number | null {
   if (!Number.isFinite(n) || n <= 0) return null
   return clampSlippageBps(Math.round(n * 100))
 }
+
+/** Safer defaults by chain + token class (native/native generally needs wider tolerance). */
+export function defaultSlippageBpsByContext(params: {
+  chainId?: number
+  sellIsNative: boolean
+  buyIsNative: boolean
+}): number {
+  const { chainId, sellIsNative, buyIsNative } = params
+  const isL2 = chainId === 10 || chainId === 8453 || chainId === 42161
+  const isBscOrPolygon = chainId === 56 || chainId === 137
+  if (sellIsNative && buyIsNative) return isL2 ? 35 : 50
+  if (sellIsNative || buyIsNative) return isBscOrPolygon ? 75 : 50
+  return isL2 ? 30 : 40
+}

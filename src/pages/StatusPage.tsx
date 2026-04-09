@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   Copy,
   Loader2,
@@ -39,6 +40,18 @@ type ApiHealth = {
 }
 type ApiSla = Record<ApiHealth['id'], { h1: number; h24: number }>
 type HealthSample = { at: number; ok: boolean }
+type FeeDashboard = {
+  checkedAt: number
+  totals: {
+    txCount: number
+    quoteFeeUsd: number
+    realizedFeeUsd: number
+    deltaUsd: number
+    realizedCoveragePct: number
+  }
+  perChain: Array<{ chainId: number; txCount: number; quoteFeeUsd: number; realizedFeeUsd: number }>
+  perDay: Array<{ day: string; txCount: number; quoteFeeUsd: number; realizedFeeUsd: number }>
+}
 
 const HEALTH_REFRESH_MS = 300_000
 const HEALTH_RETRY_DELAYS_MS = [400, 900, 1800]
@@ -101,10 +114,16 @@ function ChainSelector({
         type="button"
         aria-label={ariaLabel}
         onClick={() => setOpen((s) => !s)}
-        className="flex h-10 w-full items-center gap-2 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 text-sm text-slate-200"
+        className="flex h-10 w-full items-center rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 text-sm text-slate-200"
       >
-        <LogoBadge src={selected.logo} alt={selected.label} />
-        <span className="truncate">{selected.label}</span>
+        <span className="inline-flex min-w-0 items-center gap-2">
+          <LogoBadge src={selected.logo} alt={selected.label} />
+          <span className="truncate">{selected.label}</span>
+        </span>
+        <ChevronDown
+          className={`ml-auto h-3.5 w-3.5 shrink-0 text-slate-400 transition ${open ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
       </button>
       {open ? (
         <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-56 overflow-y-auto rounded-lg border border-white/[0.14] bg-[#0c1027] p-1.5 shadow-[0_20px_48px_-28px_rgba(0,0,0,0.9)]">
@@ -200,6 +219,7 @@ export function StatusPage() {
   const lastCriticalAlertAtRef = useRef(0)
   const healthDebounceTimerRef = useRef<number | null>(null)
   const checkStatusRef = useRef<() => Promise<void>>(async () => {})
+  const [feeDashboard, setFeeDashboard] = useState<FeeDashboard | null>(null)
 
   const canCheck = useMemo(
     () => /^0x[a-fA-F0-9]{64}$/.test(txHash.trim()),
@@ -433,6 +453,15 @@ export function StatusPage() {
               },
             }))
             usedRelay = true
+            try {
+              const feeRes = await fetch(`${relayUrl}/monitor/fees`, {
+                headers: { Accept: 'application/json' },
+              })
+              const feeJson = (await feeRes.json()) as FeeDashboard
+              if (feeRes.ok && feeJson?.totals) setFeeDashboard(feeJson)
+            } catch {
+              // keep previous fee snapshot
+            }
           }
         } catch {
           // fallback to client-side checks below
@@ -805,6 +834,52 @@ export function StatusPage() {
             Status includes latency thresholds; high latency is marked degraded for early warning.
           </p>
         </motion.div>
+        {feeDashboard ? (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.04 }}
+            className="mb-6 rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Fee observability
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Last snapshot: {new Date(feeDashboard.checkedAt).toLocaleTimeString()}
+                </p>
+              </div>
+              <p className="text-xs text-slate-400">
+                Coverage realized fee: {feeDashboard.totals.realizedCoveragePct}%
+              </p>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Tx</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{feeDashboard.totals.txCount}</p>
+              </div>
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Quote fee</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">
+                  ${feeDashboard.totals.quoteFeeUsd.toFixed(2)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Realized fee</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">
+                  ${feeDashboard.totals.realizedFeeUsd.toFixed(2)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Delta</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">
+                  ${feeDashboard.totals.deltaUsd.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
 
         <motion.div
           initial={{ opacity: 0, y: 14 }}

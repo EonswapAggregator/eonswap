@@ -471,6 +471,14 @@ export function BridgePage() {
   const amountTooSmall =
     !!quote &&
     (BigInt(quote.estimate.toAmount) <= 0n || BigInt(quote.estimate.toAmountMin) <= 0n)
+  const bridgeMaxUsd = Number(import.meta.env.VITE_BRIDGE_MAX_USD ?? 100000)
+  const bridgeFromUsd = Number.parseFloat(quote?.estimate.fromAmountUSD ?? '')
+  const abnormalBridgeValue =
+    Number.isFinite(bridgeFromUsd) &&
+    bridgeFromUsd > 0 &&
+    Number.isFinite(bridgeMaxUsd) &&
+    bridgeMaxUsd > 0 &&
+    bridgeFromUsd > bridgeMaxUsd
   const needsApproval =
     !isFromNative &&
     !!quote &&
@@ -492,6 +500,10 @@ export function BridgePage() {
               ? 'Refresh quote before bridging'
               : amountTooSmall
                 ? 'Quote amount too small'
+                : abnormalBridgeValue
+                  ? `Bridge exceeds safety limit ($${bridgeMaxUsd.toLocaleString('en-US')})`
+                  : quoteError?.toLowerCase().includes('degraded')
+                    ? 'Provider degraded, retry in a moment'
                 : null
 
   const canBridge =
@@ -631,6 +643,7 @@ export function BridgePage() {
           wallet: address,
           summary: `Bridge ${amountInput.trim() || '0'} ${fromToken.symbol} → ~${receiveLabel}`,
           at: Date.now(),
+          feeQuoteUsd: Number.isFinite(feeUsd + gasUsd) ? feeUsd + gasUsd : undefined,
         })
       }
     } else if (bridgeStatus?.status === 'FAILED') {
@@ -648,6 +661,8 @@ export function BridgePage() {
     amountInput,
     fromToken.symbol,
     receiveLabel,
+    feeUsd,
+    gasUsd,
     patchActivity,
   ])
 
@@ -845,6 +860,11 @@ export function BridgePage() {
                 </div>
                 {quoteError ? (
                   <p className="text-xs text-amber-300/90">{quoteError}</p>
+                ) : null}
+                {quoteError?.toLowerCase().includes('degraded') ? (
+                  <p className="text-xs text-amber-300/90">
+                    LI.FI degraded mode active. Quote requests are retried automatically.
+                  </p>
                 ) : null}
                 {staleQuote ? (
                   <p className="text-xs text-amber-300/90">

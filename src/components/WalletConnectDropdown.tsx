@@ -2,8 +2,12 @@ import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, Copy, LogOut, Network } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAccount, useBalance, useDisconnect } from 'wagmi'
+import { createPortal } from 'react-dom'
+import { useAccount, useBalance, useDisconnect, useSwitchChain } from 'wagmi'
 import { formatBalanceLabel, truncateAddress } from '../lib/format'
+import { eonChains } from '../lib/chains'
+import { NATIVE_AGGREGATOR } from '../lib/tokens'
+import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
 
 const triggerClass =
   'flex h-10 items-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.03] px-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-white/[0.14] hover:bg-white/[0.06] sm:px-3'
@@ -33,6 +37,7 @@ function hashString(input: string): number {
 export function WalletConnectDropdown() {
   const { address, chainId, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
+  const { switchChainAsync, isPending: switchingNetwork } = useSwitchChain()
   const { data: bal, isFetching: balanceLoading } = useBalance({
     address,
     chainId,
@@ -41,6 +46,7 @@ export function WalletConnectDropdown() {
     },
   })
   const [open, setOpen] = useState(false)
+  const [networkModalOpen, setNetworkModalOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -75,16 +81,95 @@ export function WalletConnectDropdown() {
     }
   }, [])
 
+  const networkModal =
+    typeof document !== 'undefined'
+      ? createPortal(
+          <AnimatePresence>
+            {networkModalOpen && (
+              <motion.div
+                key="switch-network-modal"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[170] flex items-center justify-center bg-black/50 p-4"
+                onClick={() => setNetworkModalOpen(false)}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.97, y: 6 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.97, y: 6 }}
+                  transition={{ duration: 0.16 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full max-w-[380px] overflow-hidden rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-[#151835] to-[#090b1e] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.55)]"
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-xl font-semibold text-white">Switch Networks</h3>
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                      onClick={() => setNetworkModalOpen(false)}
+                      aria-label="Close network modal"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {eonChains.map((c) => {
+                      const active = c.id === chainId
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          disabled={switchingNetwork || active}
+                          onClick={() => {
+                            if (active) return
+                            void switchChainAsync({ chainId: c.id })
+                              .then(() => setNetworkModalOpen(false))
+                              .catch(() => {})
+                          }}
+                          className={`flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left transition ${
+                            active
+                              ? 'bg-cyan-400 text-[#04111c]'
+                              : 'text-slate-200 hover:bg-white/[0.06]'
+                          }`}
+                        >
+                          <img
+                            src={trustWalletTokenLogoUrl(c.id, NATIVE_AGGREGATOR) ?? undefined}
+                            alt={c.name}
+                            className="h-7 w-7 rounded-full object-cover ring-1 ring-white/15"
+                            loading="lazy"
+                          />
+                          <span className="min-w-0 flex-1 truncate font-semibold">
+                            {c.name}
+                          </span>
+                          {active ? (
+                            <span className="inline-flex items-center gap-1 text-sm font-semibold">
+                              Connected
+                              <span className="h-2 w-2 rounded-full bg-lime-500" />
+                            </span>
+                          ) : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body,
+        )
+      : null
+
   return (
-    <ConnectButton.Custom>
-      {({
-        account,
-        chain,
-        mounted,
-        openConnectModal,
-        openChainModal,
-        authenticationStatus,
-      }) => {
+    <>
+      <ConnectButton.Custom>
+        {({
+          account,
+          chain,
+          mounted,
+          openConnectModal,
+          authenticationStatus,
+        }) => {
         const ready =
           mounted && authenticationStatus !== 'loading'
         const connected = ready && account
@@ -221,7 +306,7 @@ export function WalletConnectDropdown() {
                       className={menuBtnClass}
                       onClick={() => {
                         close()
-                        openChainModal()
+                        setNetworkModalOpen(true)
                       }}
                     >
                       <Network className="h-4 w-4 shrink-0 text-slate-400" />
@@ -245,7 +330,9 @@ export function WalletConnectDropdown() {
             </AnimatePresence>
           </div>
         )
-      }}
-    </ConnectButton.Custom>
+        }}
+      </ConnectButton.Custom>
+      {networkModal}
+    </>
   )
 }

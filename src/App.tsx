@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { titleForPathname } from './lib/pageTitles'
 import { syncSocialMetaForRoute } from './lib/socialMeta'
 
@@ -105,7 +105,8 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/swap" element={<SwapPage />} />
             <Route path="/bridge" element={<BridgePage />} />
-            <Route path="/earn" element={<EarnPage />} />
+            <Route path="/pool" element={<EarnPage />} />
+            <Route path="/earn" element={<Navigate to="/pool" replace />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/docs" element={<DocsPage />} />
             <Route path="/faq" element={<FaqPage />} />

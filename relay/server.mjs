@@ -6,6 +6,8 @@ import { URL, fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ACTIVITY_LOG_PATH =
   process.env.RELAY_ACTIVITY_LOG_PATH?.trim() || join(__dirname, 'data', 'activities.jsonl')
+const TX_EVENT_LOG_PATH =
+  process.env.RELAY_TX_EVENT_LOG_PATH?.trim() || join(__dirname, 'data', 'tx-events.jsonl')
 const RELAY_ADMIN_SECRET = process.env.RELAY_ADMIN_SECRET?.trim() || ''
 
 const PORT = Number(process.env.PORT || process.env.RELAY_PORT || 8787)
@@ -340,6 +342,11 @@ async function appendActivityRecord(record) {
   await appendFile(ACTIVITY_LOG_PATH, `${JSON.stringify(record)}\n`, 'utf8')
 }
 
+async function appendTxEventRecord(record) {
+  await mkdir(dirname(TX_EVENT_LOG_PATH), { recursive: true })
+  await appendFile(TX_EVENT_LOG_PATH, `${JSON.stringify(record)}\n`, 'utf8')
+}
+
 async function readActivitiesMerged(maxLines = 20_000) {
   let raw = ''
   try {
@@ -360,6 +367,81 @@ async function readActivitiesMerged(maxLines = 20_000) {
     }
   }
   return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt)
+}
+
+async function readTxEventsMerged(maxLines = 50_000) {
+  let raw = ''
+  try {
+    raw = await readFile(TX_EVENT_LOG_PATH, 'utf8')
+  } catch {
+    return []
+  }
+  const lines = raw.split('\n').filter((l) => l.trim())
+  const slice = lines.length > maxLines ? lines.slice(-maxLines) : lines
+  const byHash = new Map()
+  for (const line of slice) {
+    try {
+      const obj = JSON.parse(line)
+      const txHash = String(obj?.txHash || '')
+      if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) continue
+      byHash.set(txHash, {
+        txHash,
+        chainId: Number(obj?.chainId) || 0,
+        kind: obj?.kind === 'bridge' ? 'bridge' : 'swap',
+        at: Number(obj?.at) || Date.now(),
+        feeQuoteUsd: Number.isFinite(Number(obj?.feeQuoteUsd))
+          ? Number(obj.feeQuoteUsd)
+          : null,
+        feeRealizedUsd: Number.isFinite(Number(obj?.feeRealizedUsd))
+          ? Number(obj.feeRealizedUsd)
+          : null,
+      })
+    } catch {
+      // skip corrupt line
+    }
+  }
+  return [...byHash.values()].sort((a, b) => b.at - a.at)
+}
+
+async function buildFeeDashboard() {
+  const rows = await readTxEventsMerged()
+  const byChain = new Map()
+  const byDay = new Map()
+  let quoteTotal = 0
+  let realizedTotal = 0
+  let coverageCount = 0
+  for (const row of rows) {
+    const q = Number(row.feeQuoteUsd || 0)
+    const r = Number(row.feeRealizedUsd || 0)
+    const day = new Date(row.at).toISOString().slice(0, 10)
+    const chainKey = String(row.chainId)
+    const c = byChain.get(chainKey) || { chainId: row.chainId, txCount: 0, quoteFeeUsd: 0, realizedFeeUsd: 0 }
+    c.txCount += 1
+    c.quoteFeeUsd += q
+    c.realizedFeeUsd += r
+    byChain.set(chainKey, c)
+    const d = byDay.get(day) || { day, txCount: 0, quoteFeeUsd: 0, realizedFeeUsd: 0 }
+    d.txCount += 1
+    d.quoteFeeUsd += q
+    d.realizedFeeUsd += r
+    byDay.set(day, d)
+    quoteTotal += q
+    realizedTotal += r
+    if (row.feeRealizedUsd != null) coverageCount += 1
+  }
+  return {
+    checkedAt: Date.now(),
+    totals: {
+      txCount: rows.length,
+      quoteFeeUsd: quoteTotal,
+      realizedFeeUsd: realizedTotal,
+      deltaUsd: realizedTotal - quoteTotal,
+      realizedCoveragePct: rows.length ? Math.round((coverageCount / rows.length) * 100) : 0,
+    },
+    perChain: [...byChain.values()].sort((a, b) => b.quoteFeeUsd - a.quoteFeeUsd),
+    perDay: [...byDay.values()].sort((a, b) => String(b.day).localeCompare(String(a.day))),
+    recent: rows.slice(0, 120),
+  }
 }
 
 function alreadyProcessedTx(hash) {
@@ -672,6 +754,8 @@ createServer(async (req, res) => {
       const wallet = String(payload?.wallet || '')
       const summary = String(payload?.summary || '')
       const timestampUtc = new Date().toISOString()
+      const feeQuoteUsd = Number(payload?.feeQuoteUsd)
+      const feeRealizedUsd = Number(payload?.feeRealizedUsd)
       const txUrl = explorerTxUrl(chainId, txHash)
       const walletUrl = /^0x[a-fA-F0-9]{40}$/.test(wallet) ? explorerAddressUrl(chainId, wallet) : null
       const shortWallet = wallet ? shortHex(wallet, 8, 6) : ''
@@ -700,6 +784,17 @@ createServer(async (req, res) => {
       ]
         .filter(Boolean)
         .join('\n')
+      await appendTxEventRecord({
+        kind: payload?.kind === 'bridge' ? 'bridge' : 'swap',
+        status: 'success',
+        txHash,
+        chainId,
+        wallet: /^0x[a-fA-F0-9]{40}$/.test(wallet) ? wallet : undefined,
+        summary,
+        at: Number(payload?.at) || Date.now(),
+        feeQuoteUsd: Number.isFinite(feeQuoteUsd) ? feeQuoteUsd : undefined,
+        feeRealizedUsd: Number.isFinite(feeRealizedUsd) ? feeRealizedUsd : undefined,
+      })
       await sendTelegramMessage(msg)
       return json(req, res, 200, { ok: true })
     } catch (e) {
@@ -714,6 +809,10 @@ createServer(async (req, res) => {
   }
   if (u.pathname === '/monitor/status') {
     return json(req, res, 200, status)
+  }
+  if (u.pathname === '/monitor/fees') {
+    const out = await buildFeeDashboard()
+    return json(req, res, 200, out)
   }
   if (u.pathname === '/monitor/check-now') {
     if (RELAY_ADMIN_SECRET) {

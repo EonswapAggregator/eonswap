@@ -159,7 +159,7 @@ export function Layout() {
                     </Link>
                   </li>
                   <li>
-                    <Link to="/earn" className={footerItemClass}>
+                    <Link to="/pool" className={footerItemClass}>
                       <Droplets className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
                       Pool / Earn
                     </Link>

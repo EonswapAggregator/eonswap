@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { ArrowDownUp, ChevronDown, Loader2 } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { parseUnits } from 'viem'
 import { useAccount, useBalance, useChainId, useEstimateFeesPerGas } from 'wagmi'
 import { useKyberQuote } from '../hooks/useKyberQuote'
@@ -10,6 +10,8 @@ import { getEonChain, isSupportedChain } from '../lib/chains'
 import { isNativeToken } from '../lib/tokens'
 import { mainnet } from 'wagmi/chains'
 import { useEonSwapStore } from '../store/useEonSwapStore'
+import { priceImpactPercentFromUsd } from '../lib/quoteDisplay'
+import { defaultSlippageBpsByContext } from '../lib/slippage'
 import { BestRoute } from './BestRoute'
 import { SlippageSettings } from './SlippageSettings'
 import { SwapConfirmModal } from './SwapConfirmModal'
@@ -45,11 +47,16 @@ export function SwapWidget() {
   const buyToken = useEonSwapStore((s) => s.buyToken)
   const sellAmountInput = useEonSwapStore((s) => s.sellAmountInput)
   const receiveFormatted = useEonSwapStore((s) => s.receiveFormatted)
+  const quoteError = useEonSwapStore((s) => s.quoteError)
+  const quoteAmountInUsd = useEonSwapStore((s) => s.quoteAmountInUsd)
+  const quoteAmountOutUsd = useEonSwapStore((s) => s.quoteAmountOutUsd)
   const quoteLoading = useEonSwapStore((s) => s.quoteLoading)
   const setSellAmountInput = useEonSwapStore((s) => s.setSellAmountInput)
   const setSellToken = useEonSwapStore((s) => s.setSellToken)
   const setBuyToken = useEonSwapStore((s) => s.setBuyToken)
   const flipTokens = useEonSwapStore((s) => s.flipTokens)
+  const slippageToleranceBps = useEonSwapStore((s) => s.slippageToleranceBps)
+  const setSlippageToleranceBps = useEonSwapStore((s) => s.setSlippageToleranceBps)
 
   const [sellPicker, setSellPicker] = useState(false)
   const [buyPicker, setBuyPicker] = useState(false)
@@ -74,6 +81,30 @@ export function SwapWidget() {
 
   const sellIsNative = isNativeToken(sellToken.address)
   const activeChain = balanceChainId != null ? getEonChain(balanceChainId) : null
+  const lastAutoSlippageRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const recommended = defaultSlippageBpsByContext({
+      chainId: chainIdForTokens,
+      sellIsNative,
+      buyIsNative: isNativeToken(buyToken.address),
+    })
+    const prevAuto = lastAutoSlippageRef.current
+    const shouldAutoApply =
+      slippageToleranceBps === 50 || // legacy default
+      (prevAuto != null && slippageToleranceBps === prevAuto)
+    if (!shouldAutoApply) return
+    if (slippageToleranceBps !== recommended) {
+      setSlippageToleranceBps(recommended)
+    }
+    lastAutoSlippageRef.current = recommended
+  }, [
+    chainIdForTokens,
+    sellIsNative,
+    buyToken.address,
+    slippageToleranceBps,
+    setSlippageToleranceBps,
+  ])
 
   const { data: walletBalance, isFetching: balanceLoading } = useBalance({
     address,
@@ -181,6 +212,21 @@ export function SwapWidget() {
     activeChain?.nativeCurrency.symbol ??
     'native token'
 
+  const highPriceImpactThresholdPct = Number(import.meta.env.VITE_PRICE_IMPACT_WARN_PCT ?? 5)
+  const maxSwapUsd = Number(import.meta.env.VITE_SWAP_MAX_USD ?? 100000)
+  const quoteInUsdNum = Number.parseFloat(quoteAmountInUsd || '')
+  const abnormalTxValue =
+    Number.isFinite(quoteInUsdNum) &&
+    quoteInUsdNum > 0 &&
+    Number.isFinite(maxSwapUsd) &&
+    maxSwapUsd > 0 &&
+    quoteInUsdNum > maxSwapUsd
+  const impactPct = priceImpactPercentFromUsd(quoteAmountInUsd, quoteAmountOutUsd)
+  const highPriceImpact =
+    impactPct != null &&
+    Number.isFinite(impactPct) &&
+    impactPct >= highPriceImpactThresholdPct
+
   const preflightError = !isConnected
     ? 'Connect wallet'
     : wrongNetwork
@@ -191,6 +237,12 @@ export function SwapWidget() {
           ? `Insufficient ${sellToken.symbol} balance`
           : insufficientGasFee
             ? `Insufficient ${gasSymbol} for gas`
+            : abnormalTxValue
+              ? `Tx exceeds safety limit ($${maxSwapUsd.toLocaleString('en-US')})`
+              : highPriceImpact
+                ? `High price impact (${impactPct?.toFixed(2)}%)`
+                : quoteError?.toLowerCase().includes('degraded')
+                  ? 'Provider degraded, retry in a moment'
             : null
 
   const canSwapFinal = canSwap && !preflightError && !nativeGasLoading
@@ -375,6 +427,11 @@ export function SwapWidget() {
 
           {/* Reserved height + scroll so filling the form does not grow the card */}
           <div className="flex min-h-[20rem] flex-col gap-1.5 pt-0.5">
+            {quoteError?.toLowerCase().includes('degraded') ? (
+              <p className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-1.5 text-[11px] text-amber-200">
+                Routing provider is degraded. Retry policy applied automatically.
+              </p>
+            ) : null}
             <div className="min-h-[5.5rem] shrink-0">
               <BestRoute />
             </div>

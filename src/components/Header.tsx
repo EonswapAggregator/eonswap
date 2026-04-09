@@ -11,7 +11,7 @@ const navTextClass =
 const navItems = [
   { to: '/swap', label: 'Swap', end: true },
   { to: '/bridge', label: 'Bridge', end: false },
-  { to: '/earn', label: 'Pool / Earn', end: false },
+  { to: '/pool', label: 'Pool / Earn', end: false },
   { to: '/activity', label: 'Activity', end: false },
   { to: '/status', label: 'Status', end: false },
   { to: '/contact-support', label: 'Support', end: false },

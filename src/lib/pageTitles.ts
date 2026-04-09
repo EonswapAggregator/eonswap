@@ -3,6 +3,7 @@ const TITLES: Record<string, string> = {
   '/': 'EonSwap — Infinite Liquidity.',
   '/swap': 'EonSwap — Swap',
   '/bridge': 'EonSwap — Bridge',
+  '/pool': 'EonSwap — Pool / Earn',
   '/earn': 'EonSwap — Pool / Earn',
   '/activity': 'EonSwap — Activity',
   '/docs': 'EonSwap — Docs',
@@ -29,6 +30,7 @@ const DESCRIPTIONS: Record<string, string> = {
   '/swap': 'Swap crypto assets across supported chains with smart route discovery and wallet-first execution.',
   '/bridge':
     'Bridge assets across supported networks using non-custodial routes surfaced through EonSwap integrations.',
+  '/pool': 'Explore liquidity and yield opportunities across supported ecosystems.',
   '/earn': 'Explore liquidity and yield opportunities across supported ecosystems.',
   '/activity': 'Track your recent swap and bridge activity in one timeline.',
   '/docs': 'Read EonSwap documentation, feature guides, safety notes, and user onboarding pages.',

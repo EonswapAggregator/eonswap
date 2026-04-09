@@ -4,6 +4,7 @@ import type { Token } from './tokens'
 
 const AGGREGATOR_BASE = 'https://aggregator-api.kyberswap.com'
 const KYBER_TIMEOUT_MS = 15_000
+const KYBER_RETRY_DELAYS_MS = [350, 900]
 
 export type KyberPoolStep = {
   pool: string
@@ -64,19 +65,37 @@ function clientHeaders(): HeadersInit {
 }
 
 async function kyberFetch(url: string, init?: RequestInit): Promise<Response> {
-  const ctrl = new AbortController()
-  const timer = window.setTimeout(() => ctrl.abort(), KYBER_TIMEOUT_MS)
-  try {
-    return await fetch(url, { ...init, signal: ctrl.signal })
-  } catch (e) {
-    const msg = String(e instanceof Error ? e.message : e ?? '')
-    if (e instanceof DOMException && e.name === 'AbortError') {
-      throw new Error('Kyber request timeout')
+  let lastError: unknown = null
+  for (let i = 0; i <= KYBER_RETRY_DELAYS_MS.length; i += 1) {
+    const ctrl = new AbortController()
+    const timer = window.setTimeout(() => ctrl.abort(), KYBER_TIMEOUT_MS)
+    try {
+      const res = await fetch(url, { ...init, signal: ctrl.signal })
+      if (res.status >= 500 || res.status === 429) {
+        if (i < KYBER_RETRY_DELAYS_MS.length) {
+          await new Promise((r) => window.setTimeout(r, KYBER_RETRY_DELAYS_MS[i]))
+          continue
+        }
+      }
+      return res
+    } catch (e) {
+      lastError = e
+      if (i < KYBER_RETRY_DELAYS_MS.length) {
+        await new Promise((r) => window.setTimeout(r, KYBER_RETRY_DELAYS_MS[i]))
+        continue
+      }
+      const msg = String(e instanceof Error ? e.message : e ?? '')
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        throw new Error('Kyber degraded: request timeout')
+      }
+      throw new Error(`Kyber degraded: ${msg || 'request failed'}`)
+    } finally {
+      window.clearTimeout(timer)
     }
-    throw new Error(msg || 'Kyber request failed')
-  } finally {
-    window.clearTimeout(timer)
   }
+  throw new Error(
+    `Kyber degraded: ${String(lastError instanceof Error ? lastError.message : lastError ?? 'request failed')}`,
+  )
 }
 
 function appendFeeParams(q: URLSearchParams) {
