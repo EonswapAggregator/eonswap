@@ -19,7 +19,6 @@ const APP_ROUTES = [
   { path: '/about', changefreq: 'monthly', priority: '0.5' },
   { path: '/careers', changefreq: 'weekly', priority: '0.4' },
   { path: '/press-kit', changefreq: 'monthly', priority: '0.5' },
-  { path: '/contact', changefreq: 'monthly', priority: '0.5' },
   { path: '/terms', changefreq: 'yearly', priority: '0.3' },
   { path: '/privacy', changefreq: 'yearly', priority: '0.3' },
   { path: '/risk-disclosure', changefreq: 'yearly', priority: '0.3' },

@@ -102,10 +102,10 @@ export function CareersPage() {
           </div>
           <p className="mt-3 text-xs text-slate-500">
             Submit applications to <span className="font-medium text-slate-300">{careersEmail}</span>.
-            For non-career inquiries, use the contact/support pages.
+            For non-career inquiries, use Contact Support.
           </p>
           <Link
-            to="/contact"
+            to="/contact-support"
             className="mt-3 inline-flex h-9 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] px-3 text-xs font-semibold text-slate-200 transition hover:border-white/[0.2] hover:bg-white/[0.06]"
           >
             Company contact

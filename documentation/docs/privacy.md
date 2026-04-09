@@ -31,4 +31,4 @@ We apply reasonable technical and operational controls to protect systems and us
 
 ## Contact
 
-For privacy questions, contact the EonSwap team through official support channels on the main website.
+For privacy questions, use **[Contact support](https://eonswap.us/contact-support)** on the main website.

@@ -4,6 +4,7 @@
       <p class="eonswap-docs-footer__message">
         Powered by EonSwap · <a href="/docs/terms">Terms</a> ·
         <a href="/docs/privacy">Privacy</a> ·
+        <a href="https://eonswap.us/contact-support" target="_blank" rel="noopener noreferrer">Contact</a> ·
         <a href="https://x.com/eonswapus" target="_blank" rel="noopener noreferrer">X</a> ·
         <a href="https://t.me/eonswap" target="_blank" rel="noopener noreferrer">Telegram</a>
       </p>

@@ -46,6 +46,7 @@ const sidebar = [
     items: [
       { text: 'Troubleshooting', link: '/guides/troubleshooting' },
       { text: 'FAQ', link: '/guides/faq' },
+      { text: 'Contact support', link: 'https://eonswap.us/contact-support' },
       { text: 'System Status', link: 'https://eonswap.us/status' },
     ],
   },

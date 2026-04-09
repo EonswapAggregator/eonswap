@@ -23,6 +23,12 @@ test('core routes render without crash', async ({ page }) => {
   }
 })
 
+test('/contact redirects to contact-support', async ({ page }) => {
+  await page.goto('/contact')
+  await expect(page).toHaveURL(/\/contact-support\/?$/)
+  await expect(page.locator('main')).toBeVisible()
+})
+
 test('faq category filter works', async ({ page }) => {
   await page.goto('/faq')
   await page.getByRole('button', { name: 'Execution & status' }).click()

@@ -44,9 +44,6 @@ const CareersPage = lazy(() =>
 const PressKitPage = lazy(() =>
   import('./pages/PressKitPage').then((m) => ({ default: m.PressKitPage })),
 )
-const ContactPage = lazy(() =>
-  import('./pages/ContactPage').then((m) => ({ default: m.ContactPage })),
-)
 const TermsPage = lazy(() =>
   import('./pages/TermsPage').then((m) => ({ default: m.TermsPage })),
 )
@@ -115,7 +112,7 @@ export default function App() {
             <Route path="/about" element={<AboutPage />} />
             <Route path="/careers" element={<CareersPage />} />
             <Route path="/press-kit" element={<PressKitPage />} />
-            <Route path="/contact" element={<ContactPage />} />
+            <Route path="/contact" element={<Navigate to="/contact-support" replace />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/risk-disclosure" element={<RiskDisclosurePage />} />

@@ -85,6 +85,13 @@ export function PrivacyPage() {
             <li>EonSwap is non-custodial and does not store private keys or seed phrases.</li>
             <li>On-chain data is public by nature and can be indexed by third-party explorers.</li>
             <li>Use this interface only if you accept third-party provider processing requirements.</li>
+            <li>
+              Privacy questions:{' '}
+              <Link to="/contact-support" className="text-eon-blue underline-offset-2 hover:underline">
+                Contact support
+              </Link>
+              .
+            </li>
           </ul>
         </motion.div>
       </div>
