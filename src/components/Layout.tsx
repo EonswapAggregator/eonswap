@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { FaDiscord, FaGithub, FaMedium, FaTelegram, FaXTwitter } from 'react-icons/fa6'
 import { Link, Outlet } from 'react-router-dom'
 import {
   ArrowUp,
@@ -11,7 +12,6 @@ import {
   Route,
   Send,
   ShieldCheck,
-  Twitter,
   Waves,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -233,25 +233,52 @@ export function Layout() {
                     Follow
                   </p>
                   <div className="mt-2 flex items-center gap-2">
-                  <a
-                    href="https://x.com/eonswapus"
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="EonSwap on X"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] text-slate-400 transition hover:border-white/[0.18] hover:text-white"
-                  >
-                    <Twitter className="h-4 w-4" aria-hidden />
-                  </a>
-                  <a
-                    href="https://t.me/eonswap"
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="EonSwap on Telegram"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] text-slate-400 transition hover:border-white/[0.18] hover:text-white"
-                  >
-                    <Send className="h-4 w-4" aria-hidden />
-                  </a>
-                </div>
+                    <a
+                      href="https://x.com/eonswapus"
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="EonSwap on X"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] text-slate-400 transition hover:border-white/[0.18] hover:text-white"
+                    >
+                      <FaXTwitter className="h-4 w-4" aria-hidden />
+                    </a>
+                    <a
+                      href="https://t.me/eonswap"
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="EonSwap on Telegram"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] text-slate-400 transition hover:border-white/[0.18] hover:text-white"
+                    >
+                      <FaTelegram className="h-4 w-4" aria-hidden />
+                    </a>
+                    <a
+                      href="https://medium.com/@eonswap"
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="EonSwap on Medium"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] text-slate-400 transition hover:border-white/[0.18] hover:text-white"
+                    >
+                      <FaMedium className="h-4 w-4" aria-hidden />
+                    </a>
+                    <a
+                      href="https://discord.gg/AAEq22Sqng"
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="EonSwap on Discord"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] text-slate-400 transition hover:border-white/[0.18] hover:text-white"
+                    >
+                      <FaDiscord className="h-4 w-4" aria-hidden />
+                    </a>
+                    <a
+                      href="https://github.com/EonswapAggregator"
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="EonSwap on GitHub"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] text-slate-400 transition hover:border-white/[0.18] hover:text-white"
+                    >
+                      <FaGithub className="h-4 w-4" aria-hidden />
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>

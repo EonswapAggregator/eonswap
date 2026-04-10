@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { Briefcase, Rocket, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { roleEmail } from '../lib/site'
+import { uiButtonCompact, uiButtonPrimary } from '../lib/uiButtonClasses'
 
 export function CareersPage() {
   const careersEmail = roleEmail('careers')
@@ -22,6 +23,12 @@ export function CareersPage() {
                 Join the team
               </span>
             </div>
+            <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-400/10 px-2.5 py-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                Currently hiring
+              </span>
+            </div>
             <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
               Company
             </p>
@@ -35,7 +42,7 @@ export function CareersPage() {
           </div>
           <a
             href={`mailto:${careersEmail}`}
-            className="inline-flex h-10 w-fit shrink-0 items-center justify-center rounded-xl border border-white/[0.14] bg-white/[0.04] px-4 text-sm font-medium text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-white/[0.2] hover:bg-white/[0.07] hover:text-white"
+            className={`${uiButtonPrimary} shrink-0`}
           >
             Apply via email
           </a>
@@ -46,7 +53,7 @@ export function CareersPage() {
             {
               icon: Briefcase,
               title: 'Open roles',
-              text: 'Hiring updates are published through official channels. Core roles include engineering, product, design, and growth.',
+              text: 'Current focus: Frontend Engineer (React), Full-stack Engineer (routing/integration), Product Designer, and DevRel/Growth.',
             },
             {
               icon: Users,
@@ -102,11 +109,12 @@ export function CareersPage() {
           </div>
           <p className="mt-3 text-xs text-slate-500">
             Submit applications to <span className="font-medium text-slate-300">{careersEmail}</span>.
-            For non-career inquiries, use Contact Support.
+            Typical response time is 5-7 business days. For non-career inquiries, use Contact
+            Support.
           </p>
           <Link
             to="/contact-support"
-            className="mt-3 inline-flex h-9 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] px-3 text-xs font-semibold text-slate-200 transition hover:border-white/[0.2] hover:bg-white/[0.06]"
+            className={`${uiButtonCompact} mt-3 h-9 text-xs font-semibold`}
           >
             Company contact
           </Link>

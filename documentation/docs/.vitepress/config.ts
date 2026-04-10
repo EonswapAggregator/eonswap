@@ -14,6 +14,7 @@ const sidebar = [
     items: [
       { text: 'Introduction', link: '/' },
       { text: 'Getting Started', link: '/getting-started' },
+      { text: 'Supported Networks', link: '/supported-networks' },
     ],
   },
   {
@@ -45,6 +46,8 @@ const sidebar = [
     text: 'Support',
     items: [
       { text: 'Troubleshooting', link: '/guides/troubleshooting' },
+      { text: 'Wallet Setup', link: '/guides/wallet-setup' },
+      { text: 'Status Codes', link: '/guides/status-codes' },
       { text: 'FAQ', link: '/guides/faq' },
       { text: 'Contact support', link: 'https://eonswap.us/contact-support' },
       { text: 'System Status', link: 'https://eonswap.us/status' },
@@ -65,9 +68,10 @@ export default defineConfig({
     nav,
     sidebar,
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/EonswapAggregator/eonswap' },
+      { icon: 'github', link: 'https://github.com/EonswapAggregator' },
       { icon: 'x', link: 'https://x.com/eonswapus', ariaLabel: 'EonSwap on X' },
       { icon: 'telegram', link: 'https://t.me/eonswap', ariaLabel: 'EonSwap on Telegram' },
+      { icon: 'discord', link: 'https://discord.gg/AAEq22Sqng', ariaLabel: 'EonSwap on Discord' },
     ],
   },
 })

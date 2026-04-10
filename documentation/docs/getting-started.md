@@ -24,3 +24,10 @@ This page helps first-time users complete their first swap or bridge with confid
 3. Enter amount and review ETA + fee estimate.
 4. Confirm wallet prompt (and approval if required).
 5. Monitor progress until final status.
+
+## Related reading
+
+- [Wallet Setup Guide](/guides/wallet-setup)
+- [Supported Networks](/supported-networks)
+- [Status Codes Reference](/guides/status-codes)
+- [Troubleshooting](/guides/troubleshooting)

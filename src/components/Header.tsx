@@ -3,6 +3,7 @@ import { Droplets, Menu, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, Link, useLocation } from 'react-router-dom'
+import { uiButtonHeaderIcon } from '../lib/uiButtonClasses'
 import { WalletConnectDropdown } from './WalletConnectDropdown'
 
 const navTextClass =
@@ -177,7 +178,7 @@ export function Header() {
           <WalletConnectDropdown />
           <button
             type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.03] text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white md:hidden"
+            className={`${uiButtonHeaderIcon} md:hidden`}
             aria-expanded={mobileOpen}
             aria-controls="mobile-nav"
             aria-label={mobileOpen ? 'Close menu' : 'Open menu'}

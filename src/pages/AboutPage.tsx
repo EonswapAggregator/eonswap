@@ -1,8 +1,48 @@
 import { motion } from 'framer-motion'
 import { Compass, ShieldCheck, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { uiButtonGhost, uiButtonSecondary } from '../lib/uiButtonClasses'
 
 export function AboutPage() {
+  const networks = [
+    {
+      id: 'ethereum',
+      name: 'Ethereum',
+      iconUrl:
+        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
+    },
+    {
+      id: 'arbitrum',
+      name: 'Arbitrum',
+      iconUrl:
+        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png',
+    },
+    {
+      id: 'base',
+      name: 'Base',
+      iconUrl:
+        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png',
+    },
+    {
+      id: 'optimism',
+      name: 'Optimism',
+      iconUrl:
+        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png',
+    },
+    {
+      id: 'polygon',
+      name: 'Polygon',
+      iconUrl:
+        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png',
+    },
+    {
+      id: 'bnb',
+      name: 'BNB Chain',
+      iconUrl:
+        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png',
+    },
+  ] as const
+
   return (
     <section className="scroll-mt-24 border-t border-white/[0.08] py-16 md:py-24">
       <div className="mx-auto max-w-7xl px-4 md:px-6">
@@ -30,12 +70,22 @@ export function AboutPage() {
               and fully non-custodial for everyday on-chain users.
             </p>
           </div>
-          <Link
-            to="/swap"
-            className="inline-flex h-10 w-fit shrink-0 items-center justify-center rounded-xl border border-white/[0.14] bg-white/[0.04] px-4 text-sm font-medium text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-white/[0.2] hover:bg-white/[0.07] hover:text-white"
-          >
-            Open swap
-          </Link>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Link
+              to="/swap"
+              className={uiButtonSecondary}
+            >
+              Open swap
+            </Link>
+            <a
+              href="/docs/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={uiButtonGhost}
+            >
+              Read docs
+            </a>
+          </div>
         </motion.div>
 
         <div className="grid gap-4 lg:grid-cols-3">
@@ -71,6 +121,57 @@ export function AboutPage() {
             </motion.article>
           ))}
         </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.08 }}
+          className="mt-4 rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4"
+        >
+          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-300">
+            Trust and transparency
+          </h2>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            {[
+              'Non-custodial by default: you sign from your own wallet.',
+              'Route context is shown before execution.',
+              'No hidden interface fee added by default.',
+            ].map((item) => (
+              <p
+                key={item}
+                className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs leading-relaxed text-slate-400"
+              >
+                {item}
+              </p>
+            ))}
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.12 }}
+          className="mt-4 rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4"
+        >
+          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-300">
+            Supported networks
+          </h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {networks.map((network) => (
+              <span
+                key={network.id}
+                className="inline-flex items-center rounded-full border border-white/[0.1] bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300"
+              >
+                <img
+                  src={network.iconUrl}
+                  alt={network.name}
+                  className="mr-1.5 h-3.5 w-3.5 rounded-full object-contain"
+                />
+                {network.name}
+              </span>
+            ))}
+          </div>
+        </motion.div>
       </div>
     </section>
   )

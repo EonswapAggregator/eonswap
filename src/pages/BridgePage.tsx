@@ -34,6 +34,7 @@ import { isNativeToken, tokensForChain } from '../lib/tokens'
 import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
 import { useEonSwapStore } from '../store/useEonSwapStore'
 import { sendTxEventToRelay } from '../lib/txEvents'
+import { uiButtonSecondary } from '../lib/uiButtonClasses'
 
 const BRIDGE_PENDING_STORAGE_KEY = 'eonswap.bridge.pending.v1'
 const BRIDGE_RECOVERY_TTL_MS = 24 * 60 * 60 * 1000
@@ -134,7 +135,7 @@ function SelectorField({
         aria-label={ariaLabel}
         aria-expanded={open}
         onClick={() => setOpen((s) => !s)}
-        className="flex h-9 w-full items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] px-2 transition hover:border-white/[0.2]"
+        className="flex h-9 w-full items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] px-2 transition hover:border-white/[0.2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0f1e]"
       >
         <LogoBadge src={selected.logo} alt={selected.label} fallback={selected.fallback} />
         <span className="min-w-0 truncate text-xs font-medium text-slate-200">
@@ -159,7 +160,7 @@ function SelectorField({
                 value === opt.value
                   ? 'bg-cyan-400/15 text-cyan-100'
                   : 'text-slate-200 hover:bg-white/[0.06]'
-              }`}
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0f1e]`}
             >
               <LogoBadge src={opt.logo} alt={opt.label} fallback={opt.fallback} />
               <span className="truncate">{opt.label}</span>
@@ -708,7 +709,7 @@ export function BridgePage() {
           </div>
           <Link
             to="/swap"
-            className="inline-flex h-10 w-fit shrink-0 items-center justify-center rounded-xl border border-white/[0.14] bg-white/[0.04] px-4 text-sm font-medium text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-white/[0.2] hover:bg-white/[0.07] hover:text-white"
+            className={`${uiButtonSecondary} shrink-0`}
           >
             Back to swap
           </Link>

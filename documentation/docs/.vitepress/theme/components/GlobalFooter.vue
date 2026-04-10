@@ -6,7 +6,10 @@
         <a href="/docs/privacy">Privacy</a> ·
         <a href="https://eonswap.us/contact-support" target="_blank" rel="noopener noreferrer">Contact</a> ·
         <a href="https://x.com/eonswapus" target="_blank" rel="noopener noreferrer">X</a> ·
-        <a href="https://t.me/eonswap" target="_blank" rel="noopener noreferrer">Telegram</a>
+        <a href="https://t.me/eonswap" target="_blank" rel="noopener noreferrer">Telegram</a> ·
+        <a href="https://medium.com/@eonswap" target="_blank" rel="noopener noreferrer">Medium</a> ·
+        <a href="https://discord.gg/AAEq22Sqng" target="_blank" rel="noopener noreferrer">Discord</a> ·
+        <a href="https://github.com/EonswapAggregator" target="_blank" rel="noopener noreferrer">GitHub</a>
       </p>
       <p class="eonswap-docs-footer__copyright">
         Copyright © {{ year }} EonSwap. All rights reserved.

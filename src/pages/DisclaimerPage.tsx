@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
-import { AlertOctagon, BadgeInfo, Scale } from 'lucide-react'
+import { AlertOctagon, BadgeInfo, CheckCircle2, Scale } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { uiButtonSecondary } from '../lib/uiButtonClasses'
 
 export function DisclaimerPage() {
   return (
@@ -10,8 +11,12 @@ export function DisclaimerPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] via-white/[0.015] to-transparent p-4 sm:flex-row sm:items-center sm:justify-between md:mb-7 md:p-5"
+          className="relative mb-6 flex flex-col gap-4 overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] via-white/[0.015] to-transparent p-4 sm:flex-row sm:items-center sm:justify-between md:mb-7 md:p-5"
         >
+          <div
+            className="pointer-events-none absolute -right-12 top-1/2 h-28 w-28 -translate-y-1/2 rounded-full bg-eon-blue/[0.12] blur-2xl"
+            aria-hidden
+          />
           <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1">
               <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
@@ -32,7 +37,7 @@ export function DisclaimerPage() {
           </div>
           <Link
             to="/risk-disclosure"
-            className="inline-flex h-10 w-fit shrink-0 items-center justify-center rounded-xl border border-white/[0.14] bg-white/[0.04] px-4 text-sm font-medium text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-white/[0.2] hover:bg-white/[0.07] hover:text-white"
+            className={`${uiButtonSecondary} shrink-0`}
           >
             Risk disclosure
           </Link>
@@ -61,7 +66,7 @@ export function DisclaimerPage() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, delay: i * 0.05 }}
-              className="rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4"
+              className="group rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4 transition duration-200 hover:border-white/[0.18] hover:bg-white/[0.03]"
             >
               <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.03]">
                 <card.icon className="h-4 w-4 text-eon-blue" aria-hidden />
@@ -81,10 +86,22 @@ export function DisclaimerPage() {
           <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-300">
             Final reminder
           </h3>
-          <p className="mt-2 text-sm leading-relaxed text-slate-400">
-            By using this interface, you acknowledge self-custody responsibility, third-party protocol
-            risk, and on-chain execution finality. Confirm every transaction in wallet before signing.
-          </p>
+          <ul className="mt-2 grid gap-2 text-sm text-slate-400 md:grid-cols-2">
+            {[
+              'You remain fully responsible for wallet custody and signing decisions.',
+              'Third-party protocol behavior, pricing, and liquidity are outside direct platform control.',
+              'On-chain execution is final after confirmation and generally cannot be reversed.',
+              'Confirm every transaction payload in your wallet before signing.',
+            ].map((item) => (
+              <li
+                key={item}
+                className="flex items-start gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2"
+              >
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-eon-blue/90" aria-hidden />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
         </motion.div>
       </div>
     </section>

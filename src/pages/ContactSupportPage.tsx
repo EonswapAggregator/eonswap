@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { Clock3, LifeBuoy, Mail, ShieldAlert } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { roleEmail } from '../lib/site'
+import { uiButtonCompact, uiButtonGhost, uiButtonPrimary } from '../lib/uiButtonClasses'
 
 export function ContactSupportPage() {
   const supportEmail = roleEmail('support')
@@ -14,8 +15,12 @@ export function ContactSupportPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] via-white/[0.015] to-transparent p-4 sm:flex-row sm:items-center sm:justify-between md:mb-7 md:p-5"
+          className="relative mb-6 flex flex-col gap-4 overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] via-white/[0.015] to-transparent p-4 sm:flex-row sm:items-center sm:justify-between md:mb-7 md:p-5"
         >
+          <div
+            className="pointer-events-none absolute -right-12 top-1/2 h-28 w-28 -translate-y-1/2 rounded-full bg-eon-blue/[0.12] blur-2xl"
+            aria-hidden
+          />
           <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1">
               <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
@@ -34,12 +39,20 @@ export function ContactSupportPage() {
               Share details and our team can investigate faster.
             </p>
           </div>
-          <Link
-            to="/status"
-            className="inline-flex h-10 w-fit shrink-0 items-center justify-center rounded-xl border border-white/[0.14] bg-white/[0.04] px-4 text-sm font-medium text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-white/[0.2] hover:bg-white/[0.07] hover:text-white"
-          >
-            Open status tracker
-          </Link>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Link
+              to="/status"
+              className={uiButtonPrimary}
+            >
+              Open status tracker
+            </Link>
+            <Link
+              to="/faq"
+              className={uiButtonGhost}
+            >
+              Open FAQ
+            </Link>
+          </div>
         </motion.div>
 
         <div className="grid gap-4 lg:grid-cols-3">
@@ -47,7 +60,7 @@ export function ContactSupportPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4"
+            className="group flex h-full flex-col rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4 transition duration-200 hover:border-white/[0.18] hover:bg-white/[0.03]"
           >
             <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.03]">
               <LifeBuoy className="h-4 w-4 text-eon-blue" aria-hidden />
@@ -56,9 +69,10 @@ export function ContactSupportPage() {
             <p className="mt-1 text-sm text-slate-400">
               Wallet connection, quote mismatch, route behavior, pending transaction diagnostics.
             </p>
+            <p className="mt-2 text-xs text-slate-500">Best for: swap/bridge execution and tracker issues.</p>
             <a
               href={`mailto:${supportEmail}`}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg border border-white/[0.12] bg-white/[0.03] px-3 py-2 text-sm text-slate-200 transition hover:border-white/[0.2]"
+              className={`${uiButtonCompact} mt-auto gap-2`}
             >
               <Mail className="h-3.5 w-3.5" aria-hidden />
               {supportEmail}
@@ -69,7 +83,7 @@ export function ContactSupportPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.04 }}
-            className="rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4"
+            className="group flex h-full flex-col rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4 transition duration-200 hover:border-white/[0.18] hover:bg-white/[0.03]"
           >
             <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.03]">
               <ShieldAlert className="h-4 w-4 text-eon-blue" aria-hidden />
@@ -78,9 +92,10 @@ export function ContactSupportPage() {
             <p className="mt-1 text-sm text-slate-400">
               Found a vulnerability? Send reproducible details and impact scope via the dedicated channel.
             </p>
+            <p className="mt-2 text-xs text-slate-500">Best for: security bugs, exploit paths, and abuse reports.</p>
             <a
               href={`mailto:${securityEmail}`}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg border border-white/[0.12] bg-white/[0.03] px-3 py-2 text-sm text-slate-200 transition hover:border-white/[0.2]"
+              className={`${uiButtonCompact} mt-auto gap-2`}
             >
               <Mail className="h-3.5 w-3.5" aria-hidden />
               {securityEmail}
@@ -91,13 +106,14 @@ export function ContactSupportPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.08 }}
-            className="rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4"
+            className="group flex h-full flex-col rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4 transition duration-200 hover:border-white/[0.18] hover:bg-white/[0.03]"
           >
             <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.03]">
               <Clock3 className="h-4 w-4 text-eon-blue" aria-hidden />
             </div>
             <h2 className="mt-3 text-base font-semibold text-white">Response scope</h2>
             <ul className="mt-2 space-y-1.5 text-sm text-slate-400">
+              <li>Typical first response target: within 24-48 hours (business days).</li>
               <li>Support clarifies interface and status behavior.</li>
               <li>Support cannot reverse confirmed on-chain transactions.</li>
               <li>Critical issues are prioritized in queue order.</li>
@@ -128,6 +144,20 @@ export function ContactSupportPage() {
                 {item}
               </div>
             ))}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            <a
+              href={`mailto:${supportEmail}?subject=EonSwap%20Support%20Request`}
+              className={uiButtonCompact}
+            >
+              Email support template
+            </a>
+            <a
+              href={`mailto:${securityEmail}?subject=EonSwap%20Security%20Report`}
+              className={uiButtonCompact}
+            >
+              Email security template
+            </a>
           </div>
         </motion.div>
       </div>

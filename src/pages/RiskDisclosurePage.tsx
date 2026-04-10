@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
-import { AlertTriangle, Layers3, Network } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Layers3, Network } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { uiButtonSecondary } from '../lib/uiButtonClasses'
 
 export function RiskDisclosurePage() {
   return (
@@ -10,8 +11,12 @@ export function RiskDisclosurePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] via-white/[0.015] to-transparent p-4 sm:flex-row sm:items-center sm:justify-between md:mb-7 md:p-5"
+          className="relative mb-6 flex flex-col gap-4 overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] via-white/[0.015] to-transparent p-4 sm:flex-row sm:items-center sm:justify-between md:mb-7 md:p-5"
         >
+          <div
+            className="pointer-events-none absolute -right-12 top-1/2 h-28 w-28 -translate-y-1/2 rounded-full bg-eon-blue/[0.12] blur-2xl"
+            aria-hidden
+          />
           <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1">
               <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
@@ -32,13 +37,13 @@ export function RiskDisclosurePage() {
           </div>
           <Link
             to="/disclaimer"
-            className="inline-flex h-10 w-fit shrink-0 items-center justify-center rounded-xl border border-white/[0.14] bg-white/[0.04] px-4 text-sm font-medium text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-white/[0.2] hover:bg-white/[0.07] hover:text-white"
+            className={`${uiButtonSecondary} shrink-0`}
           >
             Disclaimer
           </Link>
         </motion.div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[
             {
               icon: AlertTriangle,
@@ -55,15 +60,20 @@ export function RiskDisclosurePage() {
               title: 'Operational risk',
               text: 'RPC instability, network congestion, chain reorgs, and wallet issues can delay confirmations or cause transaction failure.',
             },
+            {
+              icon: Network,
+              title: 'Bridge execution risk',
+              text: 'Cross-chain transfers can be delayed by relayer downtime, destination chain finality, and temporary route unavailability.',
+            },
           ].map((card, i) => (
             <motion.article
               key={card.title}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, delay: i * 0.05 }}
-              className="rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4"
+              className="group rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4 transition duration-200 hover:border-white/[0.18] hover:bg-white/[0.03]"
             >
-              <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.03]">
+              <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.03] transition group-hover:border-eon-blue/40 group-hover:text-eon-blue">
                 <card.icon className="h-4 w-4 text-eon-blue" aria-hidden />
               </div>
               <h2 className="mt-3 text-base font-semibold text-white">{card.title}</h2>
@@ -81,12 +91,38 @@ export function RiskDisclosurePage() {
           <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-300">
             User checklist before signing
           </h3>
-          <ul className="mt-2 space-y-2 text-sm text-slate-400">
-            <li>Confirm source/destination chain and token contract addresses.</li>
-            <li>Review quote freshness, expected output, and total fee impact.</li>
-            <li>Check approval scope and avoid unnecessary unlimited allowances.</li>
-            <li>Verify explorer links and keep tx hash records for troubleshooting.</li>
+          <ul className="mt-2 grid gap-2 text-sm text-slate-400 md:grid-cols-2">
+            {[
+              'Confirm source/destination chain and token contract addresses.',
+              'Review quote freshness, expected output, and total fee impact.',
+              'Check approval scope and avoid unnecessary unlimited allowances.',
+              'Verify you are on the official EonSwap domain before signing any transaction.',
+              'Verify explorer links and keep tx hash records for troubleshooting.',
+              'Ensure your usage complies with local regulations and tax obligations.',
+            ].map((item) => (
+              <li
+                key={item}
+                className="flex items-start gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2"
+              >
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-eon-blue/90" aria-hidden />
+                <span>{item}</span>
+              </li>
+            ))}
           </ul>
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
+            <Link
+              to="/status"
+              className="text-slate-400 underline decoration-white/20 underline-offset-2 transition hover:text-white hover:decoration-white/40"
+            >
+              Check system status
+            </Link>
+            <Link
+              to="/disclaimer"
+              className="text-slate-400 underline decoration-white/20 underline-offset-2 transition hover:text-white hover:decoration-white/40"
+            >
+              Read full disclaimer
+            </Link>
+          </div>
         </motion.div>
       </div>
     </section>

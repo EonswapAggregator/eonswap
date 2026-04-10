@@ -21,3 +21,10 @@
 
 - Degraded status may be temporary.
 - Retry later if provider traffic is high.
+
+## Related reading
+
+- [Status Codes Reference](/guides/status-codes)
+- [Wallet Setup Guide](/guides/wallet-setup)
+- [Supported Networks](/supported-networks)
+- [FAQ](/guides/faq)

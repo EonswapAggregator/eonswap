@@ -21,6 +21,7 @@ import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
 import { NATIVE_AGGREGATOR } from '../lib/tokens'
 import { toUserFacingErrorMessage } from '../lib/errors'
 import { getMonitorRelayBaseUrl } from '../lib/monitorRelayUrl'
+import { uiButtonCompact, uiButtonSecondary } from '../lib/uiButtonClasses'
 
 type Mode = 'bridge' | 'swap'
 
@@ -114,7 +115,7 @@ function ChainSelector({
         type="button"
         aria-label={ariaLabel}
         onClick={() => setOpen((s) => !s)}
-        className="flex h-10 w-full items-center rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 text-sm text-slate-200"
+        className="flex h-10 w-full items-center rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 text-sm text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0f1e]"
       >
         <span className="inline-flex min-w-0 items-center gap-2">
           <LogoBadge src={selected.logo} alt={selected.label} />
@@ -139,7 +140,7 @@ function ChainSelector({
                 value === opt.value
                   ? 'bg-cyan-400/15 text-cyan-100'
                   : 'text-slate-200 hover:bg-white/[0.06]'
-              }`}
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0f1e]`}
             >
               <LogoBadge src={opt.logo} alt={opt.label} />
               <span className="truncate">{opt.label}</span>
@@ -735,7 +736,7 @@ export function StatusPage() {
             type="button"
             onClick={() => void checkStatus()}
             disabled={!canCheck || loading}
-            className="inline-flex h-10 w-fit shrink-0 items-center justify-center gap-2 rounded-xl border border-white/[0.14] bg-white/[0.04] px-4 text-sm font-medium text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-white/[0.2] hover:bg-white/[0.07] hover:text-white disabled:opacity-60"
+            className={`${uiButtonSecondary} shrink-0 gap-2`}
           >
             {loading ? 'Checking...' : 'Quick check'}
           </button>
@@ -761,7 +762,7 @@ export function StatusPage() {
               <button
                 type="button"
                 onClick={() => setHealthAutoRefresh((v) => !v)}
-                className={`inline-flex h-9 items-center justify-center rounded-lg border px-3 text-xs font-semibold transition ${
+                className={`inline-flex h-9 items-center justify-center rounded-lg border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0f1e] ${
                   healthAutoRefresh
                     ? 'border-cyan-400/35 bg-cyan-400/10 text-cyan-200'
                     : 'border-white/[0.12] bg-white/[0.03] text-slate-300'
@@ -773,7 +774,7 @@ export function StatusPage() {
                 type="button"
                 onClick={() => runHealthChecks()}
                 disabled={healthLoading}
-                className="inline-flex h-9 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] px-3 text-xs font-semibold text-slate-200 transition hover:border-white/[0.2] hover:bg-white/[0.06] disabled:opacity-60"
+                className={`${uiButtonCompact} h-9 text-xs font-semibold disabled:opacity-60`}
               >
                 {healthLoading ? 'Checking...' : 'Refresh health'}
               </button>
