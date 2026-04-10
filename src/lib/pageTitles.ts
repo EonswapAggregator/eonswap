@@ -34,7 +34,7 @@ const DESCRIPTIONS: Record<string, string> = {
   '/earn': 'Explore liquidity and yield opportunities across supported ecosystems.',
   '/activity': 'Track your recent swap and bridge activity in one timeline.',
   '/leaderboard':
-    'See top wallets by completed swaps and bridges recorded through EonSwap when relay logging is enabled.',
+    'See how wallets rank on EonSwap by completed swaps and bridges.',
   '/docs': 'Read EonSwap documentation, feature guides, safety notes, and user onboarding pages.',
   '/faq': 'Find quick answers to common EonSwap questions and troubleshooting steps.',
   '/status':
