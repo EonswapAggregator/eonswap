@@ -6,3 +6,6 @@ dist
 .env.*.local
 relay/data/*.jsonl
 test-results/
+
+# Local QA / manual check screenshots (not for version control)
+desktop-*-check.png
