@@ -12,6 +12,7 @@ const APP_ROUTES = [
   { path: '/bridge', changefreq: 'daily', priority: '0.9' },
   { path: '/earn', changefreq: 'weekly', priority: '0.7' },
   { path: '/activity', changefreq: 'daily', priority: '0.7' },
+  { path: '/leaderboard', changefreq: 'hourly', priority: '0.55' },
   { path: '/status', changefreq: 'hourly', priority: '0.8' },
   { path: '/docs', changefreq: 'weekly', priority: '0.8' },
   { path: '/faq', changefreq: 'weekly', priority: '0.7' },

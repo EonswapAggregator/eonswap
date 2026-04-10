@@ -1,5 +1,49 @@
 import { getMonitorRelayBaseUrl, normalizeMonitorRelayBaseUrl } from './monitorRelayUrl'
 
+export type LeaderboardEntry = {
+  rank: number
+  address: string
+  successCount: number
+  lastSuccessAt: number
+}
+
+/** Public ranking by wallet: successful swaps/bridges recorded on the relay (requires `VITE_MONITOR_RELAY_URL`). */
+export async function fetchRelayLeaderboard(limit = 50): Promise<
+  | { ok: true; generatedAt: number; entries: LeaderboardEntry[] }
+  | { ok: false; error: string }
+> {
+  const base = getMonitorRelayBaseUrl()
+  if (!base) return { ok: false, error: 'Relay not configured' }
+  const capped = Math.min(100, Math.max(1, Math.floor(limit)))
+  const q = new URLSearchParams({ limit: String(capped) })
+  try {
+    const res = await fetch(`${base}/public/leaderboard?${q}`, {
+      headers: { accept: 'application/json' },
+    })
+    const json = (await res.json().catch(() => null)) as
+      | {
+          ok?: boolean
+          error?: string
+          entries?: LeaderboardEntry[]
+          generatedAt?: number
+        }
+      | null
+    if (!res.ok) {
+      return { ok: false, error: json?.error || `HTTP ${res.status}` }
+    }
+    if (!json?.ok || !Array.isArray(json.entries)) {
+      return { ok: false, error: 'Invalid response' }
+    }
+    return {
+      ok: true,
+      generatedAt: Number(json.generatedAt) || Date.now(),
+      entries: json.entries,
+    }
+  } catch {
+    return { ok: false, error: 'Network error' }
+  }
+}
+
 /** Fire-and-forget log to monitoring relay (aggregated admin view). */
 export function sendActivityLogToRelay(item: {
   id: string

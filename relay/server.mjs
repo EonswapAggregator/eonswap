@@ -46,6 +46,9 @@ function corsOriginHeader(req) {
 }
 const EVENT_RATE_LIMIT_PER_MIN = Number(process.env.RELAY_EVENTS_RATE_LIMIT_PER_MIN || 60)
 const EXPLORER_RATE_LIMIT_PER_MIN = Number(process.env.RELAY_EXPLORER_RATE_LIMIT_PER_MIN || 20)
+const LEADERBOARD_RATE_LIMIT_PER_MIN = Number(
+  process.env.RELAY_LEADERBOARD_RATE_LIMIT_PER_MIN || 30,
+)
 const EVENT_MAX_BODY_BYTES = Number(process.env.RELAY_EVENTS_MAX_BODY_BYTES || 262_144)
 const EXPLORER_ACCESS_TOKEN = process.env.RELAY_EXPLORER_ACCESS_TOKEN?.trim() || ''
 const WARN_LATENCY_MS = {
@@ -79,6 +82,7 @@ const status = {
 let lastAlertAt = 0
 const eventRateMap = new Map()
 const explorerRateMap = new Map()
+const leaderboardRateMap = new Map()
 const recentTxEvents = new Map()
 
 function classifyError(error) {
@@ -230,6 +234,19 @@ function isExplorerRateLimited(req) {
   return entry.count > EXPLORER_RATE_LIMIT_PER_MIN
 }
 
+function isLeaderboardRateLimited(req) {
+  const now = Date.now()
+  const key = getClientIp(req)
+  const entry = leaderboardRateMap.get(key) || { count: 0, resetAt: now + 60_000 }
+  if (now > entry.resetAt) {
+    entry.count = 0
+    entry.resetAt = now + 60_000
+  }
+  entry.count += 1
+  leaderboardRateMap.set(key, entry)
+  return entry.count > LEADERBOARD_RATE_LIMIT_PER_MIN
+}
+
 async function readJsonBody(req, maxBytes = EVENT_MAX_BODY_BYTES) {
   let body = ''
   let size = 0
@@ -307,6 +324,10 @@ function normalizeActivityFromLine(obj) {
   if (obj.txHash) row.txHash = String(obj.txHash)
   if (obj.from) row.from = String(obj.from)
   if (obj.blockNumber != null) row.blockNumber = Number(obj.blockNumber)
+  if (obj.serverAt != null && obj.serverAt !== '') {
+    const s = Number(obj.serverAt)
+    if (Number.isFinite(s)) row.serverAt = Math.floor(s)
+  }
   return row
 }
 
@@ -367,6 +388,34 @@ async function readActivitiesMerged(maxLines = 20_000) {
     }
   }
   return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt)
+}
+
+/** Count successful swap/bridge rows per wallet (`from`), from merged activity log. */
+function buildAddressLeaderboard(activities, limit) {
+  const byAddr = new Map()
+  for (const row of activities) {
+    if (row.status !== 'success') continue
+    const addr = row.from
+    if (!addr || !/^0x[a-fA-F0-9]{40}$/i.test(addr)) continue
+    const key = addr.toLowerCase()
+    const cur = byAddr.get(key) || { successCount: 0, lastSuccessAt: 0 }
+    cur.successCount += 1
+    const t = Number(row.serverAt) || Number(row.createdAt) || 0
+    if (t > cur.lastSuccessAt) cur.lastSuccessAt = t
+    byAddr.set(key, cur)
+  }
+  const sorted = [...byAddr.entries()].sort((a, b) => {
+    const [, ca] = a
+    const [, cb] = b
+    if (cb.successCount !== ca.successCount) return cb.successCount - ca.successCount
+    return cb.lastSuccessAt - ca.lastSuccessAt
+  })
+  return sorted.slice(0, limit).map(([address, stats], i) => ({
+    rank: i + 1,
+    address,
+    successCount: stats.successCount,
+    lastSuccessAt: stats.lastSuccessAt,
+  }))
 }
 
 async function readTxEventsMerged(maxLines = 50_000) {
@@ -653,11 +702,13 @@ async function runChecks() {
   }
 }
 
-function json(req, res, code, payload) {
+function json(req, res, code, payload, opts = {}) {
   const acao = corsOriginHeader(req)
+  const cacheControl =
+    typeof opts.cacheControl === 'string' ? opts.cacheControl : 'no-store'
   const headers = {
     'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store',
+    'cache-control': cacheControl,
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
@@ -691,6 +742,32 @@ createServer(async (req, res) => {
     }
     const activities = await readActivitiesMerged()
     return json(req, res, 200, { ok: true, activities })
+  }
+  if (req.method === 'GET' && u.pathname === '/public/leaderboard') {
+    if (isLeaderboardRateLimited(req)) {
+      return json(req, res, 429, { ok: false, error: 'Rate limited' })
+    }
+    if (!CORS_ALLOW_ALL && !corsOriginHeader(req)) {
+      return json(req, res, 403, { ok: false, error: 'Forbidden origin' })
+    }
+    const limitRaw = Number(u.searchParams.get('limit') || '50')
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(100, Math.max(1, Math.floor(limitRaw)))
+      : 50
+    const activities = await readActivitiesMerged()
+    const entries = buildAddressLeaderboard(activities, limit)
+    return json(
+      req,
+      res,
+      200,
+      {
+        ok: true,
+        generatedAt: Date.now(),
+        metric: 'successful_swaps_and_bridges',
+        entries,
+      },
+      { cacheControl: 'public, max-age=30' },
+    )
   }
   if (req.method === 'GET' && u.pathname === '/explorer/txlist') {
     if (isExplorerRateLimited(req)) return json(req, res, 429, { ok: false, error: 'Rate limited' })

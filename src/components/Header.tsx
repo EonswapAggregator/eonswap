@@ -14,6 +14,7 @@ const navItems = [
   { to: '/bridge', label: 'Bridge', end: false },
   { to: '/pool', label: 'Pool / Earn', end: false },
   { to: '/activity', label: 'Activity', end: false },
+  { to: '/leaderboard', label: 'Leaderboard', end: false },
   { to: '/status', label: 'Status', end: false },
   { to: '/contact-support', label: 'Support', end: false },
 ] as const

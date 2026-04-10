@@ -21,6 +21,9 @@ const EarnPage = lazy(() =>
 const ActivityPage = lazy(() =>
   import('./pages/ActivityPage').then((m) => ({ default: m.ActivityPage })),
 )
+const LeaderboardPage = lazy(() =>
+  import('./pages/LeaderboardPage').then((m) => ({ default: m.LeaderboardPage })),
+)
 const DocsPage = lazy(() =>
   import('./pages/DocsPage').then((m) => ({ default: m.DocsPage })),
 )
@@ -105,6 +108,7 @@ export default function App() {
             <Route path="/pool" element={<EarnPage />} />
             <Route path="/earn" element={<Navigate to="/pool" replace />} />
             <Route path="/activity" element={<ActivityPage />} />
+            <Route path="/leaderboard" element={<LeaderboardPage />} />
             <Route path="/docs" element={<DocsPage />} />
             <Route path="/faq" element={<FaqPage />} />
             <Route path="/status" element={<StatusPage />} />

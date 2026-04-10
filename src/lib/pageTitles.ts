@@ -6,6 +6,7 @@ const TITLES: Record<string, string> = {
   '/pool': 'EonSwap — Pool / Earn',
   '/earn': 'EonSwap — Pool / Earn',
   '/activity': 'EonSwap — Activity',
+  '/leaderboard': 'EonSwap — Leaderboard',
   '/docs': 'EonSwap — Docs',
   '/faq': 'EonSwap — FAQ',
   '/status': 'EonSwap — Status',
@@ -32,6 +33,8 @@ const DESCRIPTIONS: Record<string, string> = {
   '/pool': 'Explore liquidity and yield opportunities across supported ecosystems.',
   '/earn': 'Explore liquidity and yield opportunities across supported ecosystems.',
   '/activity': 'Track your recent swap and bridge activity in one timeline.',
+  '/leaderboard':
+    'See top wallets by completed swaps and bridges recorded through EonSwap when relay logging is enabled.',
   '/docs': 'Read EonSwap documentation, feature guides, safety notes, and user onboarding pages.',
   '/faq': 'Find quick answers to common EonSwap questions and troubleshooting steps.',
   '/status':
