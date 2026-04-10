@@ -33,6 +33,60 @@ body {
   }
 }
 
+/** Footer monitor dot — fast, bright pulse (see FooterMonitorStatus) */
+@keyframes eon-footer-status-live {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow:
+      0 0 10px rgba(167, 243, 208, 1),
+      0 0 22px rgba(52, 211, 153, 0.75),
+      0 0 36px rgba(34, 211, 238, 0.35);
+  }
+  50% {
+    opacity: 0.38;
+    box-shadow:
+      0 0 4px rgba(167, 243, 208, 0.45),
+      0 0 10px rgba(52, 211, 153, 0.35),
+      0 0 16px rgba(34, 211, 238, 0.15);
+  }
+}
+
+@keyframes eon-footer-status-warn {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow:
+      0 0 10px rgba(253, 224, 71, 0.95),
+      0 0 20px rgba(245, 158, 11, 0.65);
+  }
+  50% {
+    opacity: 0.4;
+    box-shadow:
+      0 0 4px rgba(253, 224, 71, 0.4),
+      0 0 10px rgba(245, 158, 11, 0.25);
+  }
+}
+
+@keyframes eon-footer-status-pending {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 8px rgba(148, 163, 184, 0.7);
+  }
+  50% {
+    opacity: 0.35;
+    box-shadow: 0 0 3px rgba(148, 163, 184, 0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eon-footer-status-dot {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
+
 /* RainbowKit — accent sync + interaction polish (theme in eonRainbowTheme.ts) */
 [data-rk] {
   --rk-colors-accentColor: #00d2ff;

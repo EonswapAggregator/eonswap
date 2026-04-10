@@ -12,11 +12,13 @@ import {
   Route,
   Send,
   ShieldCheck,
+  Trophy,
   Waves,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useActivityReceiptSync } from '../hooks/useActivityReceiptSync'
 import { ChainTokenSync } from './ChainTokenSync'
+import { FooterMonitorStatus } from './FooterMonitorStatus'
 import { GdprConsentBanner } from './GdprConsentBanner'
 import { Header } from './Header'
 
@@ -171,6 +173,12 @@ export function Layout() {
                     </Link>
                   </li>
                   <li>
+                    <Link to="/leaderboard" className={footerItemClass}>
+                      <Trophy className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
+                      Leaderboard
+                    </Link>
+                  </li>
+                  <li>
                     <Link to="/status" className={footerItemClass}>
                       <ShieldCheck className="h-3.5 w-3.5 text-slate-500 transition group-hover:text-eon-blue" aria-hidden />
                       Status
@@ -279,6 +287,7 @@ export function Layout() {
                       <FaGithub className="h-4 w-4" aria-hidden />
                     </a>
                   </div>
+                  <FooterMonitorStatus />
                 </div>
               </div>
             </div>
