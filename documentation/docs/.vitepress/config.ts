@@ -89,7 +89,7 @@ export default defineConfig({
       label: 'On this page',
     },
     editLink: {
-      pattern: 'https://github.com/EonswapRouting/EonSwap/edit/main/documentation/docs/:path',
+      pattern: 'https://github.com/EonswapAggregator/EonSwap/edit/main/documentation/docs/:path',
       text: 'Edit this page on GitHub',
     },
     search: {
@@ -99,7 +99,7 @@ export default defineConfig({
       },
     },
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/EonswapRouting' },
+      { icon: 'github', link: 'https://github.com/EonswapAggregator' },
       { icon: 'x', link: 'https://x.com/eonswapus', ariaLabel: 'EonSwap on X' },
       { icon: 'telegram', link: 'https://t.me/eonswap', ariaLabel: 'EonSwap on Telegram' },
       { icon: 'discord', link: 'https://discord.gg/AAEq22Sqng', ariaLabel: 'EonSwap on Discord' },

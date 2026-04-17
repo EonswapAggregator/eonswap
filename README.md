@@ -41,7 +41,7 @@ You stay in control of your wallet while EonSwap helps you discover efficient ro
 - Telegram: [t.me/eonswap](https://t.me/eonswap)
 - Medium: [medium.com/@eonswap](https://medium.com/@eonswap)
 - Discord: [discord.gg/AAEq22Sqng](https://discord.gg/AAEq22Sqng)
-- GitHub: [github.com/EonswapRouting](https://github.com/EonswapRouting)
+- GitHub: [github.com/EonswapAggregator](https://github.com/EonswapAggregator)
 - Docs: [eonswap.us/docs](https://eonswap.us/docs/)
 - Status: [eonswap.us/status](https://eonswap.us/status)
 - Support: [eonswap.us/contact-support](https://eonswap.us/contact-support)
