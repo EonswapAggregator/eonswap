@@ -192,7 +192,7 @@ async function ethCall(to: string, data: string): Promise<string> {
   return json.result
 }
 
-function calculatePriceImpact(amountIn: string, amountOut: string): string {
+function calculatePriceImpact(_amountIn: string, _amountOut: string): string {
   // Simplified: would need reserves for accurate calculation
   // Return placeholder
   return '< 0.5%'

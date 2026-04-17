@@ -57,12 +57,6 @@ export function FarmPage() {
   // Track transaction for potential UI feedback
   useWaitForTransactionReceipt({ hash: pendingTxHash })
 
-  // Helper to get pool name
-  const getPoolName = (pid: number) => {
-    const pool = pools.find((p) => p.pid === pid)
-    return pool ? `${pool.lpSymbol0}/${pool.lpSymbol1}` : `Pool #${pid}`
-  }
-
   // Wrapper functions that handle tx state
   const handleDeposit = useCallback(
     async (pid: number, amount: bigint) => {
@@ -173,7 +167,7 @@ export function FarmPage() {
         }, 3000)
       }
     },
-    [harvest, refresh, publicClient, userPositions, userAddress, getPoolName]
+    [harvest, refresh, publicClient, pools, userPositions, userAddress]
   )
 
   const handleApprove = useCallback(

@@ -24,7 +24,7 @@ const SYMBOL_TO_COINGECKO: Record<string, string> = {
   WBTC: 'wrapped-bitcoin',
 }
 
-// Cache for prices (5 minute TTL)
+// Cache for prices (5 minute TTL), keyed by `${coingeckoId}:${vsCurrency}`
 const priceCache = new Map<string, { price: number; timestamp: number }>()
 const CACHE_TTL = 5 * 60 * 1000
 
@@ -52,6 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { tokens, vs = 'usd' } = req.query
+  const vsCurrency = String(vs).toLowerCase()
 
   if (!tokens) {
     return res.status(400).json({
@@ -112,7 +113,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const idsToFetch: string[] = []
 
     for (const id of coingeckoIds) {
-      const cached = priceCache.get(id)
+      const cacheKey = `${id}:${vsCurrency}`
+      const cached = priceCache.get(cacheKey)
       if (cached && now - cached.timestamp < CACHE_TTL) {
         prices[id] = cached.price
       } else {
@@ -122,11 +124,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Fetch missing prices from CoinGecko
     if (idsToFetch.length > 0) {
-      const freshPrices = await fetchCoinGeckoPrices(idsToFetch, String(vs))
+      const freshPrices = await fetchCoinGeckoPrices(idsToFetch, vsCurrency)
       
       for (const [id, price] of Object.entries(freshPrices)) {
         prices[id] = price
-        priceCache.set(id, { price, timestamp: now })
+        priceCache.set(`${id}:${vsCurrency}`, { price, timestamp: now })
       }
     }
 
@@ -138,7 +140,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (id && prices[id] !== undefined) {
         result[token] = {
           price: prices[id],
-          currency: String(vs).toUpperCase(),
+          currency: vsCurrency.toUpperCase(),
         }
       }
     }

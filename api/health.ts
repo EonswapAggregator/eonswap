@@ -54,7 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         masterChef: '0x1ffbe00f3810e97a8306961d8dc4054abd4f4a2c',
       },
     })
-  } catch (error) {
+  } catch (_error) {
     return res.status(503).json({
       status: 'error',
       timestamp: new Date().toISOString(),

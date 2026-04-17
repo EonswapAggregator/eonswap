@@ -152,7 +152,12 @@ export function StatusPage() {
       const base = getMonitorRelayBaseUrl()
       if (!base) { checks.push({ id: 'relay', label: 'Monitor Relay', status: 'degraded', detail: 'Not configured' }) }
       else {
-        const res = await fetch(base + '/health', { signal: AbortSignal.timeout(5000) })
+        const normalizedBase = base.replace(/\/$/u, '')
+        let res = await fetch(normalizedBase + '/healthz', { signal: AbortSignal.timeout(5000) })
+        if (res.status === 404) {
+          // Backward compatibility for older relay deployments.
+          res = await fetch(normalizedBase + '/health', { signal: AbortSignal.timeout(5000) })
+        }
         const latency = Math.round(performance.now() - relayStart)
         if (res.ok) {
           const data = await res.json().catch(() => ({}))
