@@ -23,7 +23,7 @@ function parseRelayActivities(raw: unknown[]): ActivityItem[] {
     const id = String(o.id ?? '')
     const status = o.status
     if (status !== 'pending' && status !== 'success' && status !== 'failed') continue
-    const kind = o.kind === 'bridge' ? 'bridge' : o.kind === 'swap' ? 'swap' : 'swap'
+    const kind = 'swap'
     const createdAt = Number(o.createdAt)
     if (!Number.isFinite(createdAt)) continue
     out.push({
@@ -58,7 +58,7 @@ function chainName(chainId: number): string {
   return eonChains.find((c) => c.id === chainId)?.name ?? `Chain ${chainId}`
 }
 
-function parseAmountAndToken(summary: string, prefix: 'Swap' | 'Bridge') {
+function parseAmountAndToken(summary: string, prefix: 'Swap') {
   const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const match = summary.match(new RegExp(`^${escaped}\\s+([\\d.,]+)\\s+([A-Za-z0-9._-]+)`))
   if (!match) return null
@@ -83,7 +83,6 @@ type MonthlyRow = {
   success: number
   failed: number
   swapFee: number
-  bridgeFee: number
 }
 
 export function AdminPage() {
@@ -153,10 +152,8 @@ export function AdminPage() {
     const success = reportHistory.filter((h) => h.status === 'success').length
     const failed = reportHistory.filter((h) => h.status === 'failed').length
     const successRate = total ? Math.round((success / total) * 100) : 0
-    const swapFeeRate = Number(import.meta.env.VITE_KYBER_FEE_BPS ?? '0') / 10_000
-    const bridgeFeeRate = Number(import.meta.env.VITE_LIFI_FEE_PERCENT ?? '0')
+    const swapFeeRate = Number(import.meta.env.VITE_SWAP_FEE_BPS ?? '0') / 10_000
     const swapFeeByToken = new Map<string, number>()
-    const bridgeFeeByToken = new Map<string, number>()
 
     for (const item of reportHistory) {
       if (item.status !== 'success') continue
@@ -165,15 +162,9 @@ export function AdminPage() {
         const next = (swapFeeByToken.get(swapParsed.token) ?? 0) + swapParsed.amount * swapFeeRate
         swapFeeByToken.set(swapParsed.token, next)
       }
-      const bridgeParsed = parseAmountAndToken(item.summary, 'Bridge')
-      if (bridgeParsed && bridgeFeeRate > 0) {
-        const next = (bridgeFeeByToken.get(bridgeParsed.token) ?? 0) + bridgeParsed.amount * bridgeFeeRate
-        bridgeFeeByToken.set(bridgeParsed.token, next)
-      }
     }
 
     const swapFeeTotal = [...swapFeeByToken.values()].reduce((a, b) => a + b, 0)
-    const bridgeFeeTotal = [...bridgeFeeByToken.values()].reduce((a, b) => a + b, 0)
     return {
       total,
       pending,
@@ -181,17 +172,13 @@ export function AdminPage() {
       failed,
       successRate,
       swapFeeRate,
-      bridgeFeeRate,
       swapFeeTotal,
-      bridgeFeeTotal,
       swapFeeByToken,
-      bridgeFeeByToken,
     }
   }, [reportHistory])
 
   const monthlyRows = useMemo<MonthlyRow[]>(() => {
-    const swapFeeRate = Number(import.meta.env.VITE_KYBER_FEE_BPS ?? '0') / 10_000
-    const bridgeFeeRate = Number(import.meta.env.VITE_LIFI_FEE_PERCENT ?? '0')
+    const swapFeeRate = Number(import.meta.env.VITE_SWAP_FEE_BPS ?? '0') / 10_000
     const rows = new Map<string, MonthlyRow>()
 
     for (const item of reportHistory) {
@@ -203,7 +190,6 @@ export function AdminPage() {
         success: 0,
         failed: 0,
         swapFee: 0,
-        bridgeFee: 0,
       }
       row.total += 1
       if (item.status === 'success') row.success += 1
@@ -212,8 +198,6 @@ export function AdminPage() {
       if (item.status === 'success') {
         const swapParsed = parseAmountAndToken(item.summary, 'Swap')
         if (swapParsed && swapFeeRate > 0) row.swapFee += swapParsed.amount * swapFeeRate
-        const bridgeParsed = parseAmountAndToken(item.summary, 'Bridge')
-        if (bridgeParsed && bridgeFeeRate > 0) row.bridgeFee += bridgeParsed.amount * bridgeFeeRate
       }
 
       rows.set(month, row)
@@ -269,8 +253,7 @@ export function AdminPage() {
     const totalSuccess = monthlyRowsFiltered.reduce((acc, row) => acc + row.success, 0)
     const totalFailed = monthlyRowsFiltered.reduce((acc, row) => acc + row.failed, 0)
     const totalSwapFee = monthlyRowsFiltered.reduce((acc, row) => acc + row.swapFee, 0)
-    const totalBridgeFee = monthlyRowsFiltered.reduce((acc, row) => acc + row.bridgeFee, 0)
-    return { totalTx, totalSuccess, totalFailed, totalSwapFee, totalBridgeFee }
+    return { totalTx, totalSuccess, totalFailed, totalSwapFee }
   }, [monthlyRowsFiltered])
 
   const filteredHistory = useMemo(() => {
@@ -338,7 +321,7 @@ export function AdminPage() {
             Transaction dashboard
           </h1>
           <p className="mt-2 text-sm text-slate-300">
-            Local view uses this browser&apos;s saved activity. Relay view aggregates events from all
+            Local view uses this browser&apos;s saved activity. Relay view combines events from all
             users when the monitoring relay logs them (configure an admin access key on the relay,
             then refresh below).
           </p>
@@ -502,10 +485,8 @@ export function AdminPage() {
               sub: formatTokenFeeMap(metrics.swapFeeByToken),
             },
             {
-              label: 'Bridge fee (est.)',
-              value: metrics.bridgeFeeTotal.toFixed(6),
-              note: `${(metrics.bridgeFeeRate * 100).toFixed(2)}%`,
-              sub: formatTokenFeeMap(metrics.bridgeFeeByToken),
+              label: 'Data source',
+              value: dataSource === 'relay' ? 'Relay' : 'Local',
             },
           ].map((item) => (
             <div
@@ -577,8 +558,7 @@ export function AdminPage() {
               </p>
               <p className="truncate text-[11px] text-slate-500">
                 Tx {monthlyTotals.totalTx} • Success {monthlyTotals.totalSuccess} • Failed {monthlyTotals.totalFailed}{' '}
-                • Swap fee {monthlyTotals.totalSwapFee.toFixed(6)} • Bridge fee{' '}
-                {monthlyTotals.totalBridgeFee.toFixed(6)}
+                • Swap fee {monthlyTotals.totalSwapFee.toFixed(6)}
               </p>
             </div>
             <div className="inline-flex shrink-0 items-center gap-2">
@@ -602,8 +582,7 @@ export function AdminPage() {
             <p className="col-span-2">Total</p>
             <p className="col-span-2">Success</p>
             <p className="col-span-2">Failed</p>
-            <p className="col-span-2">Swap fee est.</p>
-            <p className="col-span-2">Bridge fee est.</p>
+            <p className="col-span-4">Swap fee est.</p>
           </div>
           {monthlyRowsFiltered.length ? (
             monthlyRowsFiltered.map((row) => (
@@ -615,8 +594,7 @@ export function AdminPage() {
                 <p className="col-span-2">{row.total}</p>
                 <p className="col-span-2 text-emerald-300">{row.success}</p>
                 <p className="col-span-2 text-rose-300">{row.failed}</p>
-                <p className="col-span-2">{row.swapFee.toFixed(6)}</p>
-                <p className="col-span-2">{row.bridgeFee.toFixed(6)}</p>
+                <p className="col-span-4">{row.swapFee.toFixed(6)}</p>
               </div>
             ))
           ) : (

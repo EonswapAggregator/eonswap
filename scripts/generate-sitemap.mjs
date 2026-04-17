@@ -9,8 +9,11 @@ const OUTPUT_FILE = join(ROOT_DIR, 'public', 'sitemap.xml')
 const APP_ROUTES = [
   { path: '/', changefreq: 'daily', priority: '1.0' },
   { path: '/swap', changefreq: 'daily', priority: '0.9' },
-  { path: '/bridge', changefreq: 'daily', priority: '0.9' },
-  { path: '/earn', changefreq: 'weekly', priority: '0.7' },
+    { path: '/earn', changefreq: 'weekly', priority: '0.7' },
+  { path: '/farm', changefreq: 'weekly', priority: '0.65' },
+  { path: '/stake', changefreq: 'weekly', priority: '0.55' },
+  { path: '/referral', changefreq: 'weekly', priority: '0.5' },
+  { path: '/airdrop', changefreq: 'weekly', priority: '0.5' },
   { path: '/activity', changefreq: 'daily', priority: '0.7' },
   { path: '/leaderboard', changefreq: 'hourly', priority: '0.55' },
   { path: '/status', changefreq: 'hourly', priority: '0.8' },

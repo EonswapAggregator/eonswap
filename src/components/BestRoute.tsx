@@ -10,12 +10,12 @@ export function BestRoute() {
 
   if (quoteError && !quoteLoading) {
     return (
-      <div className="rounded-lg border border-red-500/20 bg-red-500/[0.07] px-3 py-2.5">
-        <div className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-red-300/90">
+      <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2.5">
+        <div className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-300">
           <GitBranch className="h-3 w-3" />
           Route
         </div>
-        <p className="line-clamp-3 text-[12px] leading-snug text-red-200/90">
+        <p className="line-clamp-3 text-[12px] leading-snug text-rose-200">
           No quote for this trade. See trade details below for the full message.
         </p>
       </div>
@@ -24,13 +24,13 @@ export function BestRoute() {
 
   if (quoteLoading) {
     return (
-      <div className="rounded-lg border border-white/[0.07] bg-[#080918]/80 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-          <GitBranch className="h-3 w-3 text-eon-blue" />
+      <div className="rounded-xl border border-uni-border bg-uni-surface-2 px-3 py-2.5">
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
+          <GitBranch className="h-3 w-3 text-uni-pink" />
           Best route
         </div>
-        <div className="mt-2 flex items-center gap-1.5 text-[12px] text-slate-400">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-eon-blue" />
+        <div className="mt-2 flex items-center gap-1.5 text-[12px] text-neutral-400">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-uni-pink" />
           Fetching route…
         </div>
       </div>
@@ -39,12 +39,12 @@ export function BestRoute() {
 
   if (!routeSources.length) {
     return (
-      <div className="rounded-lg border border-white/[0.07] bg-[#080918]/80 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+      <div className="rounded-xl border border-uni-border bg-uni-surface-2 px-3 py-2.5">
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
           <GitBranch className="h-3 w-3" />
           Best route
         </div>
-        <p className="mt-2 line-clamp-3 text-[12px] leading-snug text-slate-600">
+        <p className="mt-2 line-clamp-3 text-[12px] leading-snug text-neutral-600">
           {hasInput
             ? 'No route returned for this pair or amount. Try another token or size.'
             : 'Liquidity path appears here once you enter an amount to swap.'}
@@ -54,16 +54,16 @@ export function BestRoute() {
   }
 
   return (
-    <div className="rounded-lg border border-cyan-500/15 bg-gradient-to-br from-cyan-500/[0.06] to-eon-blue/[0.04] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-300/90">
+    <div className="rounded-xl border border-uni-pink/20 bg-uni-pink/5 px-3 py-2.5">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-uni-pink-light">
         <GitBranch className="h-3 w-3" />
         Best route
       </div>
       <p
-        className="line-clamp-2 text-[12px] leading-snug text-slate-200/95"
+        className="line-clamp-2 text-[12px] leading-snug text-neutral-200"
         title={routeSources.join(' · ')}
       >
-        <span className="text-slate-500">Liquidity: </span>
+        <span className="text-neutral-500">Liquidity: </span>
         {routeSources.join(' · ')}
       </p>
     </div>

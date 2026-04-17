@@ -1,20 +1,20 @@
 # Risk Disclosure
 
-Using EonSwap involves blockchain and market risk. Please read this page before you trade or bridge.
+Using EonSwap involves blockchain and market risk. Please read this page before you trade or swap.
 
 ## Core Risks
 
 - **Price movement:** token prices can change quickly between quote and execution.
 - **Slippage:** execution price may be worse than the quoted price in volatile markets.
 - **Network congestion:** gas spikes and chain congestion can delay or fail transactions.
-- **Bridge delay:** cross-chain transfers may take longer during heavy network traffic.
+- **Swap delay:** cross-chain transfers may take longer during heavy network traffic.
 - **Protocol risk:** smart contracts and third-party protocols can contain vulnerabilities.
 
 ## What This Means for You
 
 - Transactions are generally irreversible once confirmed on-chain.
 - Failed transactions may still consume network fees.
-- Bridge and swap outcomes depend on live chain and liquidity conditions.
+- Swap and swap outcomes depend on live chain and liquidity conditions.
 
 ## Safety Checklist
 

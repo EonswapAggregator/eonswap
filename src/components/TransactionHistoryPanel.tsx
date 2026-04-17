@@ -28,8 +28,8 @@ import {
 import { explorerTxUrl, getEonChain } from '../lib/chains'
 import { truncateAddress } from '../lib/format'
 import { useLiveClock } from '../hooks/useLiveClock'
-import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
-import { NATIVE_AGGREGATOR, tokensForChain } from '../lib/tokens'
+import { nativeChainDisplayLogoUrl, tokenDisplayLogoUrl } from '../lib/tokenLogos'
+import { tokensForChain } from '../lib/tokens'
 import {
   useEonSwapStore,
   type ActivityItem,
@@ -41,11 +41,11 @@ function badgeClass(status: TxStatus) {
     case 'success':
       return 'bg-emerald-500/12 text-emerald-200 ring-emerald-500/20'
     case 'pending':
-      return 'bg-eon-blue/12 text-eon-blue ring-eon-blue/25'
+      return 'bg-uni-pink/12 text-uni-pink ring-uni-pink/25'
     case 'failed':
       return 'bg-red-500/12 text-red-200 ring-red-500/20'
     default:
-      return 'bg-slate-500/15 text-slate-300'
+      return 'bg-neutral-500/15 text-neutral-300'
   }
 }
 
@@ -55,7 +55,7 @@ function StatusIcon({ status }: { status: TxStatus }) {
       return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" aria-hidden />
     case 'pending':
       return (
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-eon-blue" aria-hidden />
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-uni-pink" aria-hidden />
       )
     case 'failed':
       return <XCircle className="h-3.5 w-3.5 text-red-400" aria-hidden />
@@ -69,8 +69,8 @@ function txExplorerHref(item: ActivityItem) {
   return explorerTxUrl(item.chainId, item.txHash)
 }
 
-function sessionMethodLabel(item: ActivityItem): 'Swap' | 'Bridge' {
-  if (item.kind === 'bridge') return 'Bridge'
+function sessionMethodLabel(item: ActivityItem): 'Swap' {
+  void item
   return 'Swap'
 }
 
@@ -78,7 +78,7 @@ function summaryTokenSymbols(summary: string): string[] {
   const parts = String(summary).match(/\b[A-Z0-9]{2,10}\b/g) ?? []
   const unique: string[] = []
   for (const p of parts) {
-    if (['SWAP', 'BRIDGE', 'DONE', 'FAILED'].includes(p)) continue
+    if (['SWAP', 'DONE', 'FAILED'].includes(p)) continue
     if (!unique.includes(p)) unique.push(p)
     if (unique.length >= 2) break
   }
@@ -118,7 +118,7 @@ export function TransactionHistoryPanel({
   const shell =
     variant === 'page'
       ? activityCardShellClass
-      : 'h-fit max-h-none rounded-3xl border border-white/[0.1] bg-white/[0.05] shadow-xl backdrop-blur-2xl lg:sticky lg:top-24'
+      : 'h-fit max-h-none rounded-3xl border border-uni-border bg-uni-surface shadow-xl backdrop-blur-2xl lg:sticky lg:top-24'
 
   const showPanelHeader = variant === 'sidebar'
 
@@ -131,7 +131,7 @@ export function TransactionHistoryPanel({
       {showPanelHeader && (
         <>
           <h2 className="text-sm font-semibold text-white">Recent activity</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="mt-0.5 text-xs text-neutral-500">
             Session history with block explorer links.
           </p>
         </>
@@ -156,23 +156,23 @@ export function TransactionHistoryPanel({
         <div className={`${activityTableScrollClass} min-w-0`}>
           {history.length === 0 && (
             <div className="px-5 py-16 text-center md:px-6">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.04]">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-uni-border bg-uni-surface">
                 <ArrowLeftRight
-                  className="h-7 w-7 text-slate-600"
+                  className="h-7 w-7 text-neutral-600"
                   aria-hidden
                 />
               </div>
               <p className="mt-5 text-base font-medium text-white">
                 No transactions
               </p>
-              <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
+              <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-neutral-500">
                 Confirmed swaps appear in this table with hash, block, and live
                 status updates.
               </p>
             </div>
           )}
           {history.length > 0 && filtered.length === 0 && (
-            <div className="px-5 py-14 text-center text-sm text-slate-400">
+            <div className="px-5 py-14 text-center text-sm text-neutral-400">
               No rows match this filter.
             </div>
           )}
@@ -245,20 +245,20 @@ export function TransactionHistoryPanel({
                   const blockCell = (() => {
                     if (item.blockNumber != null) {
                       return (
-                        <span className="font-mono tabular-nums text-slate-300">
+                        <span className="font-mono tabular-nums text-neutral-300">
                           {item.blockNumber.toLocaleString('en-US')}
                         </span>
                       )
                     }
                     if (item.status === 'pending' && item.txHash) {
                       return (
-                        <span className="inline-flex items-center gap-1.5 text-eon-blue">
+                        <span className="inline-flex items-center gap-1.5 text-uni-pink">
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           <span className="hidden sm:inline">pending</span>
                         </span>
                       )
                     }
-                    return <span className="text-slate-600">—</span>
+                    return <span className="text-neutral-600">—</span>
                   })()
 
                   return (
@@ -279,20 +279,20 @@ export function TransactionHistoryPanel({
                                 href={url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="font-mono text-[11px] text-eon-blue hover:underline"
+                                className="font-mono text-[11px] text-uni-pink hover:underline"
                                 title={item.txHash}
                               >
                                 {shortTxHash(item.txHash)}
                               </a>
                             ) : (
-                              <span className="font-mono text-[11px] text-slate-400">
+                              <span className="font-mono text-[11px] text-neutral-400">
                                 {shortTxHash(item.txHash)}
                               </span>
                             )}
                             <button
                               type="button"
                               onClick={() => copyHash(item.id, item.txHash!)}
-                              className="rounded-md p-1 text-slate-500 transition hover:bg-white/10 hover:text-slate-200"
+                              className="rounded-md p-1 text-neutral-500 transition hover:bg-white/10 hover:text-neutral-200"
                               title="Copy hash"
                             >
                               {copiedId === item.id ? (
@@ -306,7 +306,7 @@ export function TransactionHistoryPanel({
                                 href={url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="rounded-md p-1 text-slate-500 hover:bg-white/10 hover:text-eon-blue"
+                                className="rounded-md p-1 text-neutral-500 hover:bg-white/10 hover:text-uni-pink"
                                 title="Open in explorer"
                               >
                                 <ExternalLink className="h-3.5 w-3.5" />
@@ -314,7 +314,7 @@ export function TransactionHistoryPanel({
                             ) : null}
                           </div>
                         ) : (
-                          <span className="text-slate-600">—</span>
+                          <span className="text-neutral-600">—</span>
                         )}
                       </td>
                       <td className={`hidden ${activityTdClass} lg:table-cell`}>
@@ -325,7 +325,7 @@ export function TransactionHistoryPanel({
                       <td className={`${activityTdClass} text-right tabular-nums`}>
                         {blockCell}
                       </td>
-                      <td className={`${activityTdClass} text-slate-400`}>
+                      <td className={`${activityTdClass} text-neutral-400`}>
                         <time
                           dateTime={new Date(item.createdAt).toISOString()}
                           title={fullDate}
@@ -336,7 +336,7 @@ export function TransactionHistoryPanel({
                       </td>
                       <td className={`hidden ${activityTdClass} xl:table-cell`}>
                         <span
-                          className="font-mono text-[11px] text-slate-500"
+                          className="font-mono text-[11px] text-neutral-500"
                           title={item.from ?? undefined}
                         >
                           {item.from
@@ -347,7 +347,7 @@ export function TransactionHistoryPanel({
                       <td className={activityTdClass}>
                         <span className={`${networkPillClass()} inline-flex items-center gap-1.5`}>
                           <img
-                            src={trustWalletTokenLogoUrl(item.chainId, NATIVE_AGGREGATOR) ?? undefined}
+                            src={nativeChainDisplayLogoUrl(item.chainId) ?? undefined}
                             alt={chainLabel}
                             className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-white/15"
                             loading="lazy"
@@ -367,10 +367,10 @@ export function TransactionHistoryPanel({
                             return (
                               <span
                                 key={`${item.id}-${sym}`}
-                                className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.02] px-1.5 py-0.5 text-[10px] text-slate-300"
+                                className="inline-flex items-center gap-1 rounded-md border border-uni-border bg-white/[0.02] px-1.5 py-0.5 text-[10px] text-neutral-300"
                               >
                                 <img
-                                  src={trustWalletTokenLogoUrl(item.chainId, token.address) ?? undefined}
+                                  src={tokenDisplayLogoUrl(item.chainId, token) ?? undefined}
                                   alt={sym}
                                   className="h-3 w-3 rounded-full object-cover ring-1 ring-white/15"
                                   loading="lazy"
@@ -386,7 +386,7 @@ export function TransactionHistoryPanel({
                           )
                         })()}
                         <p
-                          className="truncate text-[12px] leading-snug text-slate-300"
+                          className="truncate text-[12px] leading-snug text-neutral-300"
                           title={item.summary}
                         >
                           {item.summary}
@@ -402,12 +402,12 @@ export function TransactionHistoryPanel({
       ) : (
         <ul className="mt-4 max-h-[min(60vh,480px)] space-y-3 overflow-y-auto pr-1">
           {history.length === 0 && (
-            <li className="rounded-xl border border-dashed border-white/10 py-10 text-center text-sm text-slate-500">
-              No activity yet. Execute a swap or bridge to see it here.
+            <li className="rounded-xl border border-dashed border-uni-border py-10 text-center text-sm text-neutral-500">
+              No activity yet. Execute a swap to see it here.
             </li>
           )}
           {history.length > 0 && filtered.length === 0 && (
-            <li className="rounded-xl border border-white/[0.06] py-8 text-center text-sm text-slate-500">
+            <li className="rounded-xl border border-uni-border py-8 text-center text-sm text-neutral-500">
               No rows match this filter.
             </li>
           )}
@@ -425,7 +425,7 @@ export function TransactionHistoryPanel({
             return (
               <li
                 key={item.id}
-                className="rounded-xl border border-white/[0.06] bg-black/20 p-3"
+                className="rounded-xl border border-uni-border bg-uni-bg/50 p-3"
               >
                 <div className="flex items-start justify-between gap-2">
                   <span
@@ -435,14 +435,14 @@ export function TransactionHistoryPanel({
                     {item.status}
                   </span>
                   <time
-                    className="text-[10px] text-slate-500"
+                    className="text-[10px] text-neutral-500"
                     dateTime={new Date(item.createdAt).toISOString()}
                     title={fullDate}
                   >
                     {formatActivityAge(item.createdAt, nowMs)}
                   </time>
                 </div>
-                <p className="mt-2 text-xs leading-relaxed text-slate-300">
+                <p className="mt-2 text-xs leading-relaxed text-neutral-300">
                   {item.summary}
                 </p>
                 {url && (
@@ -450,7 +450,7 @@ export function TransactionHistoryPanel({
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-eon-blue hover:underline"
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-uni-pink hover:underline"
                   >
                     Block explorer
                     <ExternalLink className="h-3 w-3" />

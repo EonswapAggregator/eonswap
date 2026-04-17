@@ -1,37 +1,773 @@
+/* ========================================
+   EonSwap Documentation Theme - Uni-Pink
+   ======================================== */
+
 :root {
-  --eonswap-sidebar-active: #3b82f6;
+  /* Uni-pink color palette */
+  --vp-c-brand-1: #ff007a;
+  --vp-c-brand-2: #ff3399;
+  --vp-c-brand-3: #ff66b2;
+  --vp-c-brand-soft: rgba(255, 0, 122, 0.14);
+  
+  /* Custom EonSwap colors */
+  --eon-pink: #ff007a;
+  --eon-pink-light: #ff3399;
+  --eon-pink-dark: #d1006a;
+  --eon-pink-glow: rgba(255, 0, 122, 0.4);
+  --eon-purple: #a855f7;
+  --eon-surface: #131313;
+  --eon-surface-light: #1a1a1a;
+  --eon-border: rgba(255, 255, 255, 0.08);
+  
+  /* Gradient definitions */
+  --eon-gradient: linear-gradient(135deg, #ff007a 0%, #a855f7 100%);
+  --eon-gradient-soft: linear-gradient(135deg, rgba(255, 0, 122, 0.15) 0%, rgba(168, 85, 247, 0.1) 100%);
 }
 
+/* ========================================
+   Light Mode Theme
+   ======================================== */
+
+:root {
+  /* Light mode backgrounds */
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #f8f8fa;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-soft: #f4f4f6;
+  
+  /* Light mode text */
+  --vp-c-text-1: #1a1a1a;
+  --vp-c-text-2: #4a4a4a;
+  --vp-c-text-3: #717171;
+  
+  /* Light mode borders */
+  --vp-c-divider: rgba(0, 0, 0, 0.08);
+  --vp-c-divider-light: rgba(0, 0, 0, 0.04);
+  
+  /* Hero section */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: var(--eon-gradient);
+  --vp-home-hero-image-background-image: radial-gradient(circle at center, rgba(255, 0, 122, 0.15) 0%, transparent 70%);
+  --vp-home-hero-image-filter: blur(72px);
+  
+  /* Light mode surfaces */
+  --eon-surface: #f8f8fa;
+  --eon-surface-light: #ffffff;
+  --eon-border: rgba(0, 0, 0, 0.08);
+}
+
+/* ========================================
+   Dark Mode Theme
+   ======================================== */
+
+.dark {
+  --vp-c-brand-1: #ff007a;
+  --vp-c-brand-2: #ff3399;
+  --vp-c-brand-3: #ff66b2;
+  --vp-c-brand-soft: rgba(255, 0, 122, 0.16);
+  
+  /* Background colors */
+  --vp-c-bg: #0d0d0d;
+  --vp-c-bg-alt: #111111;
+  --vp-c-bg-elv: #161616;
+  --vp-c-bg-soft: #1a1a1a;
+  
+  /* Text colors */
+  --vp-c-text-1: rgba(255, 255, 255, 0.95);
+  --vp-c-text-2: rgba(255, 255, 255, 0.7);
+  --vp-c-text-3: rgba(255, 255, 255, 0.5);
+  
+  /* Borders */
+  --vp-c-divider: rgba(255, 255, 255, 0.08);
+  --vp-c-divider-light: rgba(255, 255, 255, 0.04);
+  
+  /* Hero section */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: var(--eon-gradient);
+  --vp-home-hero-image-background-image: radial-gradient(circle at center, rgba(255, 0, 122, 0.25) 0%, transparent 70%);
+  --vp-home-hero-image-filter: blur(72px);
+  
+  /* Dark mode surfaces */
+  --eon-surface: #131313;
+  --eon-surface-light: #1a1a1a;
+  --eon-border: rgba(255, 255, 255, 0.08);
+}
+
+/* ========================================
+   Hero Section
+   ======================================== */
+
+.VPHero {
+  padding-bottom: 64px !important;
+}
+
+.VPHero .name {
+  background: var(--eon-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.VPHero .tagline {
+  color: var(--vp-c-text-2);
+  font-size: 1.25rem;
+  font-weight: 400;
+}
+
+.VPHero .text {
+  color: var(--vp-c-text-1);
+}
+
+/* Hero image glow effect */
+.VPHero .image-container::before {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(circle at center, rgba(255, 0, 122, 0.3) 0%, transparent 60%);
+  filter: blur(40px);
+  z-index: -1;
+  animation: heroGlow 4s ease-in-out infinite alternate;
+}
+
+@keyframes heroGlow {
+  0% { opacity: 0.5; transform: scale(1); }
+  100% { opacity: 0.8; transform: scale(1.1); }
+}
+
+/* ========================================
+   Buttons
+   ======================================== */
+
+.VPButton.brand {
+  background: var(--eon-gradient) !important;
+  border: none !important;
+  color: white !important;
+  font-weight: 600;
+  padding: 12px 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px var(--eon-pink-glow);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.VPButton.brand:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px var(--eon-pink-glow);
+  filter: brightness(1.1);
+}
+
+.VPButton.alt {
+  background: transparent !important;
+  border: 1px solid var(--eon-pink) !important;
+  color: var(--eon-pink) !important;
+  border-radius: 12px;
+  transition: all 0.25s ease;
+}
+
+.VPButton.alt:hover {
+  background: rgba(255, 0, 122, 0.1) !important;
+  border-color: var(--eon-pink-light) !important;
+}
+
+/* ========================================
+   Navigation Bar
+   ======================================== */
+
+.VPNav {
+  background: var(--vp-c-bg) !important;
+  backdrop-filter: blur(12px) saturate(180%);
+  border-bottom: 1px solid var(--eon-border);
+}
+
+.dark .VPNav {
+  background: rgba(13, 13, 13, 0.85) !important;
+}
+
+.VPNavBar .title {
+  font-weight: 700;
+  background: var(--eon-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.VPNavBarMenuLink {
+  position: relative;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.VPNavBarMenuLink::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: var(--eon-gradient);
+  border-radius: 1px;
+  transition: all 0.25s ease;
+  transform: translateX(-50%);
+}
+
+.VPNavBarMenuLink:hover::after,
+.VPNavBarMenuLink.active::after {
+  width: 100%;
+}
+
+.VPNavBarMenuLink.active,
+.VPNavBarMenuLink:hover {
+  color: var(--eon-pink) !important;
+}
+
+/* Search button styling */
+.VPNavBarSearch .DocSearch-Button {
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--eon-border);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.dark .VPNavBarSearch .DocSearch-Button {
+  background: var(--eon-surface-light);
+}
+
+.VPNavBarSearch .DocSearch-Button:hover {
+  border-color: rgba(255, 0, 122, 0.3);
+  box-shadow: 0 0 12px rgba(255, 0, 122, 0.15);
+}
+
+/* Social links in header */
+.VPSocialLinks .VPSocialLink {
+  width: 36px;
+  height: 36px;
+  color: var(--vp-c-text-2);
+  transition: all 0.25s ease;
+}
+
+.VPSocialLinks .VPSocialLink:hover {
+  color: var(--eon-pink) !important;
+  transform: translateY(-2px);
+  filter: drop-shadow(0 4px 8px rgba(255, 0, 122, 0.3));
+}
+
+.VPSocialLinks .VPSocialLink svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ========================================
+   Sidebar
+   ======================================== */
+
 .VPSidebar {
-  width: 272px;
+  width: 280px;
+  background: var(--vp-c-bg) !important;
+  border-right: 1px solid var(--eon-border);
+}
+
+.dark .VPSidebar {
+  background: rgba(13, 13, 13, 0.95) !important;
 }
 
 .VPSidebarItem.level-0 > .item > .text {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
+  color: var(--eon-pink);
+  opacity: 0.9;
 }
 
 .VPSidebarItem .item {
   border-left: 2px solid transparent;
   border-radius: 8px;
-  transition: background-color 0.18s ease, border-color 0.18s ease;
+  margin: 2px 0;
+  transition: all 0.2s ease;
 }
 
 .VPSidebarItem .item:hover {
-  background-color: var(--vp-c-default-soft);
+  background: rgba(255, 0, 122, 0.06);
+  border-left-color: rgba(255, 0, 122, 0.3);
 }
 
 .VPSidebarItem .item:hover .link {
-  color: var(--vp-c-text-1);
+  color: var(--eon-pink-light);
 }
 
 .VPSidebarItem.is-active > .item {
-  border-left-color: var(--eonswap-sidebar-active);
-  background-color: color-mix(in srgb, var(--eonswap-sidebar-active) 12%, transparent);
+  border-left-color: var(--eon-pink);
+  background: linear-gradient(90deg, rgba(255, 0, 122, 0.12) 0%, transparent 100%);
+}
+
+.VPSidebarItem.is-active > .item .link {
+  color: var(--eon-pink) !important;
+  font-weight: 600;
 }
 
 .VPSidebarItem .item .link {
   font-weight: 500;
+}
+
+/* ========================================
+   Content Area
+   ======================================== */
+
+/* Links */
+.vp-doc a {
+  color: var(--eon-pink);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.vp-doc a:hover {
+  color: var(--eon-pink-light);
+  border-bottom-color: var(--eon-pink-light);
+}
+
+/* Headers */
+.vp-doc h1 {
+  background: var(--eon-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.vp-doc h2 {
+  border-bottom: 1px solid var(--eon-border);
+  padding-bottom: 12px;
+}
+
+.vp-doc h2::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 1em;
+  background: var(--eon-gradient);
+  border-radius: 2px;
+  margin-right: 12px;
+  vertical-align: middle;
+}
+
+/* Inline code */
+.vp-doc :not(pre) > code {
+  color: var(--eon-pink);
+  background: rgba(255, 0, 122, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+/* Code blocks */
+.vp-doc div[class*='language-'] {
+  background: var(--vp-c-bg-soft) !important;
+  border: 1px solid var(--eon-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.dark .vp-doc div[class*='language-'] {
+  background: #0d0d0d !important;
+}
+
+.vp-doc div[class*='language-']::before {
+  color: var(--eon-pink);
+  font-weight: 600;
+}
+
+.vp-doc div[class*='language-'] .line-numbers-wrapper {
+  border-right: 1px solid var(--eon-border);
+}
+
+/* Copy button */
+.vp-doc div[class*='language-'] button.copy {
+  background: var(--eon-surface-light);
+  border: 1px solid var(--eon-border);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.vp-doc div[class*='language-'] button.copy:hover {
+  border-color: var(--eon-pink);
+  background: rgba(255, 0, 122, 0.1);
+}
+
+/* ========================================
+   Tables
+   ======================================== */
+
+.vp-doc table {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--eon-border);
+}
+
+.vp-doc th {
+  background: linear-gradient(135deg, rgba(255, 0, 122, 0.12) 0%, rgba(168, 85, 247, 0.08) 100%);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.85em;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--eon-border) !important;
+}
+
+.vp-doc td {
+  border-bottom: 1px solid var(--eon-border) !important;
+}
+
+.vp-doc tr:hover td {
+  background: rgba(255, 0, 122, 0.04);
+}
+
+.vp-doc tr:last-child td {
+  border-bottom: none !important;
+}
+
+/* ========================================
+   Custom Blocks (Tips, Warnings, etc.)
+   ======================================== */
+
+.custom-block {
+  border-radius: 12px;
+  border-left-width: 4px;
+}
+
+.custom-block.tip {
+  background: linear-gradient(135deg, rgba(255, 0, 122, 0.08) 0%, rgba(168, 85, 247, 0.04) 100%);
+  border-color: var(--eon-pink);
+}
+
+.custom-block.tip .custom-block-title {
+  color: var(--eon-pink);
+  font-weight: 600;
+}
+
+.custom-block.warning {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.08) 0%, rgba(234, 179, 8, 0.04) 100%);
+}
+
+.custom-block.danger {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.04) 100%);
+}
+
+.custom-block.info {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.04) 100%);
+}
+
+/* ========================================
+   Features Grid (Homepage)
+   ======================================== */
+
+.VPFeature {
+  background: var(--vp-c-bg) !important;
+  border: 1px solid var(--eon-border) !important;
+  border-radius: 16px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.dark .VPFeature {
+  background: var(--eon-surface-light) !important;
+  box-shadow: none;
+}
+
+.VPFeature::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--eon-gradient-soft);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.VPFeature:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 0, 122, 0.3) !important;
+  box-shadow: 0 8px 32px rgba(255, 0, 122, 0.15);
+}
+
+.VPFeature:hover::before {
+  opacity: 1;
+}
+
+.VPFeature .title {
+  font-weight: 700;
+  color: var(--vp-c-text-1);
+  position: relative;
+  z-index: 1;
+}
+
+.VPFeature .details {
+  color: var(--vp-c-text-2);
+  position: relative;
+  z-index: 1;
+}
+
+.VPFeature .icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+/* ========================================
+   Footer
+   ======================================== */
+
+.VPFooter {
+  background: linear-gradient(180deg, transparent 0%, rgba(255, 0, 122, 0.03) 100%);
+  border-top: 1px solid var(--eon-border);
+}
+
+.VPFooter .message,
+.VPFooter .copyright {
+  color: var(--vp-c-text-3);
+}
+
+.VPFooter a {
+  color: var(--eon-pink);
+  transition: color 0.2s ease;
+}
+
+.VPFooter a:hover {
+  color: var(--eon-pink-light);
+}
+
+/* ========================================
+   Scrollbar
+   ======================================== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--vp-c-bg-soft);
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: var(--eon-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 0, 122, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--eon-pink);
+}
+
+/* ========================================
+   Selection
+   ======================================== */
+
+::selection {
+  background: rgba(255, 0, 122, 0.3);
+  color: var(--vp-c-text-1);
+}
+
+.dark ::selection {
+  color: white;
+}
+
+/* ========================================
+   Badges
+   ======================================== */
+
+.VPBadge {
+  background: var(--eon-gradient) !important;
+  color: white !important;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+/* ========================================
+   Local Nav (mobile)
+   ======================================== */
+
+.VPLocalNav {
+  background: var(--vp-c-bg) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--eon-border);
+}
+
+.dark .VPLocalNav {
+  background: rgba(13, 13, 13, 0.95) !important;
+}
+
+/* ========================================
+   On This Page (Table of Contents)
+   ======================================== */
+
+.VPDocAsideOutline {
+  border-left: 1px solid var(--eon-border);
+}
+
+.VPDocAsideOutline .outline-link {
+  transition: all 0.2s ease;
+}
+
+.VPDocAsideOutline .outline-link:hover {
+  color: var(--eon-pink);
+}
+
+.VPDocAsideOutline .outline-link.active {
+  color: var(--eon-pink);
+  font-weight: 600;
+}
+
+/* ========================================
+   Previous/Next Navigation
+   ======================================== */
+
+.pager-link {
+  background: var(--vp-c-bg) !important;
+  border: 1px solid var(--eon-border) !important;
+  border-radius: 12px !important;
+  transition: all 0.25s ease;
+}
+
+.dark .pager-link {
+  background: var(--eon-surface-light) !important;
+}
+
+.pager-link:hover {
+  border-color: var(--eon-pink) !important;
+  box-shadow: 0 4px 16px rgba(255, 0, 122, 0.15);
+}
+
+.pager-link .title {
+  color: var(--eon-pink);
+}
+
+/* ========================================
+   Blockquotes
+   ======================================== */
+
+.vp-doc blockquote {
+  background: var(--vp-c-bg-soft);
+  border-left: 4px solid var(--eon-pink);
+  border-radius: 0 8px 8px 0;
+  padding: 16px 20px;
+  color: var(--vp-c-text-2);
+}
+
+.dark .vp-doc blockquote {
+  background: var(--eon-surface-light);
+}
+
+/* ========================================
+   Horizontal Rule
+   ======================================== */
+
+.vp-doc hr {
+  background: var(--eon-gradient);
+  height: 2px;
+  border: none;
+  border-radius: 1px;
+  opacity: 0.3;
+}
+
+/* ========================================
+   Lists
+   ======================================== */
+
+.vp-doc ul > li::marker {
+  color: var(--eon-pink);
+}
+
+.vp-doc ol > li::marker {
+  color: var(--eon-pink);
+  font-weight: 600;
+}
+
+/* ========================================
+   Responsive Adjustments
+   ======================================== */
+
+@media (max-width: 768px) {
+  .VPHero .name {
+    font-size: 2.5rem;
+  }
+  
+  .VPHero .tagline {
+    font-size: 1.1rem;
+  }
+  
+  .VPFeature {
+    margin: 8px 0;
+  }
+}
+
+/* ========================================
+   Light Mode Specific Overrides
+   ======================================== */
+
+/* Light mode hero glow - softer */
+:not(.dark) .VPHero .image-container::before {
+  background: radial-gradient(circle at center, rgba(255, 0, 122, 0.15) 0%, transparent 60%);
+}
+
+/* Light mode table header */
+:not(.dark) .vp-doc th {
+  background: linear-gradient(135deg, rgba(255, 0, 122, 0.08) 0%, rgba(168, 85, 247, 0.05) 100%);
+}
+
+/* Light mode custom blocks */
+:not(.dark) .custom-block.tip {
+  background: linear-gradient(135deg, rgba(255, 0, 122, 0.06) 0%, rgba(168, 85, 247, 0.03) 100%);
+}
+
+:not(.dark) .custom-block.warning {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.06) 0%, rgba(234, 179, 8, 0.03) 100%);
+}
+
+:not(.dark) .custom-block.danger {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, rgba(239, 68, 68, 0.03) 100%);
+}
+
+:not(.dark) .custom-block.info {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.06) 0%, rgba(59, 130, 246, 0.03) 100%);
+}
+
+/* Light mode inline code */
+:not(.dark) .vp-doc :not(pre) > code {
+  color: var(--eon-pink-dark);
+  background: rgba(255, 0, 122, 0.08);
+}
+
+/* Light mode feature hover */
+:not(.dark) .VPFeature:hover {
+  box-shadow: 0 8px 32px rgba(255, 0, 122, 0.12);
+}
+
+/* Light mode gradient soft */
+:not(.dark) .VPFeature::before {
+  background: linear-gradient(135deg, rgba(255, 0, 122, 0.08) 0%, rgba(168, 85, 247, 0.05) 100%);
+}
+
+/* Light mode footer */
+:not(.dark) .VPFooter {
+  background: linear-gradient(180deg, transparent 0%, rgba(255, 0, 122, 0.02) 100%);
+}
+
+/* Light mode sidebar hover */
+:not(.dark) .VPSidebarItem .item:hover {
+  background: rgba(255, 0, 122, 0.04);
+}
+
+:not(.dark) .VPSidebarItem.is-active > .item {
+  background: linear-gradient(90deg, rgba(255, 0, 122, 0.08) 0%, transparent 100%);
+}
+
+/* Light mode row hover */
+:not(.dark) .vp-doc tr:hover td {
+  background: rgba(255, 0, 122, 0.03);
 }

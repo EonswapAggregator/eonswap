@@ -25,8 +25,7 @@ Optional env:
 - `RELAY_PORT` (default `8787`)
 - `RELAY_ALERT_WEBHOOK_URL` (optional; Slack/Discord/Telegram-compatible webhook)
 - `RELAY_ALERT_COOLDOWN_MS` (default `180000`)
-- `RELAY_WARN_KYBER_MS` (default `2500`)
-- `RELAY_WARN_LIFI_MS` (default `3500`)
+- `RELAY_WARN_EONSWAP_MS` (default `2500`)
 - `RELAY_WARN_COINGECKO_MS` (default `2500`)
 - `RELAY_WARN_ETHERSCAN_MS` (default `3000`)
 - `RELAY_TELEGRAM_BOT_TOKEN` (optional; bot token for tx success alerts)
@@ -45,7 +44,7 @@ Optional env:
 - `GET /monitor/status` – latest provider status + latency + SLA windows
 - `GET /monitor/check-now` – trigger immediate checks (**requires** `Authorization: Bearer <RELAY_ADMIN_SECRET>` when admin secret is configured)
 - `POST /events/tx` – receive tx success event and forward to Telegram (if configured)
-- `POST /events/activity` – append one activity row (swap/bridge lifecycle) for aggregated admin reporting (rate-limited per IP)
+- `POST /events/activity` – append one activity row (swap lifecycle) for admin reporting (rate-limited per IP)
 - `GET /admin/activities` – return merged activity rows (latest row per `id`); header `Authorization: Bearer <RELAY_ADMIN_SECRET>`
 - `GET /explorer/txlist?chainId=<id>&address=<0x...>&offset=<n>` – proxy Etherscan V2 txlist using relay API key (keeps key out of frontend). Optional token auth via `x-relay-explorer-token` (recommended when called via your own trusted proxy/server path).
 
@@ -62,12 +61,12 @@ Set the app env:
 VITE_MONITOR_RELAY_URL=http://127.0.0.1:8787
 ```
 
-When configured, `Status` page health panel prefers relay data for Kyber/LI.FI/CoinGecko/Etherscan.
+When configured, `Status` page health panel prefers relay data for EonSwap/CoinGecko/Etherscan.
 
 Activity rows are written when users trigger `addActivity` / `patchActivity` in the app (if `VITE_MONITOR_RELAY_URL` is set). On the **Admin** page, use **Refresh from relay** with the same secret as `RELAY_ADMIN_SECRET` to load all logged activity.
 
 ## Added reliability hardening
 
-- Fallback probes for Kyber and LI.FI checks when primary probe fails.
+- Health probes for EonSwap, CoinGecko, and Etherscan.
 - Webhook alerts with cooldown for critical degraded providers and high latency.
 - Response security headers enabled on relay endpoints.

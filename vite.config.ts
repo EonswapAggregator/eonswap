@@ -30,6 +30,12 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/etherscan/, ''),
         },
+        // Browser → CoinGecko (avoids CORS during local dev)
+        '/api/coingecko': {
+          target: 'https://api.coingecko.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/coingecko/, ''),
+        },
       },
     },
   }

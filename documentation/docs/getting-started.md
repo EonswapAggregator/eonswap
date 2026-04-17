@@ -1,33 +1,73 @@
 # Getting Started
 
-This page helps first-time users complete their first swap or bridge with confidence.
+Welcome to EonSwap! This guide will help you get started with our DEX on Base.
 
-## Before you begin
+## Prerequisites
 
-- Use the official EonSwap domain.
-- Connect an EVM-compatible wallet.
-- Hold enough native token for gas fees.
-- Start with a small test amount if this is your first time.
+- **Wallet**: MetaMask, Coinbase Wallet, or any WalletConnect-compatible wallet
+- **Network**: Base Mainnet configured in your wallet
+- **Gas**: Small amount of ETH on Base for transaction fees
+- **Tokens**: ETH or any ERC-20 token to trade
 
-## First swap in 5 steps
+## Setting Up Base Network
 
-1. Open **Swap**.
-2. Select sell token and buy token.
-3. Enter amount and review quote details.
-4. Confirm wallet prompt (and approval if required).
-5. Check outcome in **Activity** or **Status**.
+If Base isn't in your wallet yet:
 
-## First bridge in 5 steps
+| Field | Value |
+|-------|-------|
+| Network Name | Base |
+| RPC URL | `https://mainnet.base.org` |
+| Chain ID | 8453 |
+| Symbol | ETH |
+| Explorer | `https://basescan.org` |
 
-1. Open **Bridge**.
-2. Choose source chain/token and destination chain/token.
-3. Enter amount and review ETA + fee estimate.
-4. Confirm wallet prompt (and approval if required).
-5. Monitor progress until final status.
+## Your First Swap
 
-## Related reading
+1. Visit [EonSwap](https://eonswap.us) and click **Connect Wallet**
+2. Select your wallet and approve the connection
+3. Go to **Swap** page
+4. Select the token you want to sell (e.g., ETH)
+5. Select the token you want to buy (e.g., ESTF)
+6. Enter the amount
+7. Review the quote and price impact
+8. Click **Swap** and confirm in your wallet
 
-- [Wallet Setup Guide](/guides/wallet-setup)
-- [Supported Networks](/supported-networks)
-- [Status Codes Reference](/guides/status-codes)
-- [Troubleshooting](/guides/troubleshooting)
+## Adding Liquidity
+
+1. Go to **Liquidity** page
+2. Click **Add Liquidity**
+3. Select token pair (e.g., ESTF/WETH)
+4. Enter amounts (equal value on both sides)
+5. Approve tokens if needed
+6. Confirm the transaction
+7. Receive LP tokens
+
+## Start Farming
+
+1. Go to **Farm** page
+2. Find a pool you have LP tokens for
+3. Click **Stake**
+4. Enter amount and confirm
+5. Watch your rewards grow!
+6. Claim or compound anytime
+
+## Check Airdrop Eligibility
+
+1. Go to **Airdrop** page
+2. Connect your wallet
+3. See if you're eligible
+4. Click **Claim** if available
+
+## Important Tokens
+
+| Token | Symbol | Contract |
+|-------|--------|----------|
+| EonSwap Token | ESTF | `0x7bd09674b3c721e35973993d5b6a79cda7da9c7f` |
+| EonSwap Reward | ESR | `0xbc11e3093afdbeb88d32ef893027202fc2b84f9d` |
+
+## Next Steps
+
+- [How It Works](/how-it-works) — Understand the AMM mechanics
+- [Features](/features) — Explore all platform features
+- [Tokenomics](/tokenomics) — Learn about ESTF distribution
+- [FAQ](/guides/faq) — Common questions answered

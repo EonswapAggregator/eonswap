@@ -1,12 +1,39 @@
-/** Kyber `slippageTolerance`: same as basis points (100 = 1%). */
+/** Slippage tolerance uses basis points (100 = 1%). */
 export const DEFAULT_SLIPPAGE_BPS = 50
 
 export const SLIPPAGE_PRESETS_BPS = [10, 50, 100] as const
 
-/** Clamp to a sane range for the UI (0.05% … 50%). */
+/** Max slippage allowed (10% = 1000 bps) - protects against catastrophic trades */
+export const MAX_SLIPPAGE_BPS = 1000
+
+/** Transaction deadline in minutes */
+export const DEFAULT_DEADLINE_MINUTES = 20
+export const MIN_DEADLINE_MINUTES = 1
+export const MAX_DEADLINE_MINUTES = 60
+export const DEADLINE_PRESETS_MINUTES = [10, 20, 30] as const
+
+/** Clamp deadline to valid range (1-60 minutes). */
+export function clampDeadlineMinutes(minutes: number): number {
+  if (!Number.isFinite(minutes)) return DEFAULT_DEADLINE_MINUTES
+  return Math.min(MAX_DEADLINE_MINUTES, Math.max(MIN_DEADLINE_MINUTES, Math.round(minutes)))
+}
+
+/** Price impact warning threshold (percentage) */
+export const DEFAULT_PRICE_IMPACT_WARN_PCT = 5
+export const MIN_PRICE_IMPACT_WARN_PCT = 1
+export const MAX_PRICE_IMPACT_WARN_PCT = 20
+export const PRICE_IMPACT_PRESETS_PCT = [3, 5, 10] as const
+
+/** Clamp price impact warning to valid range (1-20%). */
+export function clampPriceImpactWarnPct(pct: number): number {
+  if (!Number.isFinite(pct)) return DEFAULT_PRICE_IMPACT_WARN_PCT
+  return Math.min(MAX_PRICE_IMPACT_WARN_PCT, Math.max(MIN_PRICE_IMPACT_WARN_PCT, Math.round(pct)))
+}
+
+/** Clamp to a sane range for the UI (0.05% … 10%). */
 export function clampSlippageBps(bps: number): number {
   if (!Number.isFinite(bps)) return DEFAULT_SLIPPAGE_BPS
-  return Math.min(5000, Math.max(5, Math.round(bps)))
+  return Math.min(MAX_SLIPPAGE_BPS, Math.max(5, Math.round(bps)))
 }
 
 export function formatSlippagePercent(bps: number): string {
@@ -32,9 +59,8 @@ export function defaultSlippageBpsByContext(params: {
   buyIsNative: boolean
 }): number {
   const { chainId, sellIsNative, buyIsNative } = params
-  const isL2 = chainId === 10 || chainId === 8453 || chainId === 42161
-  const isBscOrPolygon = chainId === 56 || chainId === 137
-  if (sellIsNative && buyIsNative) return isL2 ? 35 : 50
-  if (sellIsNative || buyIsNative) return isBscOrPolygon ? 75 : 50
-  return isL2 ? 30 : 40
+  const isBaseChain = chainId === 8453
+  if (sellIsNative && buyIsNative) return isBaseChain ? 35 : 50
+  if (sellIsNative || buyIsNative) return 50
+  return isBaseChain ? 30 : 40
 }

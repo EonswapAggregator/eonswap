@@ -1,7 +1,9 @@
 import { getMonitorRelayBaseUrl } from './monitorRelayUrl'
 
+export type TxEventKind = 'swap' | 'farm_deposit' | 'farm_withdraw' | 'farm_harvest' | 'lp_add' | 'lp_remove'
+
 export type TxEventPayload = {
-  kind: 'swap' | 'bridge'
+  kind: TxEventKind
   status: 'success'
   txHash: string
   chainId: number
@@ -10,6 +12,10 @@ export type TxEventPayload = {
   at: number
   feeQuoteUsd?: number
   feeRealizedUsd?: number
+  // Farm-specific
+  poolName?: string
+  amount?: string
+  rewards?: string
 }
 
 export async function sendTxEventToRelay(payload: TxEventPayload): Promise<void> {

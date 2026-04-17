@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { mainnet } from 'wagmi/chains'
+import { base } from 'wagmi/chains'
 import {
   Check,
   ChevronDown,
@@ -33,8 +33,7 @@ import {
   txSuccess,
   type ExplorerNormalTx,
 } from '../lib/explorerTxHistory'
-import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
-import { NATIVE_AGGREGATOR } from '../lib/tokens'
+import { nativeChainDisplayLogoUrl } from '../lib/tokenLogos'
 import {
   hasEtherscanApiKey,
   useWalletTxHistory,
@@ -56,7 +55,7 @@ function walletMethodLabel(tx: ExplorerNormalTx): string {
 
 export function WalletOnChainTable() {
   const { address, isConnected } = useAccount()
-  const [viewChain, setViewChain] = useState<number>(mainnet.id)
+  const [viewChain, setViewChain] = useState<number>(base.id)
   const [copiedHash, setCopiedHash] = useState<string | null>(null)
   const [chainOpen, setChainOpen] = useState(false)
   const chainRootRef = useRef<HTMLDivElement | null>(null)
@@ -68,7 +67,7 @@ export function WalletOnChainTable() {
   const rows = useMemo(() => data ?? [], [data])
 
   const chainLabel = getEonChain(viewChain)?.name ?? `Chain ${viewChain}`
-  const chainLogo = trustWalletTokenLogoUrl(viewChain, NATIVE_AGGREGATOR)
+  const chainLogo = nativeChainDisplayLogoUrl(viewChain)
 
   useEffect(() => {
     if (!chainOpen) return
@@ -161,7 +160,7 @@ export function WalletOnChainTable() {
             {chainOpen ? (
               <div className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[12rem] overflow-hidden rounded-lg border border-white/[0.14] bg-[#0c1027] p-1 shadow-[0_20px_48px_-28px_rgba(0,0,0,0.9)]">
                 {eonChains.map((c) => {
-                  const logo = trustWalletTokenLogoUrl(c.id, NATIVE_AGGREGATOR)
+                  const logo = nativeChainDisplayLogoUrl(c.id)
                   const active = c.id === viewChain
                   return (
                     <button
@@ -371,7 +370,7 @@ export function WalletOnChainTable() {
                     <td className={activityTdClass}>
                       <span className={`${networkPillClass()} inline-flex items-center gap-1.5`}>
                         <img
-                          src={trustWalletTokenLogoUrl(viewChain, NATIVE_AGGREGATOR) ?? undefined}
+                          src={nativeChainDisplayLogoUrl(viewChain) ?? undefined}
                           alt={chainLabel}
                           className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-white/15"
                           loading="lazy"

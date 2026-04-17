@@ -1,39 +1,59 @@
 # Supported Networks
 
-EonSwap supports selected EVM networks for swap and bridge routing.
+EonSwap is currently deployed on **Base Mainnet**.
 
-## Currently supported
+## Base Network
 
-| Network | Typical Use | Explorer |
-| --- | --- | --- |
-| Ethereum | Deep liquidity, mainnet settlement | [Etherscan](https://etherscan.io) |
-| Arbitrum | Lower-cost execution, high activity | [Arbiscan](https://arbiscan.io) |
-| Base | Low-cost retail and app activity | [BaseScan](https://basescan.org) |
-| Optimism | Fast confirmations, lower fees | [OP Mainnet Explorer](https://optimistic.etherscan.io) |
-| Polygon | Cost-sensitive swaps and transfers | [PolygonScan](https://polygonscan.com) |
-| BNB Smart Chain | High-throughput retail activity | [BscScan](https://bscscan.com) |
+| Property | Value |
+|----------|-------|
+| Network Name | Base |
+| Chain ID | 8453 |
+| Native Token | ETH |
+| Block Time | ~2 seconds |
+| Explorer | [BaseScan](https://basescan.org) |
 
-## Network selection guidance
+### Why Base?
 
-- Select source chain based on your current wallet assets.
-- Confirm destination chain before bridge execution.
-- Validate gas token availability on source chain.
-- Re-check route details after changing chain.
+- **Low Fees**: Transactions cost fractions of a cent
+- **Fast Confirmations**: ~2 second block times
+- **Ethereum Security**: Built on Optimism's OP Stack, secured by Ethereum
+- **Growing Ecosystem**: Rapidly expanding DeFi and NFT ecosystem
+- **Coinbase Backing**: Strong institutional support
 
-## Operational notes
+## Network Configuration
 
-- Availability can vary by RPC and routing provider conditions.
-- Temporary degradation may affect quote freshness and status indexing.
-- Chain congestion may increase confirmation time and effective cost.
+Add Base to your wallet:
 
-## Best practice
+```
+Network Name: Base
+RPC URL: https://mainnet.base.org
+Chain ID: 8453
+Currency Symbol: ETH
+Block Explorer: https://basescan.org
+```
 
-For first-time routes on a new chain pair, run a small test transaction before larger execution.
+## Deployed Contracts
 
-## Related reading
+| Contract | Address |
+|----------|---------|
+| ESTF Token | `0x7bd09674b3c721e35973993d5b6a79cda7da9c7f` |
+| ESR Token | `0xbc11e3093afdbeb88d32ef893027202fc2b84f9d` |
+| EonFactory | `0xd7b56729dcaa67aa2fa4a72795e3ed94ac03071b` |
+| EonRouter | `0xccc8b61b06544c942446846b6715f86c1c2823ce` |
+| MasterChef | `0x1ffbe00f3810e97a8306961d8dc4054abd4f4a2c` |
+
+## Future Networks
+
+We're evaluating expansion to:
+- Ethereum Mainnet
+- Arbitrum
+- Optimism
+
+Stay tuned for announcements on our [Twitter](https://x.com/eonswapus) and [Discord](https://discord.gg/AAEq22Sqng).
+
+## Related Reading
 
 - [Getting Started](/getting-started)
+- [How It Works](/how-it-works)
 - [Wallet Setup Guide](/guides/wallet-setup)
-- [Status Codes Reference](/guides/status-codes)
-- [Risk Disclosure](/risk-disclosure)
 

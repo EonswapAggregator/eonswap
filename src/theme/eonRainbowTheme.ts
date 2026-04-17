@@ -1,12 +1,12 @@
 import { darkTheme, type Theme } from '@rainbow-me/rainbowkit'
 
 /**
- * RainbowKit / account modal styling aligned with EonSwap (cyan accent, glassy depth).
+ * RainbowKit / account modal styling aligned with EonSwap Uniswap-style theme (pink accent).
  */
 export function eonRainbowTheme(): Theme {
   const base = darkTheme({
-    accentColor: '#00d2ff',
-    accentColorForeground: '#05060f',
+    accentColor: '#FF007A',
+    accentColorForeground: '#ffffff',
     borderRadius: 'large',
     fontStack: 'system',
     overlayBlur: 'large',
@@ -16,34 +16,33 @@ export function eonRainbowTheme(): Theme {
     ...base,
     colors: {
       ...base.colors,
-      modalBackground:
-        'linear-gradient(165deg, #16182f 0%, #0f1128 42%, #0a0b1c 100%)',
-      modalBorder: 'rgba(0, 210, 255, 0.14)',
-      modalBackdrop: 'rgba(4, 5, 12, 0.78)',
-      modalText: '#f8fafc',
-      modalTextSecondary: '#94a3b8',
-      modalTextDim: 'rgba(148, 163, 184, 0.4)',
-      closeButton: '#cbd5e1',
+      modalBackground: '#191919',
+      modalBorder: 'rgba(255, 0, 122, 0.14)',
+      modalBackdrop: 'rgba(0, 0, 0, 0.78)',
+      modalText: '#ffffff',
+      modalTextSecondary: '#a3a3a3',
+      modalTextDim: 'rgba(163, 163, 163, 0.4)',
+      closeButton: '#d4d4d4',
       closeButtonBackground: 'rgba(255, 255, 255, 0.07)',
-      profileAction: 'rgba(0, 210, 255, 0.1)',
-      profileActionHover: 'rgba(0, 210, 255, 0.2)',
+      profileAction: 'rgba(255, 0, 122, 0.1)',
+      profileActionHover: 'rgba(255, 0, 122, 0.2)',
       profileForeground: 'rgba(255, 255, 255, 0.04)',
-      actionButtonBorder: 'rgba(0, 210, 255, 0.12)',
-      actionButtonBorderMobile: 'rgba(0, 210, 255, 0.14)',
+      actionButtonBorder: 'rgba(255, 0, 122, 0.12)',
+      actionButtonBorderMobile: 'rgba(255, 0, 122, 0.14)',
       actionButtonSecondaryBackground: 'rgba(255, 255, 255, 0.06)',
       generalBorder: 'rgba(255, 255, 255, 0.09)',
       generalBorderDim: 'rgba(255, 255, 255, 0.05)',
-      connectButtonBackground: '#12142a',
-      menuItemBackground: 'rgba(0, 210, 255, 0.08)',
+      connectButtonBackground: '#1B1B1B',
+      menuItemBackground: 'rgba(255, 0, 122, 0.08)',
     },
     shadows: {
       ...base.shadows,
       dialog:
-        '0 28px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 210, 255, 0.07), 0 0 56px -12px rgba(34, 211, 238, 0.12)',
+        '0 28px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 0, 122, 0.07), 0 0 56px -12px rgba(255, 0, 122, 0.12)',
       profileDetailsAction:
         '0 6px 24px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
       connectButton:
-        '0 4px 16px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 210, 255, 0.06)',
+        '0 4px 16px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 0, 122, 0.06)',
     },
     fonts: {
       ...base.fonts,

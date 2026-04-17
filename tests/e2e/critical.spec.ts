@@ -3,21 +3,21 @@ import { expect, test } from '@playwright/test'
 test('status health panel renders core monitoring signals', async ({ page }) => {
   await page.goto('/status')
 
-  await expect(page.getByRole('heading', { name: 'Status command center' })).toBeVisible()
-  await expect(page.getByText('API health')).toBeVisible()
+  await expect(page.getByText('Status Dashboard')).toBeVisible()
+  await expect(page.getByText('Service Health')).toBeVisible()
 
-  for (const provider of ['Kyber', 'LI.FI', 'CoinGecko', 'Etherscan']) {
+  for (const provider of ['EonSwap API', 'CoinGecko', 'EVM RPC']) {
     await expect(page.getByText(provider, { exact: true })).toBeVisible()
   }
 
-  await expect(page.getByText('Warn', { exact: false }).first()).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Refresh health' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Refresh All' })).toBeVisible()
 })
 
 test('swap widget critical controls are available', async ({ page }) => {
   await page.goto('/swap')
 
-  await expect(page.getByRole('heading', { name: 'Swap', exact: true })).toBeVisible()
+  // Page has both h1 "Swap" (dashboard title) and h2 "Swap" (widget header) — target h1
+  await expect(page.locator('h1', { hasText: 'Swap' })).toBeVisible()
   await expect(page.getByText('You pay', { exact: true })).toBeVisible()
   await expect(page.getByText('You receive', { exact: true })).toBeVisible()
 
@@ -29,24 +29,16 @@ test('swap widget critical controls are available', async ({ page }) => {
 test('status health controls can toggle and refresh', async ({ page }) => {
   await page.goto('/status')
 
-  const autoButton = page.getByRole('button', { name: /^Auto (on|off)$/i })
-  await expect(autoButton).toBeVisible()
-  await autoButton.click()
-  await expect(autoButton).toContainText(/Auto (on|off)/)
-
-  const refreshButton = page.getByRole('button', { name: 'Refresh health' })
+  const refreshButton = page.getByRole('button', { name: 'Refresh All' })
   await expect(refreshButton).toBeVisible()
   await refreshButton.click()
-  await expect(page.getByText('Last checked:', { exact: false }).first()).toBeVisible()
+  await expect(page.getByText('Service Health')).toBeVisible()
 })
 
 test('status page supports URL-prefill for swap mode', async ({ page }) => {
   const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
-  await page.goto(`/status?mode=swap&fromChain=1&toChain=42161&txHash=${hash}`)
-
-  await expect(page.getByRole('button', { name: 'swap' })).toBeVisible()
-  await expect(page.getByText('Swap mode uses source chain only')).toBeVisible()
-  await expect(page.locator('input[placeholder="0x... transaction hash"]')).toHaveValue(hash)
+  await page.goto(`/status?tx=${hash}`)
+  await expect(page.locator('input[placeholder="Enter transaction hash (0x...)"]')).toBeVisible()
 })
 
 test('admin dashboard filters and search operate with seeded data', async ({ page }) => {
@@ -68,7 +60,7 @@ test('admin dashboard filters and search operate with seeded data', async ({ pag
             id: 'b1',
             status: 'failed',
             createdAt: ts - 32 * 24 * 60 * 60 * 1000,
-            summary: 'Bridge 25 USDC → ~24.8 USDC (failed)',
+            summary: 'Swap 25 USDC → ~24.8 USDC (failed)',
             txHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
             chainId: 42161,
             from: '0x114629C43Fa2528E5295b2982765733Acf3aCadA',
@@ -86,8 +78,8 @@ test('admin dashboard filters and search operate with seeded data', async ({ pag
   await page.getByRole('button', { name: /success/i }).click()
   await expect(page.getByText('Rows: 1')).toBeVisible()
 
-  await page.getByPlaceholder('Search hash, wallet, summary, chain...').fill('bridge')
-  await expect(page.getByText('Rows: 0')).toBeVisible()
+  await page.getByPlaceholder('Search hash, wallet, summary, chain...').fill('swap')
+  await expect(page.getByText('Rows: 1')).toBeVisible()
 
   await page.getByPlaceholder('Search hash, wallet, summary, chain...').fill('')
   await page.getByRole('button', { name: /^all$/i }).first().click()

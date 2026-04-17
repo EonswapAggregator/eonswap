@@ -1,94 +1,95 @@
 import { motion } from 'framer-motion'
-import { Compass, ShieldCheck, Sparkles } from 'lucide-react'
+import { ArrowRight, Compass, Globe2, ShieldCheck, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { uiButtonGhost, uiButtonSecondary } from '../lib/uiButtonClasses'
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 20 },
+  show: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.08, duration: 0.45, ease: 'easeOut' as const },
+  }),
+}
 
 export function AboutPage() {
   const networks = [
-    {
-      id: 'ethereum',
-      name: 'Ethereum',
-      iconUrl:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
-    },
-    {
-      id: 'arbitrum',
-      name: 'Arbitrum',
-      iconUrl:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png',
-    },
     {
       id: 'base',
       name: 'Base',
       iconUrl:
         'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png',
     },
-    {
-      id: 'optimism',
-      name: 'Optimism',
-      iconUrl:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png',
-    },
-    {
-      id: 'polygon',
-      name: 'Polygon',
-      iconUrl:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png',
-    },
-    {
-      id: 'bnb',
-      name: 'BNB Chain',
-      iconUrl:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png',
-    },
   ] as const
 
+  const prefersReducedMotion =
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+
   return (
-    <section className="scroll-mt-24 border-t border-white/[0.08] py-16 md:py-24">
-      <div className="mx-auto max-w-7xl px-4 md:px-6">
+    <section className="relative min-h-screen overflow-hidden border-t border-uni-border">
+      {/* Gradient backdrop */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(255,0,122,0.12),transparent)]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-uni-bg" />
+        <div
+          className="absolute -left-32 top-[-10%] h-[min(420px,45vw)] w-[min(420px,45vw)] rounded-full bg-uni-pink/10 blur-[100px]"
+          style={{
+            animation: prefersReducedMotion ? 'none' : 'eon-gradient-drift 22s ease-in-out infinite',
+          }}
+        />
+        <div
+          className="absolute -right-24 top-[30%] h-[min(360px,40vw)] w-[min(360px,40vw)] rounded-full bg-uni-purple/[0.08] blur-[90px]"
+          style={{
+            animation: prefersReducedMotion ? 'none' : 'eon-gradient-drift 28s ease-in-out infinite reverse',
+          }}
+        />
+      </div>
+
+      <div className="relative mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16">
+        {/* Hero Section */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/[0.08] bg-gradient-to-r from-white/[0.03] via-white/[0.015] to-transparent p-4 sm:flex-row sm:items-center sm:justify-between md:mb-7 md:p-5"
+          initial="hidden"
+          animate="show"
+          variants={{ show: { transition: { staggerChildren: 0.08 } } }}
+          className="mb-12 text-center"
         >
-          <div className="min-w-0">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
-              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-200">
-                Company profile
-              </span>
-            </div>
-            <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+          <motion.div custom={0} variants={fadeUp} className="mb-6 flex flex-wrap items-center justify-center gap-3">
+            <span className="inline-flex items-center gap-2 rounded-full border border-uni-pink/30 bg-uni-pink/10 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-uni-pink">
+              <Compass className="h-3.5 w-3.5" aria-hidden />
               Company
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white md:text-3xl">
-              About EonSwap
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300 md:text-[15px]">
-              EonSwap is built to make multi-chain swaps and bridge execution clearer, faster,
-              and fully non-custodial for everyday on-chain users.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            </span>
+          </motion.div>
+
+          <motion.h1
+            custom={1}
+            variants={fadeUp}
+            className="text-3xl font-bold tracking-tight text-white md:text-4xl lg:text-5xl"
+          >
+            About <span className="text-uni-pink">EonSwap</span>
+          </motion.h1>
+
+          <motion.p
+            custom={2}
+            variants={fadeUp}
+            className="mx-auto mt-4 max-w-2xl text-neutral-400 md:text-lg"
+          >
+            Built to make swaps and transaction execution clearer, faster, 
+            and fully non-custodial for everyday on-chain users.
+          </motion.p>
+
+          <motion.div custom={3} variants={fadeUp} className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
               to="/swap"
-              className={uiButtonSecondary}
+              className="inline-flex items-center gap-2 rounded-xl border border-uni-border bg-uni-surface-2 px-5 py-2.5 text-sm font-medium text-white transition hover:border-uni-pink/30 hover:bg-uni-surface-3"
             >
               Open swap
+              <ArrowRight className="h-4 w-4 text-uni-pink" aria-hidden />
             </Link>
-            <a
-              href="/docs/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={uiButtonGhost}
-            >
-              Read docs
-            </a>
-          </div>
+          </motion.div>
         </motion.div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
+        {/* Mission Cards */}
+        <div className="grid gap-5 lg:grid-cols-3">
           {[
             {
               icon: Compass,
@@ -98,7 +99,7 @@ export function AboutPage() {
             {
               icon: Sparkles,
               title: 'What we build',
-              text: 'A practical execution interface for swap, bridge, activity, and status diagnostics with transparent route context.',
+              text: 'A practical execution interface for swap, activity, and status diagnostics with transparent route context.',
             },
             {
               icon: ShieldCheck,
@@ -108,68 +109,87 @@ export function AboutPage() {
           ].map((item, i) => (
             <motion.article
               key={item.title}
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: i * 0.05 }}
-              className="rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4"
+              transition={{ duration: 0.4, delay: 0.1 + i * 0.05 }}
+              className="group relative flex flex-col items-center overflow-hidden rounded-3xl border border-uni-border bg-uni-surface p-6 text-center transition duration-300 hover:border-uni-pink/30"
             >
-              <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.03]">
-                <item.icon className="h-4 w-4 text-eon-blue" aria-hidden />
+              <div
+                className="pointer-events-none absolute inset-0 bg-gradient-to-b from-uni-pink/[0.03] via-transparent to-transparent opacity-0 transition duration-500 group-hover:opacity-100"
+                aria-hidden
+              />
+              <div className="relative">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-uni-pink/10 text-uni-pink ring-1 ring-uni-pink/20">
+                  <item.icon className="h-6 w-6" aria-hidden />
+                </div>
+                <h2 className="text-lg font-semibold text-white">{item.title}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-neutral-400">{item.text}</p>
               </div>
-              <h2 className="mt-3 text-base font-semibold text-white">{item.title}</h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-400">{item.text}</p>
             </motion.article>
           ))}
         </div>
 
+        {/* Trust Section */}
         <motion.div
-          initial={{ opacity: 0, y: 14 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.08 }}
-          className="mt-4 rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4"
+          transition={{ duration: 0.4, delay: 0.25 }}
+          className="mt-8"
         >
-          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-300">
-            Trust and transparency
-          </h2>
-          <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            {[
-              'Non-custodial by default: you sign from your own wallet.',
-              'Route context is shown before execution.',
-              'No hidden interface fee added by default.',
-            ].map((item) => (
-              <p
-                key={item}
-                className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs leading-relaxed text-slate-400"
-              >
-                {item}
-              </p>
-            ))}
+          <div className="relative overflow-hidden rounded-3xl border border-uni-border bg-uni-surface p-6 md:p-8">
+            <div
+              className="pointer-events-none absolute -right-16 top-0 h-40 w-40 rounded-full bg-uni-pink/[0.06] blur-3xl"
+              aria-hidden
+            />
+            <div className="relative">
+              <h3 className="text-lg font-semibold text-white">Trust and transparency</h3>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {[
+                  'Non-custodial by default: you sign from your own wallet.',
+                  'Route context is shown before execution.',
+                  'No hidden interface fee added by default.',
+                ].map((item) => (
+                  <div
+                    key={item}
+                    className="rounded-xl border border-uni-border bg-uni-surface-2 px-4 py-3 text-sm text-neutral-400"
+                  >
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </motion.div>
 
+        {/* Networks Section */}
         <motion.div
-          initial={{ opacity: 0, y: 14 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.12 }}
-          className="mt-4 rounded-2xl border border-white/[0.1] bg-white/[0.02] p-4"
+          transition={{ duration: 0.4, delay: 0.3 }}
+          className="mt-8"
         >
-          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-300">
-            Supported networks
-          </h2>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {networks.map((network) => (
-              <span
-                key={network.id}
-                className="inline-flex items-center rounded-full border border-white/[0.1] bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300"
-              >
-                <img
-                  src={network.iconUrl}
-                  alt={network.name}
-                  className="mr-1.5 h-3.5 w-3.5 rounded-full object-contain"
-                />
-                {network.name}
-              </span>
-            ))}
+          <div className="relative overflow-hidden rounded-3xl border border-uni-border bg-uni-surface p-6 md:p-8">
+            <div className="relative">
+              <h3 className="text-lg font-semibold text-white">
+                <Globe2 className="mr-2 inline-block h-5 w-5 text-uni-pink" aria-hidden />
+                Supported networks
+              </h3>
+              <div className="mt-4 flex flex-wrap gap-3">
+                {networks.map((network) => (
+                  <span
+                    key={network.id}
+                    className="inline-flex items-center gap-2 rounded-xl border border-uni-border bg-uni-surface-2 px-4 py-2 text-sm font-medium text-white"
+                  >
+                    <img
+                      src={network.iconUrl}
+                      alt={network.name}
+                      className="h-5 w-5 rounded-full object-contain"
+                    />
+                    {network.name}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         </motion.div>
       </div>

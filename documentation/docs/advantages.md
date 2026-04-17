@@ -1,17 +1,52 @@
-# Advantages
+# Why EonSwap?
 
-## Non-custodial by design
+## Non-Custodial
 
-Funds remain in user wallets and transactions require explicit wallet signatures.
+Your funds stay in your wallet. EonSwap never has access to your tokens — every transaction requires your explicit signature.
 
-## Unified user experience
+## Built on Base
 
-Swap, bridge, activity, and status are available in one place.
+Leverage Base's low fees and fast transactions. Average swap costs less than $0.01 in gas fees.
 
-## Better decision visibility
+## Dual Reward Farming
 
-Users can review route, fee, and status signals before and after execution.
+Earn both ESTF and ESR tokens when you farm. Double the rewards, double the opportunities.
 
-## Built for everyday users
+## Fair Token Distribution
 
-Simple flow for first-time users, with enough detail for frequent users.
+- 40% to community farming rewards
+- 10% community airdrops
+- Team tokens are vested with 12-month cliff
+
+## Transparent & Verified
+
+All smart contracts are:
+- Open source
+- Verified on BaseScan
+- Auditable by anyone
+
+## Low Fees
+
+| Action | Fee |
+|--------|-----|
+| Swap | 0.3% (to LPs) |
+| Add Liquidity | Gas only |
+| Farm Stake/Unstake | Gas only |
+| Claim Rewards | Gas only |
+
+## Complete DeFi Suite
+
+Everything you need in one place:
+- Swap tokens
+- Provide liquidity
+- Farm for rewards
+- Stake for benefits
+- Track activity
+- Monitor system status
+
+## Community First
+
+- Governance voting for ESTF holders
+- Community airdrops
+- Referral rewards
+- Active Discord and Telegram

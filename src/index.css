@@ -4,6 +4,11 @@
 
 :root {
   color-scheme: dark;
+  --uni-pink: #FF007A;
+  --uni-pink-light: #FF68B5;
+  --uni-bg: #131313;
+  --uni-surface: #191919;
+  --uni-border: #2D2D2D;
 }
 
 html {
@@ -15,10 +20,18 @@ body {
   margin: 0;
   min-height: 100vh;
   overflow-x: hidden;
-  background-color: #0a0b1e;
-  color: #e2e8f0;
+  background-color: var(--uni-bg);
+  color: #FFFFFF;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Uniswap-style gradient background */
+.uni-gradient-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255, 0, 122, 0.15), transparent);
 }
 
 @keyframes eon-gradient-drift {
@@ -89,8 +102,8 @@ body {
 
 /* RainbowKit — accent sync + interaction polish (theme in eonRainbowTheme.ts) */
 [data-rk] {
-  --rk-colors-accentColor: #00d2ff;
-  --rk-colors-accentColorForeground: #05060f;
+  --rk-colors-accentColor: #FF007A;
+  --rk-colors-accentColorForeground: #FFFFFF;
 }
 
 [data-rk] button[type='button']:not([disabled]) {

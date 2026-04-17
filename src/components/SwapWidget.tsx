@@ -3,14 +3,15 @@ import { ArrowDownUp, ChevronDown, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { parseUnits } from 'viem'
 import { useAccount, useBalance, useChainId, useEstimateFeesPerGas } from 'wagmi'
-import { useKyberQuote } from '../hooks/useKyberQuote'
+import { useSwapQuote } from '../hooks/useSwapQuote'
 import { useSwapSubmit } from '../hooks/useSwapSubmit'
+import { chainWrappedNative } from '../lib/amm/config'
 import { formatBalanceCompact, formatMaxSellInput } from '../lib/format'
-import { getEonChain, isSupportedChain } from '../lib/chains'
+import { isEonAmmSwapChain } from '../lib/chains'
 import { isNativeToken } from '../lib/tokens'
-import { mainnet } from 'wagmi/chains'
+import { base } from 'wagmi/chains'
 import { useEonSwapStore } from '../store/useEonSwapStore'
-import { priceImpactPercentFromUsd } from '../lib/quoteDisplay'
+import { priceImpactPercentFromUsd, priceImpactPercentFromAmounts } from '../lib/quoteDisplay'
 import { defaultSlippageBpsByContext } from '../lib/slippage'
 import { BestRoute } from './BestRoute'
 import { SlippageSettings } from './SlippageSettings'
@@ -21,24 +22,34 @@ import { TokenSelector } from './TokenSelector'
 
 const SWAP_GAS_LIMIT_ESTIMATE = 300_000n
 const DEFAULT_RESERVE_WEI = 1_500_000_000_000_000n // 0.0015
+const DEFAULT_GAS_BUFFER_BPS = 11_000n // 110%
 
-function nativeReserveFloorWei(chainId?: number): bigint {
-  switch (chainId) {
-    case 56: // BSC
-    case 137: // Polygon
-      return 300_000_000_000_000n // 0.0003
-    case 8453: // Base
-    case 42161: // Arbitrum
-    case 10: // Optimism
-      return 500_000_000_000_000n // 0.0005
-    case 1: // Ethereum
-    default:
-      return DEFAULT_RESERVE_WEI
+function envBigInt(name: string): bigint | null {
+  const raw = String((import.meta.env as Record<string, unknown>)[name] ?? '').trim()
+  if (!raw) return null
+  try {
+    const n = BigInt(raw)
+    return n >= 0n ? n : null
+  } catch {
+    return null
   }
 }
 
+function nativeReserveFloorWei(chainId?: number): bigint {
+  const byChain =
+    chainId != null
+      ? envBigInt(`VITE_SWAP_NATIVE_RESERVE_WEI_${chainId}`)
+      : null
+  if (byChain != null && byChain > 0n) return byChain
+  const common = envBigInt('VITE_SWAP_NATIVE_RESERVE_WEI')
+  if (common != null && common > 0n) return common
+
+  if (chainId === 8453) return 150_000_000_000_000n // Base
+  return DEFAULT_RESERVE_WEI
+}
+
 export function SwapWidget() {
-  useKyberQuote()
+  useSwapQuote()
   const { submitSwap, isWorking } = useSwapSubmit()
   const { address, isConnected, chainId: accountChainId } = useAccount()
   const walletDefaultChain = useChainId()
@@ -50,7 +61,10 @@ export function SwapWidget() {
   const quoteError = useEonSwapStore((s) => s.quoteError)
   const quoteAmountInUsd = useEonSwapStore((s) => s.quoteAmountInUsd)
   const quoteAmountOutUsd = useEonSwapStore((s) => s.quoteAmountOutUsd)
+  const quoteAmountOutWei = useEonSwapStore((s) => s.quoteAmountOutWei)
+  const quotePriceImpact = useEonSwapStore((s) => s.quotePriceImpact)
   const quoteLoading = useEonSwapStore((s) => s.quoteLoading)
+  const priceImpactWarnPct = useEonSwapStore((s) => s.priceImpactWarnPct)
   const setSellAmountInput = useEonSwapStore((s) => s.setSellAmountInput)
   const setSellToken = useEonSwapStore((s) => s.setSellToken)
   const setBuyToken = useEonSwapStore((s) => s.setBuyToken)
@@ -65,29 +79,36 @@ export function SwapWidget() {
   const wrongNetwork =
     isConnected &&
     accountChainId != null &&
-    !isSupportedChain(accountChainId)
+    !isEonAmmSwapChain(accountChainId)
 
   const chainIdForTokens =
-    isConnected && accountChainId != null && isSupportedChain(accountChainId)
+    isConnected && accountChainId != null && isEonAmmSwapChain(accountChainId)
       ? accountChainId
-      : isSupportedChain(walletDefaultChain)
+      : isEonAmmSwapChain(walletDefaultChain)
         ? walletDefaultChain
-        : mainnet.id
+        : base.id
 
   const balanceChainId =
-    isConnected && accountChainId != null && isSupportedChain(accountChainId)
+    isConnected && accountChainId != null && isEonAmmSwapChain(accountChainId)
       ? accountChainId
-      : undefined
+      : isConnected && isEonAmmSwapChain(walletDefaultChain)
+        ? walletDefaultChain
+        : undefined
 
   const sellIsNative = isNativeToken(sellToken.address)
-  const activeChain = balanceChainId != null ? getEonChain(balanceChainId) : null
+  const buyIsNative = isNativeToken(buyToken.address)
+  const wrappedNative =
+    balanceChainId != null ? chainWrappedNative(balanceChainId).toLowerCase() : null
+  const sellIsWeth = wrappedNative != null && sellToken.address.toLowerCase() === wrappedNative
+  const buyIsWeth = wrappedNative != null && buyToken.address.toLowerCase() === wrappedNative
+  const actionLabel = sellIsNative && buyIsWeth ? 'Wrap' : sellIsWeth && buyIsNative ? 'Unwrap' : 'Swap'
   const lastAutoSlippageRef = useRef<number | null>(null)
 
   useEffect(() => {
     const recommended = defaultSlippageBpsByContext({
       chainId: chainIdForTokens,
       sellIsNative,
-      buyIsNative: isNativeToken(buyToken.address),
+      buyIsNative,
     })
     const prevAuto = lastAutoSlippageRef.current
     const shouldAutoApply =
@@ -101,7 +122,7 @@ export function SwapWidget() {
   }, [
     chainIdForTokens,
     sellIsNative,
-    buyToken.address,
+    buyIsNative,
     slippageToleranceBps,
     setSlippageToleranceBps,
   ])
@@ -139,7 +160,8 @@ export function SwapWidget() {
     const floor = nativeReserveFloorWei(balanceChainId)
     const feePerGas = feeData?.maxFeePerGas ?? feeData?.gasPrice ?? 0n
     if (feePerGas <= 0n) return floor
-    const estimated = (feePerGas * SWAP_GAS_LIMIT_ESTIMATE * 12n) / 10n // +20% buffer
+    const bufferBps = envBigInt('VITE_SWAP_GAS_BUFFER_BPS') ?? DEFAULT_GAS_BUFFER_BPS
+    const estimated = (feePerGas * SWAP_GAS_LIMIT_ESTIMATE * bufferBps) / 10_000n
     return estimated > floor ? estimated : floor
   }, [balanceChainId, feeData?.gasPrice, feeData?.maxFeePerGas])
 
@@ -165,8 +187,8 @@ export function SwapWidget() {
     maxInputWei <= 0n
 
   const maxBtnClass = maxDisabled
-    ? 'cursor-not-allowed border-white/[0.06] text-slate-600'
-    : 'border-cyan-500/30 text-cyan-300 hover:border-cyan-400/50 hover:bg-cyan-500/10'
+    ? 'cursor-not-allowed border-white/[0.06] text-neutral-600'
+    : 'border-uni-pink/30 text-uni-pink hover:border-uni-pink/50 hover:bg-uni-pink/10'
 
   const balanceDisplay = (() => {
     if (!isConnected) return '—'
@@ -207,12 +229,7 @@ export function SwapWidget() {
       gasBalanceWei < sellAmountWei + dynamicNativeReserveWei
     : gasBalanceWei < dynamicNativeReserveWei
 
-  const gasSymbol =
-    nativeGasBalance?.symbol ??
-    activeChain?.nativeCurrency.symbol ??
-    'native token'
-
-  const highPriceImpactThresholdPct = Number(import.meta.env.VITE_PRICE_IMPACT_WARN_PCT ?? 5)
+  const highPriceImpactThresholdPct = priceImpactWarnPct
   const maxSwapUsd = Number(import.meta.env.VITE_SWAP_MAX_USD ?? 100000)
   const quoteInUsdNum = Number.parseFloat(quoteAmountInUsd || '')
   const abnormalTxValue =
@@ -221,7 +238,39 @@ export function SwapWidget() {
     Number.isFinite(maxSwapUsd) &&
     maxSwapUsd > 0 &&
     quoteInUsdNum > maxSwapUsd
-  const impactPct = priceImpactPercentFromUsd(quoteAmountInUsd, quoteAmountOutUsd)
+  
+  // Calculate price impact - prefer router-calculated (from reserves), then USD, then token amounts
+  const impactPct = useMemo(() => {
+    // Method 1: Router-calculated from reserves (most accurate for AMM)
+    // This is computed by getAmountsOut which has access to actual pool reserves
+    if (quotePriceImpact) {
+      const parsed = Number.parseFloat(quotePriceImpact)
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed
+    }
+    
+    // Method 2: USD-based calculation (accurate when prices available)
+    if (quoteAmountInUsd && quoteAmountOutUsd) {
+      return priceImpactPercentFromUsd(quoteAmountInUsd, quoteAmountOutUsd)
+    }
+    
+    // Method 3: Token amount-based calculation (fallback - less accurate)
+    // Use sellAmountWei (bigint) converted to string, not sellAmountInput (formatted)
+    if (sellAmountWei && quoteAmountOutWei) {
+      return priceImpactPercentFromAmounts(
+        sellAmountWei.toString(),
+        quoteAmountOutWei,
+        sellToken.decimals,
+        buyToken.decimals,
+      )
+    }
+    
+    return null
+  }, [quotePriceImpact, quoteAmountInUsd, quoteAmountOutUsd, sellAmountWei, quoteAmountOutWei, sellToken.decimals, buyToken.decimals])
+      
+  const extremePriceImpact =
+    impactPct != null &&
+    Number.isFinite(impactPct) &&
+    impactPct >= 50
   const highPriceImpact =
     impactPct != null &&
     Number.isFinite(impactPct) &&
@@ -230,32 +279,35 @@ export function SwapWidget() {
   const preflightError = !isConnected
     ? 'Connect wallet'
     : wrongNetwork
-      ? 'Wrong network'
+      ? 'Switch network'
       : missingAmount
         ? 'Enter amount'
         : insufficientTokenBalance
-          ? `Insufficient ${sellToken.symbol} balance`
+          ? `Insufficient ${sellToken.symbol}`
           : insufficientGasFee
-            ? `Insufficient ${gasSymbol} for gas`
+            ? 'Insufficient gas'
             : abnormalTxValue
-              ? `Tx exceeds safety limit ($${maxSwapUsd.toLocaleString('en-US')})`
-              : highPriceImpact
-                ? `High price impact (${impactPct?.toFixed(2)}%)`
-                : quoteError?.toLowerCase().includes('degraded')
-                  ? 'Provider degraded, retry in a moment'
-            : null
+              ? 'Amount too large'
+              : extremePriceImpact
+                ? 'Price impact too high'
+                : highPriceImpact
+                  ? `Price impact: ${impactPct?.toFixed(2)}%`
+                  : quoteError?.toLowerCase().includes('degraded')
+                    ? 'Provider degraded'
+                    : null
 
   const canSwapFinal = canSwap && !preflightError && !nativeGasLoading
 
-  /** Fixed size so pay / receive selectors match regardless of symbol length */
+  /** Uniswap-style token selector button */
   const tokenSelectorBtnClass =
-    'group flex h-10 w-[7.25rem] shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.05] px-1.5 text-[13px] font-semibold text-white transition hover:border-cyan-500/30 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40'
+    'group flex h-9 shrink-0 items-center gap-1.5 rounded-2xl bg-uni-surface-3 px-2 pr-2.5 text-base font-semibold text-white transition hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-40'
 
+  /** Uniswap-style input shell */
   const shell =
-    'rounded-xl border border-white/[0.08] bg-[#070818]/95 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]'
+    'rounded-2xl bg-uni-surface p-4'
 
   const receiveMetaRight = quoteLoading ? (
-    <span className="flex items-center gap-1 text-[11px] font-medium text-cyan-400/90">
+    <span className="flex items-center gap-1 text-[11px] font-medium text-uni-pink/90">
       <Loader2 className="h-3 w-3 animate-spin" />
       Quoting
     </span>
@@ -296,57 +348,46 @@ export function SwapWidget() {
 
       <motion.div
         layoutId="eonswap-card"
-        className="relative w-full max-w-[min(100%,392px)] overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#12142e] to-[#0a0b1c] shadow-[0_20px_64px_-20px_rgba(0,0,0,0.85),0_0_0_1px_rgba(0,210,255,0.06)]"
+        className="relative w-full max-w-[min(100%,420px)] overflow-hidden rounded-3xl border border-uni-border bg-uni-bg shadow-uni-card"
       >
+        {/* Uniswap-style gradient glow */}
         <div
-          className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-cyan-500/[0.07] blur-3xl"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-eon-blue/[0.06] blur-3xl"
+          className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-uni-pink/[0.08] blur-[100px]"
           aria-hidden
         />
 
-        <header className="relative flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-2.5">
-          <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold tracking-tight text-white">
-              Swap
-            </h2>
-            <p className="truncate text-[11px] leading-tight text-slate-500">
-              Aggregated liquidity
-            </p>
-          </div>
+        <header className="relative flex items-center justify-between gap-3 px-4 py-4">
+          <h2 className="text-lg font-medium text-white">
+            Swap
+          </h2>
           <SlippageSettings disabled={wrongNetwork} />
         </header>
 
-        <div className="flex flex-col gap-2.5 px-4 pb-3.5 pt-2.5">
+        <div className="flex flex-col gap-1 px-2 pb-2">
           <div className={shell}>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+                <span className="text-sm text-neutral-400">
                   You pay
                 </span>
-                <div className="flex min-w-0 flex-1 items-center justify-end gap-x-1.5 overflow-hidden text-right">
-                  <span className="shrink-0 text-[11px] text-slate-500">
-                    Balance
-                  </span>
+                <div className="flex min-w-0 flex-1 items-center justify-end gap-x-2 overflow-hidden text-right">
                   <span
-                    className={`min-w-0 flex-1 truncate text-[11px] font-semibold tabular-nums text-slate-300 ${balanceLoading ? 'animate-pulse text-slate-500' : ''}`}
+                    className={`min-w-0 truncate text-sm text-neutral-400 ${balanceLoading ? 'animate-pulse' : ''}`}
                     title={balanceDisplay}
                   >
-                    {balanceDisplay}
+                    Balance: {balanceDisplay}
                   </span>
                   <button
                     type="button"
                     disabled={maxDisabled}
                     onClick={applyMaxSell}
-                    className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide transition ${maxBtnClass}`}
+                    className={`shrink-0 rounded-lg border px-2 py-0.5 text-xs font-semibold uppercase transition ${maxBtnClass}`}
                   >
                     Max
                   </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-3">
                 <input
                   type="text"
                   inputMode="decimal"
@@ -355,7 +396,7 @@ export function SwapWidget() {
                   value={sellAmountInput}
                   onChange={(e) => setSellAmountInput(e.target.value)}
                   disabled={wrongNetwork}
-                  className="min-h-[2.25rem] min-w-0 flex-1 truncate bg-transparent text-[1.25rem] font-semibold leading-none tracking-tight text-white placeholder:text-slate-600 outline-none disabled:opacity-40"
+                  className="min-h-[2.5rem] min-w-0 flex-1 truncate bg-transparent text-[2rem] font-medium leading-none text-white placeholder:text-neutral-600 outline-none disabled:opacity-40"
                 />
                 <button
                   type="button"
@@ -368,41 +409,43 @@ export function SwapWidget() {
                     token={sellToken}
                     size="sm"
                   />
-                  <span className="min-w-0 flex-1 truncate text-left">
+                  <span className="min-w-0 truncate">
                     {sellToken.symbol}
                   </span>
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500 group-hover:text-slate-400" />
+                  <ChevronDown className="h-4 w-4 shrink-0 text-neutral-400" />
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="flex justify-center py-0.5">
-            <button
-              type="button"
-              disabled={wrongNetwork}
-              onClick={flipTokens}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.12] bg-[#12142a] text-cyan-400 shadow-md ring-2 ring-[#0a0b1c] transition hover:border-cyan-500/35 hover:bg-[#1a1c36] hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Flip tokens"
-            >
-              <ArrowDownUp className="h-4 w-4" />
-            </button>
+          <div className="relative flex justify-center py-0">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+              <button
+                type="button"
+                disabled={wrongNetwork}
+                onClick={flipTokens}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border-4 border-uni-bg bg-uni-surface-2 text-neutral-400 transition hover:bg-uni-surface-3 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Flip tokens"
+              >
+                <ArrowDownUp className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           <div className={shell}>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               <div className="flex min-h-[22px] items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+                <span className="text-sm text-neutral-400">
                   You receive
                 </span>
-                <div className="flex items-center justify-end text-[11px]">
+                <div className="flex items-center justify-end text-sm">
                   {receiveMetaRight}
                 </div>
               </div>
-              <div className="flex items-center gap-2.5">
-                <div className="flex min-h-[2.25rem] min-w-0 flex-1 items-center truncate text-[1.25rem] font-semibold leading-none tracking-tight text-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="flex min-h-[2.5rem] min-w-0 flex-1 items-center truncate text-[2rem] font-medium leading-none text-white">
                   {receiveFormatted || (
-                    <span className="text-slate-600">0</span>
+                    <span className="text-neutral-600">0</span>
                   )}
                 </div>
                 <button
@@ -416,51 +459,54 @@ export function SwapWidget() {
                     token={buyToken}
                     size="sm"
                   />
-                  <span className="min-w-0 flex-1 truncate text-left">
+                  <span className="min-w-0 truncate">
                     {buyToken.symbol}
                   </span>
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500 group-hover:text-slate-400" />
+                  <ChevronDown className="h-4 w-4 shrink-0 text-neutral-400" />
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Reserved height + scroll so filling the form does not grow the card */}
-          <div className="flex min-h-[20rem] flex-col gap-1.5 pt-0.5">
+          {/* Quote details section */}
+          <div className="flex min-h-[18rem] flex-col gap-2 px-2 pt-1">
             {quoteError?.toLowerCase().includes('degraded') ? (
-              <p className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-1.5 text-[11px] text-amber-200">
+              <p className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
                 Routing provider is degraded. Retry policy applied automatically.
               </p>
             ) : null}
-            <div className="min-h-[5.5rem] shrink-0">
+            <div className="min-h-[5rem] shrink-0">
               <BestRoute />
             </div>
-            <div className="max-h-[15rem] min-h-[14rem] flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+            <div className="max-h-[12rem] min-h-[12rem] flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
               <SwapQuoteDetails wrongNetwork={wrongNetwork} />
             </div>
           </div>
 
-          <button
-            type="button"
-            disabled={!canSwapFinal || isWorking}
-            onClick={openConfirm}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 via-cyan-500 to-eon-blue py-2.5 text-sm font-semibold text-[#05060f] shadow-[0_0_24px_-4px_rgba(34,211,238,0.3)] transition enabled:hover:brightness-[1.05] enabled:active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
-          >
-            {isWorking ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Working…
-              </>
-            ) : !isConnected ? (
-              'Connect wallet'
-            ) : wrongNetwork ? (
-              'Wrong network'
-            ) : preflightError ? (
-              preflightError
-            ) : (
-              'Swap'
-            )}
-          </button>
+          {/* Uniswap-style pink CTA button */}
+          <div className="px-2 pb-6 pt-5">
+            <button
+              type="button"
+              disabled={!canSwapFinal || isWorking}
+              onClick={openConfirm}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-uni-pink py-4 text-lg font-semibold text-white shadow-glow transition enabled:hover:bg-uni-pink-light enabled:active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-uni-surface-3 disabled:text-neutral-500 disabled:shadow-none"
+            >
+              {isWorking ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Working…
+                </>
+              ) : !isConnected ? (
+                'Connect Wallet'
+              ) : wrongNetwork ? (
+                `Switch to ${base.name}`
+              ) : preflightError ? (
+                preflightError
+              ) : (
+                actionLabel
+              )}
+            </button>
+          </div>
         </div>
       </motion.div>
     </>

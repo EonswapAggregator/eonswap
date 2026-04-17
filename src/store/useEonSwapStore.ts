@@ -1,11 +1,18 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { sendActivityLogToRelay } from '../lib/activityRelay'
-import { DEFAULT_SLIPPAGE_BPS, clampSlippageBps } from '../lib/slippage'
+import {
+  DEFAULT_SLIPPAGE_BPS,
+  DEFAULT_DEADLINE_MINUTES,
+  DEFAULT_PRICE_IMPACT_WARN_PCT,
+  clampSlippageBps,
+  clampDeadlineMinutes,
+  clampPriceImpactWarnPct,
+} from '../lib/slippage'
 import { MAINNET_TOKENS, type Token } from '../lib/tokens'
 
 export type TxStatus = 'pending' | 'success' | 'failed'
-export type ActivityKind = 'swap' | 'bridge'
+export type ActivityKind = 'swap'
 
 export type ActivityItem = {
   id: string
@@ -27,12 +34,15 @@ type QuoteSlice = {
   quoteError: string | null
   quoteLoading: boolean
   lastZid: string | null
-  /** Kyber route USD notionals + raw out (wei) for min. received */
+  quoteRouterAddress: string
+  /** Route USD notionals + raw out (wei) for min. received */
   quoteAmountInUsd: string
   quoteAmountOutUsd: string
   quoteGasUsd: string
   quoteL1FeeUsd: string
   quoteAmountOutWei: string
+  /** Price impact from router (calculated from reserves) */
+  quotePriceImpact: string
 }
 
 type EonSwapState = {
@@ -40,8 +50,12 @@ type EonSwapState = {
   buyToken: Token
   chartToken: Token
   sellAmountInput: string
-  /** Max price movement (basis points). Kyber: 100 = 1%. */
+  /** Max price movement (basis points): 100 = 1%. */
   slippageToleranceBps: number
+  /** Transaction deadline in minutes. */
+  deadlineMinutes: number
+  /** Price impact warning threshold (percentage). */
+  priceImpactWarnPct: number
 } & QuoteSlice & {
     setSellToken: (t: Token) => void
     setBuyToken: (t: Token) => void
@@ -53,11 +67,13 @@ type EonSwapState = {
       routeSources: string[]
       error: string | null
       zid: string | null
+      routerAddress?: string
       amountInUsd?: string
       amountOutUsd?: string
       gasUsd?: string
       l1FeeUsd?: string
       amountOutWei?: string
+      priceImpact?: string
     }) => void
     flipTokens: () => void
     history: ActivityItem[]
@@ -71,7 +87,10 @@ type EonSwapState = {
         >
       >,
     ) => void
+    clearHistory: () => void
     setSlippageToleranceBps: (bps: number) => void
+    setDeadlineMinutes: (minutes: number) => void
+    setPriceImpactWarnPct: (pct: number) => void
   }
 
 const defaultSell = MAINNET_TOKENS[0]!
@@ -85,16 +104,20 @@ export const useEonSwapStore = create<EonSwapState>()(
       chartToken: defaultSell,
       sellAmountInput: '',
       slippageToleranceBps: DEFAULT_SLIPPAGE_BPS,
+      deadlineMinutes: DEFAULT_DEADLINE_MINUTES,
+      priceImpactWarnPct: DEFAULT_PRICE_IMPACT_WARN_PCT,
       receiveFormatted: '',
       routeSources: [],
       quoteError: null,
       quoteLoading: false,
       lastZid: null,
+      quoteRouterAddress: '',
       quoteAmountInUsd: '',
       quoteAmountOutUsd: '',
       quoteGasUsd: '',
       quoteL1FeeUsd: '',
       quoteAmountOutWei: '',
+      quotePriceImpact: '',
       history: [],
 
       setSellToken: (t) => set({ sellToken: t, chartToken: t }),
@@ -108,22 +131,26 @@ export const useEonSwapStore = create<EonSwapState>()(
         routeSources,
         error,
         zid,
+        routerAddress,
         amountInUsd,
         amountOutUsd,
         gasUsd,
         l1FeeUsd,
         amountOutWei,
+        priceImpact,
       }) =>
         set({
           receiveFormatted,
           routeSources,
           quoteError: error,
           lastZid: zid,
+          quoteRouterAddress: routerAddress ?? '',
           quoteAmountInUsd: amountInUsd ?? '',
           quoteAmountOutUsd: amountOutUsd ?? '',
           quoteGasUsd: gasUsd ?? '',
           quoteL1FeeUsd: l1FeeUsd ?? '',
           quoteAmountOutWei: amountOutWei ?? '',
+          quotePriceImpact: priceImpact ?? '',
         }),
 
       flipTokens: () => {
@@ -136,11 +163,13 @@ export const useEonSwapStore = create<EonSwapState>()(
           routeSources: [],
           quoteError: null,
           lastZid: null,
+          quoteRouterAddress: '',
           quoteAmountInUsd: '',
           quoteAmountOutUsd: '',
           quoteGasUsd: '',
           quoteL1FeeUsd: '',
           quoteAmountOutWei: '',
+          quotePriceImpact: '',
         })
       },
 
@@ -173,8 +202,14 @@ export const useEonSwapStore = create<EonSwapState>()(
         if (next) sendActivityLogToRelay(next)
       },
 
+      clearHistory: () => set({ history: [] }),
+
       setSlippageToleranceBps: (bps) =>
         set({ slippageToleranceBps: clampSlippageBps(bps) }),
+      setDeadlineMinutes: (minutes) =>
+        set({ deadlineMinutes: clampDeadlineMinutes(minutes) }),
+      setPriceImpactWarnPct: (pct) =>
+        set({ priceImpactWarnPct: clampPriceImpactWarnPct(pct) }),
     }),
     {
       name: 'eonswap-session',
@@ -185,6 +220,8 @@ export const useEonSwapStore = create<EonSwapState>()(
         buyToken: s.buyToken,
         chartToken: s.chartToken,
         slippageToleranceBps: s.slippageToleranceBps,
+        deadlineMinutes: s.deadlineMinutes,
+        priceImpactWarnPct: s.priceImpactWarnPct,
       }),
     },
   ),

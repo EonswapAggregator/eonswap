@@ -12,11 +12,20 @@ const HomePage = lazy(() =>
 const SwapPage = lazy(() =>
   import('./pages/SwapPage').then((m) => ({ default: m.SwapPage })),
 )
-const BridgePage = lazy(() =>
-  import('./pages/BridgePage').then((m) => ({ default: m.BridgePage })),
+const PoolPage = lazy(() =>
+  import('./pages/PoolPage').then((m) => ({ default: m.PoolPage })),
 )
-const EarnPage = lazy(() =>
-  import('./pages/EarnPage').then((m) => ({ default: m.EarnPage })),
+const FarmPage = lazy(() =>
+  import('./pages/FarmPage').then((m) => ({ default: m.FarmPage })),
+)
+const StakePage = lazy(() =>
+  import('./pages/StakePage').then((m) => ({ default: m.StakePage })),
+)
+const ReferralPage = lazy(() =>
+  import('./pages/ReferralPage').then((m) => ({ default: m.ReferralPage })),
+)
+const AirdropPage = lazy(() =>
+  import('./pages/AirdropPage').then((m) => ({ default: m.AirdropPage })),
 )
 const ActivityPage = lazy(() =>
   import('./pages/ActivityPage').then((m) => ({ default: m.ActivityPage })),
@@ -104,9 +113,13 @@ export default function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/swap" element={<SwapPage />} />
-            <Route path="/bridge" element={<BridgePage />} />
-            <Route path="/pool" element={<EarnPage />} />
-            <Route path="/earn" element={<Navigate to="/pool" replace />} />
+            <Route path="/liquidity" element={<PoolPage />} />
+            <Route path="/pool" element={<Navigate to="/liquidity" replace />} />
+            <Route path="/earn" element={<Navigate to="/liquidity" replace />} />
+            <Route path="/farm" element={<FarmPage />} />
+            <Route path="/stake" element={<StakePage />} />
+            <Route path="/referral" element={<ReferralPage />} />
+            <Route path="/airdrop" element={<AirdropPage />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/leaderboard" element={<LeaderboardPage />} />
             <Route path="/docs" element={<DocsPage />} />

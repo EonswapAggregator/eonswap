@@ -1,34 +1,83 @@
-# Fees & Execution
+# Fees
 
-This page explains what affects the final amount you receive when using EonSwap.
+This page explains all fees involved when using EonSwap.
 
-## Fee Components
+## Fee Summary
 
-- **Network fee (gas):** paid to the blockchain network.
-- **DEX/bridge fee:** applied by routing protocols or bridge providers.
-- **Price impact:** large orders can move market price during execution.
-- **Slippage tolerance:** controls how much price movement is allowed before a trade reverts.
+| Action | Fee | Recipient |
+|--------|-----|-----------|
+| Swap | 0.3% | Liquidity Providers |
+| Add Liquidity | Gas only | Network |
+| Remove Liquidity | Gas only | Network |
+| Stake LP | Gas only | Network |
+| Unstake LP | Gas only | Network |
+| Claim Rewards | Gas only | Network |
+| Airdrop Claim | Gas only | Network |
 
-## How Execution Works
+## Swap Fee (0.3%)
 
-1. EonSwap requests live routes from integrated providers.
-2. You review estimated output, fees, and route details.
-3. You sign and submit the transaction from your wallet.
-4. Final execution depends on real-time network and liquidity conditions.
+Every swap incurs a 0.3% fee that goes entirely to liquidity providers.
 
-## Why Quotes Can Change
+**Example:**
+- You swap 1 ETH for ESTF
+- 0.003 ETH (0.3%) goes to the ETH/ESTF liquidity pool
+- You receive ESTF based on the remaining 0.997 ETH
 
-- Liquidity changes between quote time and confirmation.
-- Competing transactions affect pool state.
-- Gas conditions can shift route preference.
+## Gas Fees
 
-## Best Practices
+All transactions require ETH on Base for gas. Typical costs:
 
-- Trade in smaller chunks for volatile or low-liquidity pairs.
-- Set slippage carefully: not too tight, not too loose.
-- Avoid trading during extreme congestion when possible.
-- Re-check the quote if you wait too long before signing.
+| Transaction | Estimated Gas |
+|-------------|---------------|
+| Token Approval | ~$0.001 |
+| Swap | ~$0.005 |
+| Add Liquidity | ~$0.008 |
+| Remove Liquidity | ~$0.006 |
+| Stake LP | ~$0.004 |
+| Claim Rewards | ~$0.003 |
 
-## Need Help?
+*Gas costs vary with network congestion.*
 
-If your output differs from expectation, review [Risk Disclosure](/risk-disclosure) and [Troubleshooting](/guides/troubleshooting).
+## Price Impact
+
+Large trades can move the market price. This is called **price impact**.
+
+| Price Impact | Recommendation |
+|--------------|----------------|
+| < 1% | Safe to proceed |
+| 1-3% | Review carefully |
+| 3-5% | Consider splitting trade |
+| > 5% | High impact warning |
+
+**Tip:** Split large trades into smaller amounts to reduce price impact.
+
+## Slippage
+
+Slippage is the difference between expected and actual execution price.
+
+**Default:** 0.5%
+
+You can adjust slippage in Settings:
+- **Lower (0.1%)**: May cause transaction to fail
+- **Default (0.5%)**: Balanced for most trades
+- **Higher (1%+)**: For volatile tokens
+
+## No Hidden Fees
+
+EonSwap does not charge:
+- Protocol fees (currently)
+- Interface fees
+- Withdrawal fees
+- Deposit fees
+
+## LP Earnings
+
+When you provide liquidity, you earn:
+- 0.3% of all trades in your pool (proportional to your share)
+- ESTF + ESR rewards when staking LP tokens in farms
+
+## Related Reading
+
+- [How It Works](/how-it-works)
+- [Risk Disclosure](/risk-disclosure)
+- [Troubleshooting](/guides/troubleshooting)

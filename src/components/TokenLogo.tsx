@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
+import { tokenLogoCandidateUrls } from '../lib/tokenLogos'
 import type { Token } from '../lib/tokens'
 
 const sizeStyles = {
@@ -17,12 +17,16 @@ type Props = {
 
 export function TokenLogo({ chainId, token, size = 'md', className = '' }: Props) {
   const [failed, setFailed] = useState(false)
-  const url = trustWalletTokenLogoUrl(chainId, token.address)
+  const [candidateIdx, setCandidateIdx] = useState(0)
+  const candidates = tokenLogoCandidateUrls(chainId, token)
   const dim = sizeStyles[size]
 
   useEffect(() => {
     setFailed(false)
+    setCandidateIdx(0)
   }, [chainId, token.address])
+
+  const url = candidates[candidateIdx] ?? null
 
   if (!url || failed) {
     return (
@@ -43,7 +47,13 @@ export function TokenLogo({ chainId, token, size = 'md', className = '' }: Props
       decoding="async"
       referrerPolicy="no-referrer"
       className={`shrink-0 rounded-full object-cover ring-1 ring-white/10 ${dim} ${className}`}
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (candidateIdx + 1 < candidates.length) {
+          setCandidateIdx((i) => i + 1)
+        } else {
+          setFailed(true)
+        }
+      }}
     />
   )
 }

@@ -2,7 +2,7 @@
 
 This reference explains transaction states shown in EonSwap tracking and what users should do next.
 
-## Bridge and swap tracking states
+## Swap and swap tracking states
 
 ### `PENDING`
 
@@ -39,7 +39,7 @@ Hash cannot be indexed yet, chain/mode may be incorrect, or provider indexing is
 
 **What to do:**
 
-- Re-check selected chain and tracking mode (swap vs bridge).
+- Re-check selected chain and tracking mode (swap vs swap).
 - Retry after short delay.
 - Use explorer directly to validate hash existence.
 

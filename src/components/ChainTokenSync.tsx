@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useChainId } from 'wagmi'
-import { isSupportedChain } from '../lib/chains'
+import { isEonAmmSwapChain } from '../lib/chains'
 import { tokensForChain } from '../lib/tokens'
 import { useEonSwapStore } from '../store/useEonSwapStore'
 
@@ -14,7 +14,7 @@ export function ChainTokenSync() {
   const prev = useRef<number | null>(null)
 
   useEffect(() => {
-    if (!isSupportedChain(chainId)) {
+    if (!isEonAmmSwapChain(chainId)) {
       prev.current = -1
       return
     }

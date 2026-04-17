@@ -3,7 +3,6 @@ import { expect, test } from '@playwright/test'
 test('core routes render without crash', async ({ page }) => {
   const routes = [
     '/swap',
-    '/bridge',
     '/status',
     '/activity',
     '/docs',

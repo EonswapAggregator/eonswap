@@ -6,7 +6,7 @@ This page explains how EonSwap handles information when you use the website and 
 
 ## Information We Process
 
-- Wallet addresses and public on-chain transaction data needed to provide swap and bridge flows.
+- Wallet addresses and public on-chain transaction data needed to provide swap flows.
 - Technical data such as browser type, device type, and basic usage logs for reliability and security.
 - Optional support information you choose to provide.
 

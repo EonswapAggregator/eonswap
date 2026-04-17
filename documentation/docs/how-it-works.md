@@ -1,34 +1,60 @@
 # How It Works
 
-EonSwap combines swap and bridge experiences in one interface while keeping user custody in user wallets.
+EonSwap is an automated market maker (AMM) DEX on Base, similar to Uniswap V2. Here's how each feature works.
 
-## Wallet-first execution
+## Non-Custodial Design
 
-- You connect your wallet.
-- You review quote and fee details.
-- You sign transactions in wallet.
-- EonSwap never asks for seed phrase or private key.
+- You connect your wallet (MetaMask, Coinbase Wallet, etc.)
+- You always control your funds
+- EonSwap never asks for seed phrases or private keys
+- All transactions require your wallet signature
 
-## Swap journey
+## Swap
 
-1. Route quote is requested from swap provider.
-2. Best route and expected output are displayed.
-3. If token approval is needed, wallet prompts approval.
-4. Swap transaction is signed and sent.
-5. Final status appears in Activity and Status pages.
+1. Select tokens to swap (e.g., ETH → ESTF)
+2. Enter the amount you want to trade
+3. Review quote, price impact, and fees
+4. Approve token spending (first time only)
+5. Confirm swap in your wallet
+6. Transaction executes on-chain
 
-## Bridge journey
+**How pricing works:** EonSwap uses the constant product formula (x × y = k) to determine prices. Larger trades have more price impact.
 
-1. Bridge quote is requested from bridge provider.
-2. ETA and fee estimate are shown.
-3. Source-chain transaction is signed in wallet.
-4. Cross-chain progress is tracked over time.
-5. Final status updates when transfer completes or fails.
+## Liquidity
 
-## Status and diagnostics
+1. Choose a token pair (e.g., ESTF/WETH)
+2. Provide equal value of both tokens
+3. Receive LP tokens representing your pool share
+4. Earn 0.3% of all trades in that pair
+5. Withdraw anytime by burning LP tokens
 
-Use the Status page to:
+**Impermanent loss:** If token prices diverge significantly, you may have less value than holding. Learn more in our [Risk Disclosure](/risk-disclosure).
 
-- validate transaction hashes,
-- view provider health signals,
-- understand delays during high network load.
+## Farm
+
+1. Stake LP tokens in the MasterChef contract
+2. Earn ESTF rewards every block (~2 seconds on Base)
+3. Earn bonus ESR rewards on eligible pools
+4. Claim or compound rewards anytime
+5. Unstake LP tokens when ready
+
+**Emission:** ~3.17 ESTF per second, distributed across all pools proportionally.
+
+## Airdrop
+
+1. Check eligibility using your wallet address
+2. If eligible, see your claimable amount
+3. Click claim and confirm transaction
+4. ESTF tokens are sent to your wallet
+
+## Smart Contracts
+
+| Contract | Purpose |
+|----------|---------|
+| EonFactory | Creates trading pairs |
+| EonRouter | Handles swaps and liquidity |
+| EonPair | Individual trading pair pools |
+| MasterChef | Farm reward distribution |
+| EonToken (ESTF) | Governance token |
+
+All contracts are deployed on **Base Mainnet** and verified on BaseScan.

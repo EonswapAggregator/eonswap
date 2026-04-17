@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, stat, rename } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { dirname, join } from 'node:path'
 import { URL, fileURLToPath } from 'node:url'
@@ -8,6 +8,8 @@ const ACTIVITY_LOG_PATH =
   process.env.RELAY_ACTIVITY_LOG_PATH?.trim() || join(__dirname, 'data', 'activities.jsonl')
 const TX_EVENT_LOG_PATH =
   process.env.RELAY_TX_EVENT_LOG_PATH?.trim() || join(__dirname, 'data', 'tx-events.jsonl')
+const REFERRAL_LOG_PATH =
+  process.env.RELAY_REFERRAL_LOG_PATH?.trim() || join(__dirname, 'data', 'referrals.jsonl')
 const RELAY_ADMIN_SECRET = process.env.RELAY_ADMIN_SECRET?.trim() || ''
 
 const PORT = Number(process.env.PORT || process.env.RELAY_PORT || 8787)
@@ -24,7 +26,8 @@ const TELEGRAM_BANNER_LOCAL_PATH =
   process.env.RELAY_TELEGRAM_BANNER_LOCAL_PATH?.trim() ||
   join(__dirname, '..', 'public', 'hero-banner.png')
 /** Comma-separated list, or `*` when unset / empty (dev). Entries match after trimming trailing `/`. */
-const RELAY_CORS_RAW = process.env.RELAY_ALLOWED_ORIGIN?.trim() || '*'
+// Require explicit allowed origin in production; default to empty (no wildcard)
+const RELAY_CORS_RAW = process.env.RELAY_ALLOWED_ORIGIN?.trim() ?? ''
 const CORS_ALLOW_ALL = RELAY_CORS_RAW === '*'
 function normalizeCorsOrigin(s) {
   return String(s).trim().replace(/\/+$/u, '')
@@ -52,10 +55,21 @@ const LEADERBOARD_RATE_LIMIT_PER_MIN = Number(
 const EVENT_MAX_BODY_BYTES = Number(process.env.RELAY_EVENTS_MAX_BODY_BYTES || 262_144)
 const EXPLORER_ACCESS_TOKEN = process.env.RELAY_EXPLORER_ACCESS_TOKEN?.trim() || ''
 const WARN_LATENCY_MS = {
-  kyber: Number(process.env.RELAY_WARN_KYBER_MS || 2500),
-  lifi: Number(process.env.RELAY_WARN_LIFI_MS || 3500),
+  eonswap: Number(process.env.RELAY_WARN_EONSWAP_MS || 2500),
   coingecko: Number(process.env.RELAY_WARN_COINGECKO_MS || 2500),
   etherscan: Number(process.env.RELAY_WARN_ETHERSCAN_MS || 3000),
+}
+
+// Log rotation / size limits
+const MAX_LOG_BYTES = Number(process.env.RELAY_MAX_LOG_BYTES || 10 * 1024 * 1024) // 10MB
+
+if (!RELAY_ADMIN_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('FATAL: RELAY_ADMIN_SECRET must be set in production. Exiting.')
+    process.exit(1)
+  } else {
+    console.warn('Warning: RELAY_ADMIN_SECRET is not set; running in insecure mode.')
+  }
 }
 
 const windows = {
@@ -64,8 +78,7 @@ const windows = {
 }
 
 const samples = {
-  kyber: [],
-  lifi: [],
+  eonswap: [],
   coingecko: [],
   etherscan: [],
 }
@@ -73,8 +86,7 @@ const samples = {
 const status = {
   checkedAt: null,
   providers: {
-    kyber: { ok: false, detail: 'not checked', latencyMs: null, h1: 100, h24: 100 },
-    lifi: { ok: false, detail: 'not checked', latencyMs: null, h1: 100, h24: 100 },
+    eonswap: { ok: false, detail: 'not checked', latencyMs: null, h1: 100, h24: 100 },
     coingecko: { ok: false, detail: 'not checked', latencyMs: null, h1: 100, h24: 100 },
     etherscan: { ok: false, detail: 'not checked', latencyMs: null, h1: 100, h24: 100 },
   },
@@ -83,6 +95,7 @@ let lastAlertAt = 0
 const eventRateMap = new Map()
 const explorerRateMap = new Map()
 const leaderboardRateMap = new Map()
+const referralRateMap = new Map()
 const recentTxEvents = new Map()
 
 function classifyError(error) {
@@ -154,7 +167,7 @@ function parsePriceSnapshot(summary) {
   if (!arrow) return null
   const [leftRaw, rightRaw] = s.split(arrow)
   const left = leftRaw
-    ?.replace(/^\s*(Swap|Bridge)\s+/iu, '')
+    ?.replace(/^\s*Swap\s+/iu, '')
     .trim()
   const right = rightRaw
     ?.replace(/\((done|failed|rejected)\)\s*$/iu, '')
@@ -247,6 +260,127 @@ function isLeaderboardRateLimited(req) {
   return entry.count > LEADERBOARD_RATE_LIMIT_PER_MIN
 }
 
+const REFERRAL_RATE_LIMIT_PER_MIN = Number(process.env.RELAY_REFERRAL_RATE_LIMIT_PER_MIN || 30)
+
+function isReferralRateLimited(req) {
+  const now = Date.now()
+  const key = getClientIp(req)
+  const entry = referralRateMap.get(key) || { count: 0, resetAt: now + 60_000 }
+  if (now > entry.resetAt) {
+    entry.count = 0
+    entry.resetAt = now + 60_000
+  }
+  entry.count += 1
+  referralRateMap.set(key, entry)
+  return entry.count > REFERRAL_RATE_LIMIT_PER_MIN
+}
+
+// ==================== REFERRAL DATA HANDLING ====================
+
+async function appendReferralRecord(record) {
+  await mkdir(dirname(REFERRAL_LOG_PATH), { recursive: true })
+  const line = JSON.stringify(record) + '\n'
+  try {
+    const st = await stat(REFERRAL_LOG_PATH)
+    if (st.size > MAX_LOG_BYTES) {
+      const bak = `${REFERRAL_LOG_PATH}.${Date.now()}.bak`
+      await rename(REFERRAL_LOG_PATH, bak)
+    }
+  } catch { /* file doesn't exist yet */ }
+  await appendFile(REFERRAL_LOG_PATH, line, 'utf8')
+}
+
+async function readReferralsMerged(maxLines = 50_000) {
+  let raw = ''
+  try {
+    raw = await readFile(REFERRAL_LOG_PATH, 'utf8')
+  } catch {
+    return []
+  }
+  const lines = raw.split('\n').filter((l) => l.trim())
+  const slice = lines.length > maxLines ? lines.slice(-maxLines) : lines
+  const records = []
+  for (const line of slice) {
+    try {
+      const obj = JSON.parse(line)
+      records.push(obj)
+    } catch {
+      // skip corrupt line
+    }
+  }
+  return records
+}
+
+function generateReferralCode(address) {
+  if (!address || address.length < 10) return ''
+  const clean = address.toLowerCase().replace('0x', '')
+  return clean.slice(0, 4) + clean.slice(-4)
+}
+
+function calculateTier(referralCount) {
+  if (referralCount >= 50) return 'platinum'
+  if (referralCount >= 15) return 'gold'
+  if (referralCount >= 5) return 'silver'
+  return 'bronze'
+}
+
+function getTierRewardPct(tier) {
+  const pcts = { bronze: 5, silver: 7.5, gold: 10, platinum: 15 }
+  return pcts[tier] || 5
+}
+
+async function buildReferralStats(address) {
+  const code = generateReferralCode(address)
+  if (!code) {
+    return {
+      totalReferrals: 0,
+      activeReferrals: 0,
+      totalEarnings: 0,
+      pendingRewards: 0,
+      tier: 'bronze',
+      referredAddresses: [],
+    }
+  }
+
+  const records = await readReferralsMerged()
+  
+  // Find all referrals for this code
+  const referrals = records.filter((r) => r.type === 'referral' && r.referrerCode === code)
+  const referredAddresses = []
+  
+  for (const ref of referrals) {
+    // Count swaps for this referred user
+    const swaps = records.filter((r) => 
+      r.type === 'swap' && 
+      r.referredAddress?.toLowerCase() === ref.referredAddress?.toLowerCase()
+    )
+    const volumeUsd = swaps.reduce((sum, s) => sum + (Number(s.volumeUsd) || 0), 0)
+    const tier = calculateTier(referrals.length)
+    const rewardPct = getTierRewardPct(tier) / 100
+    const rewardEarned = volumeUsd * 0.003 * rewardPct // 0.3% fee * reward %
+    
+    referredAddresses.push({
+      address: ref.referredAddress,
+      joinedAt: ref.createdAt,
+      swapCount: swaps.length,
+      volumeUsd,
+      rewardEarned,
+    })
+  }
+
+  const totalEarnings = referredAddresses.reduce((sum, r) => sum + r.rewardEarned, 0)
+  const tier = calculateTier(referrals.length)
+
+  return {
+    totalReferrals: referrals.length,
+    activeReferrals: referredAddresses.filter((r) => r.swapCount > 0).length,
+    totalEarnings,
+    pendingRewards: totalEarnings * 0.1, // 10% pending simulation
+    tier,
+    referredAddresses,
+  }
+}
+
 async function readJsonBody(req, maxBytes = EVENT_MAX_BODY_BYTES) {
   let body = ''
   let size = 0
@@ -270,14 +404,7 @@ async function readJsonBody(req, maxBytes = EVENT_MAX_BODY_BYTES) {
 function validateActivityPayload(payload) {
   const id = String(payload?.id || '')
   if (id.length < 4 || id.length > 128) return { error: 'Invalid id' }
-  const kind =
-    payload?.kind === 'bridge'
-      ? 'bridge'
-      : payload?.kind === 'swap'
-        ? 'swap'
-        : String(payload?.summary ?? '').toLowerCase().startsWith('bridge ')
-          ? 'bridge'
-          : 'swap'
+  const kind = 'swap'
   const status = payload?.status
   if (!['pending', 'success', 'failed'].includes(status)) return { error: 'Invalid status' }
   const createdAt = Number(payload?.createdAt)
@@ -312,7 +439,7 @@ function normalizeActivityFromLine(obj) {
   if (!['pending', 'success', 'failed'].includes(obj.status)) return null
   const createdAt = Number(obj.createdAt)
   if (!Number.isFinite(createdAt)) return null
-  const kind = obj.kind === 'bridge' ? 'bridge' : obj.kind === 'swap' ? 'swap' : 'swap'
+  const kind = 'swap'
   const row = {
     id: obj.id,
     kind,
@@ -359,12 +486,31 @@ async function fetchEtherscanTxListForRelay({ chainId, address, offset = 35 }) {
 }
 
 async function appendActivityRecord(record) {
-  await mkdir(dirname(ACTIVITY_LOG_PATH), { recursive: true })
+  const dir = dirname(ACTIVITY_LOG_PATH)
+  await mkdir(dir, { recursive: true, mode: 0o700 })
+  // rotate if the log file is too large
+  try {
+    const s = await stat(ACTIVITY_LOG_PATH)
+    if (s.size >= MAX_LOG_BYTES) {
+      await rename(ACTIVITY_LOG_PATH, `${ACTIVITY_LOG_PATH}.${Date.now()}.rotated`)
+    }
+  } catch (e) {
+    // ignore ENOENT and other transient errors
+  }
   await appendFile(ACTIVITY_LOG_PATH, `${JSON.stringify(record)}\n`, 'utf8')
 }
 
 async function appendTxEventRecord(record) {
-  await mkdir(dirname(TX_EVENT_LOG_PATH), { recursive: true })
+  const dir = dirname(TX_EVENT_LOG_PATH)
+  await mkdir(dir, { recursive: true, mode: 0o700 })
+  try {
+    const s = await stat(TX_EVENT_LOG_PATH)
+    if (s.size >= MAX_LOG_BYTES) {
+      await rename(TX_EVENT_LOG_PATH, `${TX_EVENT_LOG_PATH}.${Date.now()}.rotated`)
+    }
+  } catch (e) {
+    // ignore ENOENT and other transient errors
+  }
   await appendFile(TX_EVENT_LOG_PATH, `${JSON.stringify(record)}\n`, 'utf8')
 }
 
@@ -390,7 +536,7 @@ async function readActivitiesMerged(maxLines = 20_000) {
   return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt)
 }
 
-/** Count successful swap/bridge rows per wallet (`from`), from merged activity log. */
+/** Count successful swap rows per wallet (`from`), from merged activity log. */
 function buildAddressLeaderboard(activities, limit) {
   const byAddr = new Map()
   for (const row of activities) {
@@ -436,7 +582,7 @@ async function readTxEventsMerged(maxLines = 50_000) {
       byHash.set(txHash, {
         txHash,
         chainId: Number(obj?.chainId) || 0,
-        kind: obj?.kind === 'bridge' ? 'bridge' : 'swap',
+        kind: 'swap',
         at: Number(obj?.at) || Date.now(),
         feeQuoteUsd: Number.isFinite(Number(obj?.feeQuoteUsd))
           ? Number(obj.feeQuoteUsd)
@@ -587,44 +733,31 @@ async function runChecks() {
   const checks = await Promise.allSettled([
     (async () => {
       const q = new URLSearchParams({
-        tokenIn: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
-        tokenOut: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+        chainId: '8453',
+        tokenIn: '0x4200000000000000000000000000000000000006',
+        tokenOut: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
         amountIn: '1000000000000000',
       })
-      const { res, json, latencyMs } = await fetchJsonWithFallback([
-        `https://aggregator-api.kyberswap.com/ethereum/api/v1/routes?${q}`,
-        `https://aggregator-api.kyberswap.com/ethereum/api/v1/tokens`,
-      ])
-      const ok = res.ok && json?.code === 0
-      status.providers.kyber = {
-        ...status.providers.kyber,
+      const base = String(process.env.VITE_EON_AMM_API_BASE_URL || '').trim()
+      if (!base) {
+        status.providers.eonswap = {
+          ...status.providers.eonswap,
+          ok: false,
+          latencyMs: null,
+          detail: 'Missing VITE_EON_AMM_API_BASE_URL',
+        }
+        updateSla('eonswap', false)
+        return
+      }
+      const { res, json, latencyMs } = await fetchJson(`${base}/v1/quote?${q}`)
+      const ok = res.ok && (json?.amountOut || json?.data?.amountOut)
+      status.providers.eonswap = {
+        ...status.providers.eonswap,
         ok,
         latencyMs,
         detail: ok ? 'healthy' : `HTTP ${res.status}`,
       }
-      updateSla('kyber', ok)
-    })(),
-    (async () => {
-      const q = new URLSearchParams({
-        fromChain: '1',
-        toChain: '42161',
-        fromToken: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
-        toToken: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
-        fromAmount: '1000000000000000',
-        fromAddress: '0x0000000000000000000000000000000000000001',
-      })
-      const { res, json, latencyMs } = await fetchJsonWithFallback([
-        `https://li.quest/v1/quote?${q}`,
-        'https://li.quest/v1/chains',
-      ])
-      const ok = res.ok && (Boolean(json?.estimate) || Array.isArray(json?.chains))
-      status.providers.lifi = {
-        ...status.providers.lifi,
-        ok,
-        latencyMs,
-        detail: ok ? 'healthy' : `HTTP ${res.status}`,
-      }
-      updateSla('lifi', ok)
+      updateSla('eonswap', ok)
     })(),
     (async () => {
       const q = new URLSearchParams({ vs_currency: 'usd', days: '1', interval: 'daily' })
@@ -678,7 +811,7 @@ async function runChecks() {
 
   checks.forEach((result, idx) => {
     if (result.status === 'fulfilled') return
-    const key = ['kyber', 'lifi', 'coingecko', 'etherscan'][idx]
+    const key = ['eonswap', 'coingecko', 'etherscan'][idx]
     status.providers[key] = {
       ...status.providers[key],
       ok: false,
@@ -690,7 +823,7 @@ async function runChecks() {
 
   status.checkedAt = Date.now()
 
-  const degradedCore = ['kyber', 'lifi'].filter((id) => !status.providers[id].ok)
+  const degradedCore = ['eonswap'].filter((id) => !status.providers[id].ok)
   const slowProviders = Object.entries(status.providers)
     .filter(([id, p]) => p.ok && typeof p.latencyMs === 'number' && p.latencyMs > WARN_LATENCY_MS[id])
     .map(([id, p]) => `${id}:${p.latencyMs}ms`)
@@ -820,54 +953,171 @@ createServer(async (req, res) => {
     if (isRateLimited(req)) return json(req, res, 429, { ok: false, error: 'Rate limited' })
     try {
       const payload = await readJsonBody(req)
-      const kind = payload?.kind === 'bridge' ? 'Bridge' : 'Swap'
       const txHash = String(payload?.txHash || '')
       if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
         return json(req, res, 400, { ok: false, error: 'Invalid tx hash' })
       }
       if (alreadyProcessedTx(txHash)) return json(req, res, 200, { ok: true, dedup: true })
+      
+      const kind = String(payload?.kind || 'swap')
       const shortHash = shortHex(txHash, 10, 6) || 'unknown'
       const chainId = Number(payload?.chainId || 0)
       const wallet = String(payload?.wallet || '')
       const summary = String(payload?.summary || '')
+      const poolName = String(payload?.poolName || '')
+      const amount = String(payload?.amount || '')
+      const rewards = String(payload?.rewards || '')
       const timestampUtc = new Date().toISOString()
       const feeQuoteUsd = Number(payload?.feeQuoteUsd)
       const feeRealizedUsd = Number(payload?.feeRealizedUsd)
       const txUrl = explorerTxUrl(chainId, txHash)
       const walletUrl = /^0x[a-fA-F0-9]{40}$/.test(wallet) ? explorerAddressUrl(chainId, wallet) : null
       const shortWallet = wallet ? shortHex(wallet, 8, 6) : ''
-      const price = parsePriceSnapshot(summary)
-      const msg = [
-        '✅ <b>EonSwap · Execution Confirmed</b>',
-        '',
-        '<b>Overview</b>',
-        `• Product      : ${escapeHtml(kind)}`,
-        '• Status       : Success',
-        `• Network      : ${escapeHtml(chainLabel(chainId))}`,
-        `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
-        shortWallet
-          ? walletUrl
-            ? `• Wallet       : <a href="${escapeHtml(walletUrl)}"><code>${escapeHtml(shortWallet)}</code></a>`
-            : `• Wallet       : <code>${escapeHtml(shortWallet)}</code>`
-          : '',
-        `• Timestamp    : ${escapeHtml(timestampUtc)}`,
-        '',
-        '<b>Price Snapshot</b>',
-        price?.from ? `• You Send     : ${escapeHtml(price.from)}` : '',
-        price?.to ? `• You Receive  : ${escapeHtml(price.to)}` : '',
-        summary ? `• Route        : ${escapeHtml(summary)}` : '',
-        '',
-        `🔎 <a href="${escapeHtml(txUrl)}">Open transaction in explorer</a>`,
-      ]
-        .filter(Boolean)
-        .join('\n')
+      const timeFormatted = timestampUtc.replace('T', ' ').replace('Z', ' UTC')
+      
+      const walletLine = shortWallet
+        ? walletUrl
+          ? `• Wallet       : <a href="${escapeHtml(walletUrl)}"><code>${escapeHtml(shortWallet)}</code></a>`
+          : `• Wallet       : <code>${escapeHtml(shortWallet)}</code>`
+        : ''
+      
+      let msg = ''
+      
+      if (kind === 'farm_deposit') {
+        msg = [
+          '🌾 <b>EonSwap · Farm Deposit</b>',
+          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          '',
+          '📊 <b>Transaction Details</b>',
+          `• Network      : ${escapeHtml(chainLabel(chainId))}`,
+          `• Status       : ✓ Success`,
+          `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
+          walletLine,
+          `• Time         : ${escapeHtml(timeFormatted)}`,
+          '',
+          '🌱 <b>Farm Details</b>',
+          poolName ? `• Pool         : ${escapeHtml(poolName)}` : '',
+          amount ? `• Deposited    : ${escapeHtml(amount)}` : '',
+          '',
+          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          `🔗 <a href="${escapeHtml(txUrl)}">View on Explorer</a>`,
+        ].filter(Boolean).join('\n')
+      } else if (kind === 'farm_withdraw') {
+        msg = [
+          '🌾 <b>EonSwap · Farm Withdraw</b>',
+          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          '',
+          '📊 <b>Transaction Details</b>',
+          `• Network      : ${escapeHtml(chainLabel(chainId))}`,
+          `• Status       : ✓ Success`,
+          `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
+          walletLine,
+          `• Time         : ${escapeHtml(timeFormatted)}`,
+          '',
+          '📤 <b>Withdrawal Details</b>',
+          poolName ? `• Pool         : ${escapeHtml(poolName)}` : '',
+          amount ? `• Withdrawn    : ${escapeHtml(amount)}` : '',
+          rewards ? `• Harvested    : ${escapeHtml(rewards)}` : '',
+          '',
+          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          `🔗 <a href="${escapeHtml(txUrl)}">View on Explorer</a>`,
+        ].filter(Boolean).join('\n')
+      } else if (kind === 'farm_harvest') {
+        msg = [
+          '🎉 <b>EonSwap · Rewards Harvested</b>',
+          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          '',
+          '📊 <b>Transaction Details</b>',
+          `• Network      : ${escapeHtml(chainLabel(chainId))}`,
+          `• Status       : ✓ Success`,
+          `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
+          walletLine,
+          `• Time         : ${escapeHtml(timeFormatted)}`,
+          '',
+          '💰 <b>Harvest Details</b>',
+          poolName ? `• Pool         : ${escapeHtml(poolName)}` : '',
+          rewards ? `• Rewards      : ${escapeHtml(rewards)}` : '',
+          '',
+          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          `🔗 <a href="${escapeHtml(txUrl)}">View on Explorer</a>`,
+        ].filter(Boolean).join('\n')
+      } else if (kind === 'lp_add') {
+        msg = [
+          '💧 <b>EonSwap · Liquidity Added</b>',
+          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          '',
+          '📊 <b>Transaction Details</b>',
+          `• Network      : ${escapeHtml(chainLabel(chainId))}`,
+          `• Status       : ✓ Success`,
+          `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
+          walletLine,
+          `• Time         : ${escapeHtml(timeFormatted)}`,
+          '',
+          '🏊 <b>Liquidity Details</b>',
+          poolName ? `• Pool         : ${escapeHtml(poolName)}` : '',
+          summary ? `• Added        : ${escapeHtml(summary)}` : '',
+          '',
+          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          `🔗 <a href="${escapeHtml(txUrl)}">View on Explorer</a>`,
+        ].filter(Boolean).join('\n')
+      } else if (kind === 'lp_remove') {
+        msg = [
+          '💧 <b>EonSwap · Liquidity Removed</b>',
+          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          '',
+          '📊 <b>Transaction Details</b>',
+          `• Network      : ${escapeHtml(chainLabel(chainId))}`,
+          `• Status       : ✓ Success`,
+          `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
+          walletLine,
+          `• Time         : ${escapeHtml(timeFormatted)}`,
+          '',
+          '📤 <b>Removal Details</b>',
+          poolName ? `• Pool         : ${escapeHtml(poolName)}` : '',
+          summary ? `• Removed      : ${escapeHtml(summary)}` : '',
+          '',
+          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          `🔗 <a href="${escapeHtml(txUrl)}">View on Explorer</a>`,
+        ].filter(Boolean).join('\n')
+      } else {
+        // Default: swap
+        const price = parsePriceSnapshot(summary)
+        const feeDisplay = Number.isFinite(feeRealizedUsd) && feeRealizedUsd > 0
+          ? `$${feeRealizedUsd.toFixed(2)}`
+          : Number.isFinite(feeQuoteUsd) && feeQuoteUsd > 0
+            ? `~$${feeQuoteUsd.toFixed(2)}`
+            : null
+        msg = [
+          '✅ <b>EonSwap · Swap Confirmed</b>',
+          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          '',
+          '📊 <b>Transaction Details</b>',
+          `• Network      : ${escapeHtml(chainLabel(chainId))}`,
+          `• Status       : ✓ Success`,
+          `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
+          walletLine,
+          `• Time         : ${escapeHtml(timeFormatted)}`,
+          '',
+          '💱 <b>Swap Details</b>',
+          price?.from ? `• Sold         : ${escapeHtml(price.from)}` : '',
+          price?.to ? `• Received     : ${escapeHtml(price.to)}` : '',
+          feeDisplay ? `• Fee          : ${feeDisplay}` : '',
+          '',
+          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          `🔗 <a href="${escapeHtml(txUrl)}">View on Explorer</a>`,
+        ].filter(Boolean).join('\n')
+      }
+      
       await appendTxEventRecord({
-        kind: payload?.kind === 'bridge' ? 'bridge' : 'swap',
+        kind,
         status: 'success',
         txHash,
         chainId,
         wallet: /^0x[a-fA-F0-9]{40}$/.test(wallet) ? wallet : undefined,
         summary,
+        poolName: poolName || undefined,
+        amount: amount || undefined,
+        rewards: rewards || undefined,
         at: Number(payload?.at) || Date.now(),
         feeQuoteUsd: Number.isFinite(feeQuoteUsd) ? feeQuoteUsd : undefined,
         feeRealizedUsd: Number.isFinite(feeRealizedUsd) ? feeRealizedUsd : undefined,
@@ -901,7 +1151,137 @@ createServer(async (req, res) => {
     await runChecks()
     return json(req, res, 200, status)
   }
-  return json(req, res, 404, { error: 'Not found' })
+
+    // ==================== REFERRAL ENDPOINTS ====================
+
+    // GET /referral/stats?address=0x... - Get referral stats for an address
+    if (req.method === 'GET' && u.pathname === '/referral/stats') {
+      if (isReferralRateLimited(req)) {
+        return json(req, res, 429, { ok: false, error: 'Rate limited' })
+      }
+      if (!CORS_ALLOW_ALL && !corsOriginHeader(req)) {
+        return json(req, res, 403, { ok: false, error: 'Forbidden origin' })
+      }
+      const address = String(u.searchParams.get('address') || '').trim()
+      if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) {
+        return json(req, res, 400, { ok: false, error: 'Invalid address' })
+      }
+      const stats = await buildReferralStats(address)
+      return json(req, res, 200, { ok: true, ...stats }, { cacheControl: 'public, max-age=10' })
+    }
+
+    // POST /referral/register - Register a new referral
+    if (req.method === 'POST' && u.pathname === '/referral/register') {
+      if (isReferralRateLimited(req)) {
+        return json(req, res, 429, { ok: false, error: 'Rate limited' })
+      }
+      try {
+        const payload = await readJsonBody(req)
+        const referrerCode = String(payload?.referrerCode || '').trim().toLowerCase()
+        const referredAddress = String(payload?.referredAddress || '').trim()
+      
+        if (!referrerCode || referrerCode.length !== 8) {
+          return json(req, res, 400, { ok: false, error: 'Invalid referrer code' })
+        }
+        if (!/^0x[a-fA-F0-9]{40}$/i.test(referredAddress)) {
+          return json(req, res, 400, { ok: false, error: 'Invalid referred address' })
+        }
+
+        // Check if this referral already exists
+        const records = await readReferralsMerged()
+        const existing = records.find((r) => 
+          r.type === 'referral' && 
+          r.referredAddress?.toLowerCase() === referredAddress.toLowerCase()
+        )
+        if (existing) {
+          return json(req, res, 200, { ok: true, message: 'Already referred', duplicate: true })
+        }
+
+        // Check self-referral
+        const selfCode = generateReferralCode(referredAddress)
+        if (selfCode === referrerCode) {
+          return json(req, res, 400, { ok: false, error: 'Cannot self-refer' })
+        }
+
+        await appendReferralRecord({
+          type: 'referral',
+          referrerCode,
+          referredAddress: referredAddress.toLowerCase(),
+          createdAt: Date.now(),
+          serverAt: Date.now(),
+        })
+
+        return json(req, res, 200, { ok: true, message: 'Referral registered' })
+      } catch (e) {
+        if (String(e instanceof Error ? e.message : e).includes('Payload too large')) {
+          return json(req, res, 413, { ok: false, error: 'Payload too large' })
+        }
+        return json(req, res, 400, { ok: false, error: 'Invalid payload' })
+      }
+    }
+
+    // POST /referral/track-swap - Track a swap from referred user (for rewards calculation)
+    if (req.method === 'POST' && u.pathname === '/referral/track-swap') {
+      if (isReferralRateLimited(req)) {
+        return json(req, res, 429, { ok: false, error: 'Rate limited' })
+      }
+      try {
+        const payload = await readJsonBody(req)
+        const address = String(payload?.address || '').trim()
+        const volumeUsd = Number(payload?.volumeUsd || 0)
+        const txHash = String(payload?.txHash || '')
+      
+        if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) {
+          return json(req, res, 400, { ok: false, error: 'Invalid address' })
+        }
+
+        await appendReferralRecord({
+          type: 'swap',
+          referredAddress: address.toLowerCase(),
+          volumeUsd: Number.isFinite(volumeUsd) ? volumeUsd : 0,
+          txHash: /^0x[a-fA-F0-9]{64}$/.test(txHash) ? txHash : undefined,
+          createdAt: Date.now(),
+          serverAt: Date.now(),
+        })
+
+        return json(req, res, 200, { ok: true })
+      } catch (e) {
+        if (String(e instanceof Error ? e.message : e).includes('Payload too large')) {
+          return json(req, res, 413, { ok: false, error: 'Payload too large' })
+        }
+        return json(req, res, 400, { ok: false, error: 'Invalid payload' })
+      }
+    }
+
+    // GET /referral/code?address=0x... - Get referral code for an address
+    if (req.method === 'GET' && u.pathname === '/referral/code') {
+      if (isReferralRateLimited(req)) {
+        return json(req, res, 429, { ok: false, error: 'Rate limited' })
+      }
+      const address = String(u.searchParams.get('address') || '').trim()
+      if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) {
+        return json(req, res, 400, { ok: false, error: 'Invalid address' })
+      }
+      const code = generateReferralCode(address)
+      return json(req, res, 200, { ok: true, code })
+    }
+
+    // GET /referral/lookup?code=xxx - Lookup referrer by code
+    if (req.method === 'GET' && u.pathname === '/referral/lookup') {
+      if (isReferralRateLimited(req)) {
+        return json(req, res, 429, { ok: false, error: 'Rate limited' })
+      }
+      const code = String(u.searchParams.get('code') || '').trim().toLowerCase()
+      if (!code || code.length !== 8) {
+        return json(req, res, 400, { ok: false, error: 'Invalid code' })
+      }
+      // We can't reverse the code to an address, but we can check if it exists
+      const records = await readReferralsMerged()
+      const hasReferrals = records.some((r) => r.type === 'referral' && r.referrerCode === code)
+      return json(req, res, 200, { ok: true, code, active: hasReferrals })
+    }
+
+    return json(req, res, 404, { error: 'Not found' })
 }).listen(PORT, LISTEN_HOST, () => {
   console.log(
     `[relay] listening http://${LISTEN_HOST}:${PORT} (env PORT=${process.env.PORT ?? 'unset'} RELAY_PORT=${process.env.RELAY_PORT ?? 'unset'})`,

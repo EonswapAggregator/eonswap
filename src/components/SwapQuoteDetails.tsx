@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react'
+import { parseUnits } from 'viem'
 import { formatTokenAmountUi } from '../lib/format'
 import {
   formatPriceImpactLabel,
   formatUsdApprox,
   priceImpactPercentFromUsd,
+  priceImpactPercentFromAmounts,
   totalNetworkFeeUsd,
 } from '../lib/quoteDisplay'
 import { formatSlippagePercent } from '../lib/slippage'
@@ -22,9 +24,9 @@ function Row({
 }) {
   return (
     <div className="flex items-center justify-between gap-2 py-1.5 text-[12px]">
-      <span className="shrink-0 text-slate-500">{label}</span>
+      <span className="shrink-0 text-neutral-500">{label}</span>
       <span
-        className={`min-w-0 truncate text-right font-medium tabular-nums text-slate-100 ${valueClassName ?? ''} ${loading ? 'animate-pulse text-slate-500' : ''}`}
+        className={`min-w-0 truncate text-right font-medium tabular-nums text-neutral-100 ${valueClassName ?? ''} ${loading ? 'animate-pulse text-neutral-500' : ''}`}
       >
         {value}
       </span>
@@ -38,6 +40,7 @@ type Props = {
 
 export function SwapQuoteDetails({ wrongNetwork }: Props) {
   const sellAmountInput = useEonSwapStore((s) => s.sellAmountInput)
+  const sellToken = useEonSwapStore((s) => s.sellToken)
   const receiveFormatted = useEonSwapStore((s) => s.receiveFormatted)
   const quoteLoading = useEonSwapStore((s) => s.quoteLoading)
   const quoteError = useEonSwapStore((s) => s.quoteError)
@@ -48,6 +51,7 @@ export function SwapQuoteDetails({ wrongNetwork }: Props) {
   const quoteGasUsd = useEonSwapStore((s) => s.quoteGasUsd)
   const quoteL1FeeUsd = useEonSwapStore((s) => s.quoteL1FeeUsd)
   const quoteAmountOutWei = useEonSwapStore((s) => s.quoteAmountOutWei)
+  const quotePriceImpact = useEonSwapStore((s) => s.quotePriceImpact)
 
   const hasInput = sellAmountInput.trim().length > 0
   const showLoading = quoteLoading && hasInput && !receiveFormatted
@@ -67,15 +71,46 @@ export function SwapQuoteDetails({ wrongNetwork }: Props) {
     }
   }
 
-  const impactPct =
-    hasResolvedQuote && quoteAmountInUsd && quoteAmountOutUsd
-      ? priceImpactPercentFromUsd(quoteAmountInUsd, quoteAmountOutUsd)
-      : null
+  // Calculate price impact - prefer router-calculated (from reserves), then USD, then token amounts
+  const impactPct = (() => {
+    if (!hasResolvedQuote) return null
+    
+    // Method 1: Router-calculated from reserves (most accurate for AMM)
+    if (quotePriceImpact) {
+      const parsed = Number.parseFloat(quotePriceImpact)
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed
+    }
+    
+    // Method 2: USD-based calculation (accurate when prices available)
+    if (quoteAmountInUsd && quoteAmountOutUsd) {
+      return priceImpactPercentFromUsd(quoteAmountInUsd, quoteAmountOutUsd)
+    }
+    
+    // Method 3: Token amount-based calculation (fallback)
+    // ✅ FIX (L-1): Convert formatted input to wei string
+    if (sellAmountInput && quoteAmountOutWei) {
+      try {
+        const sellAmountWei = parseUnits(sellAmountInput.trim(), sellToken.decimals)
+        return priceImpactPercentFromAmounts(
+          sellAmountWei.toString(),
+          quoteAmountOutWei,
+          sellToken.decimals,
+          buyToken.decimals,
+        )
+      } catch {
+        return null
+      }
+    }
+    
+    return null
+  })()
 
   const priceImpactLabel =
     hasResolvedQuote && quoteAmountInUsd && quoteAmountOutUsd
       ? formatPriceImpactLabel(quoteAmountInUsd, quoteAmountOutUsd)
-      : null
+      : impactPct != null
+        ? `${impactPct < 0.005 ? '<0.01' : impactPct.toFixed(2)}%`
+        : null
 
   const networkTotal =
     hasResolvedQuote && quoteGasUsd
@@ -83,9 +118,9 @@ export function SwapQuoteDetails({ wrongNetwork }: Props) {
       : null
 
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-[#080918]/80 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-      <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 pt-0">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+    <div className="rounded-xl border border-uni-border bg-uni-surface-2 px-3 py-2.5">
+      <div className="flex items-center justify-between border-b border-uni-border pb-2 pt-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
           Trade details
         </p>
         {wrongNetwork && (
@@ -94,7 +129,7 @@ export function SwapQuoteDetails({ wrongNetwork }: Props) {
           </span>
         )}
       </div>
-      <div className="divide-y divide-white/[0.05]">
+      <div className="divide-y divide-uni-border">
         <Row
           label="Price impact"
           loading={showLoading}
@@ -148,19 +183,19 @@ export function SwapQuoteDetails({ wrongNetwork }: Props) {
         />
       </div>
       {quoteError && !quoteLoading && hasInput && !wrongNetwork && (
-        <p className="mt-2 rounded-md border border-red-500/15 bg-red-500/[0.08] px-2.5 py-1.5 text-[10px] leading-snug text-red-200/90">
+        <p className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-[10px] leading-snug text-rose-200">
           {quoteError}
         </p>
       )}
-      <p className="mt-2 min-h-[2.75rem] text-[10px] leading-snug text-slate-600">
+      <p className="mt-2 min-h-[2.75rem] text-[10px] leading-snug text-neutral-600">
         {showEnterAmountHint && (
           <>
             Enter an amount to see impact, network cost, and minimum received.
             {' '}
           </>
         )}
-        Price impact uses Kyber USD notionals. Network cost is an estimate and
-        can change with gas.
+        Price impact uses route USD notionals. Network cost is an estimate and
+        can change with gas conditions.
       </p>
     </div>
   )

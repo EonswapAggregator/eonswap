@@ -1,10 +1,14 @@
 /** Browser tab titles per route (`document.title`). */
 const TITLES: Record<string, string> = {
-  '/': 'EonSwap — Infinite Liquidity.',
+  '/': 'EonSwap — Multi-chain execution desk.',
   '/swap': 'EonSwap — Swap',
-  '/bridge': 'EonSwap — Bridge',
-  '/pool': 'EonSwap — Pool / Earn',
-  '/earn': 'EonSwap — Pool / Earn',
+  '/liquidity': 'EonSwap — Liquidity',
+  '/pool': 'EonSwap — Liquidity',
+  '/earn': 'EonSwap — Liquidity',
+  '/farm': 'EonSwap — Farm',
+  '/stake': 'EonSwap — Stake',
+  '/referral': 'EonSwap — Referral',
+  '/airdrop': 'EonSwap — Airdrop',
   '/activity': 'EonSwap — Activity',
   '/leaderboard': 'EonSwap — Leaderboard',
   '/docs': 'EonSwap — Docs',
@@ -28,13 +32,17 @@ const DEFAULT_DESCRIPTION =
 const DESCRIPTIONS: Record<string, string> = {
   '/': DEFAULT_DESCRIPTION,
   '/swap': 'Swap crypto assets across supported chains with smart route discovery and wallet-first execution.',
-  '/bridge':
-    'Bridge assets across supported networks using non-custodial routes surfaced through EonSwap integrations.',
+  '/liquidity': 'Explore liquidity and yield opportunities across supported ecosystems.',
   '/pool': 'Explore liquidity and yield opportunities across supported ecosystems.',
   '/earn': 'Explore liquidity and yield opportunities across supported ecosystems.',
-  '/activity': 'Track your recent swap and bridge activity in one timeline.',
+  '/farm':
+    'Discover incentive farms and staking programs on supported chains as they become available through EonSwap.',
+  '/stake': 'Stake ESTF and participate in protocol incentives when staking goes live on EonSwap.',
+  '/referral': 'Learn about the EonSwap referral program, invites, and reward mechanics.',
+  '/airdrop': 'Official EonSwap airdrop information, eligibility, and safe claim guidance.',
+  '/activity': 'Track your recent swap activity in one timeline.',
   '/leaderboard':
-    'See how wallets rank on EonSwap by completed swaps and bridges.',
+    'See how wallets rank on EonSwap by completed swaps.',
   '/docs': 'Read EonSwap documentation, feature guides, safety notes, and user onboarding pages.',
   '/faq': 'Find quick answers to common EonSwap questions and troubleshooting steps.',
   '/status':
@@ -45,7 +53,7 @@ const DESCRIPTIONS: Record<string, string> = {
   '/press-kit': 'Access official EonSwap brand and media resources.',
   '/terms': 'Review the Terms of Use for accessing EonSwap services.',
   '/privacy': 'Read the EonSwap Privacy Policy.',
-  '/risk-disclosure': 'Understand key risks of on-chain trading and cross-chain activity.',
+  '/risk-disclosure': 'Understand key risks of on-chain trading activity.',
   '/disclaimer': 'Review legal disclaimers and usage limitations for EonSwap.',
   '/aml-policy': 'Read EonSwap AML policy and compliance statements.',
 }

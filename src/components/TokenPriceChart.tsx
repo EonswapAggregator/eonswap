@@ -1,30 +1,43 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Loader2, TrendingUp } from 'lucide-react'
-import { formatUnits, parseUnits } from 'viem'
 import {
   coingeckoIdForSymbol,
   fetchMarketChartUsd,
   type MarketChartPoint,
 } from '../lib/coingecko'
-import { fetchKyberPairHistory } from '../lib/kyberHistory'
-import { fetchKyberRoute } from '../lib/kyber'
 import {
   readChartHistoryCache,
+  readLiveChartCache,
   writeChartHistoryCache,
+  writeLiveChartCache,
 } from '../lib/chartHistoryCache'
 
 const VB_W = 560
 const VB_H = 200
 const PAD = 10
-const innerH = VB_H - PAD * 2
 const MAX_POINTS = 90
-/** Live-only: faster updates so the line feels responsive (still one Kyber route per tick). */
-const LIVE_ONLY_POLL_MS = 1_500
-/** Kyber history anchor: slower to limit route API load while shape is mostly historical. */
-const LIVE_POLL_KYBER_MS = 3_000
-const HISTORY_REVALIDATE_MS = 4_000
-const CHART_HISTORY_RETRY_DELAYS_MS = [80, 180]
+const CHART_HISTORY_RETRY_DELAYS_MS = [120, 250]
+const GRID_ROWS = 4
+const GRID_COLS = 6
+const MIN_ZOOM_POINTS = 12
+
+type Props = {
+  baseSymbol: string
+  quoteSymbol: string
+  chainId: number
+  baseAddress: string
+  quoteAddress: string
+  baseDecimals: number
+  quoteDecimals: number
+  routePairPrice: number | null
+  routeLoading: boolean
+  routeError: string | null
+  days?: 7 | 30 | 90
+  onDaysChange?: (days: 7 | 30 | 90) => void
+}
+
+type TimePreset = '1H' | '4H' | '1D' | '1W' | 'ALL'
 
 function formatAxisPrice(p: number, usdLike: boolean) {
   const prefix = usdLike ? '$' : ''
@@ -48,37 +61,93 @@ function formatHeadlinePrice(p: number, usdLike: boolean) {
   })
 }
 
-function formatChartDate(ms: number, compact: boolean) {
-  const d = new Date(ms)
-  if (compact) {
-    return d.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-  }
-  return d.toLocaleDateString('en-US', {
+function formatTooltipDate(ms: number) {
+  return new Date(ms).toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
   })
 }
 
-type Props = {
-  baseSymbol: string
-  quoteSymbol: string
-  chainId: number
-  baseAddress: string
-  quoteAddress: string
-  baseDecimals: number
-  quoteDecimals: number
-  routePairPrice: number | null
-  routeLoading: boolean
-  routeError: string | null
-  days?: 7 | 30 | 90
-  onDaysChange?: (days: 7 | 30 | 90) => void
+function formatAxisTime(ms: number) {
+  return new Date(ms).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
+function ratioSeries(base: MarketChartPoint[], quote: MarketChartPoint[]) {
+  const len = Math.min(base.length, quote.length)
+  if (len < 2) return []
+  const out: MarketChartPoint[] = []
+  
+  for (let i = 0; i < len; i += 1) {
+    const b = base[base.length - len + i]
+    const q = quote[quote.length - len + i]
+    if (!b || !q || q.price <= 0 || b.price <= 0) continue
+    
+    const ratio = b.price / q.price
+    
+    // Validate ratio is reasonable (prevent division errors)
+    if (!Number.isFinite(ratio) || ratio <= 0) continue
+    
+    // Filter out extreme outliers (likely data errors)
+    // Most crypto pairs won't have ratios > 1,000,000 or < 0.000001
+    if (ratio > 1_000_000 || ratio < 0.000001) continue
+    
+    out.push({ t: Math.min(b.t, q.t), price: ratio })
+  }
+  
+  return out
+}
+
+function mergeSeries(
+  first: MarketChartPoint[],
+  second: MarketChartPoint[],
+  maxAgeMs: number,
+): MarketChartPoint[] {
+  const now = Date.now()
+  const byTs = new Map<number, number>()
+  for (const p of [...first, ...second]) {
+    if (!Number.isFinite(p.t) || !Number.isFinite(p.price) || p.price <= 0) continue
+    if (now - p.t > maxAgeMs) continue
+    byTs.set(p.t, p.price)
+  }
+  return [...byTs.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([t, price]) => ({ t, price }))
+}
+
+function alignSeriesToTarget(
+  series: MarketChartPoint[],
+  targetPrice: number | null,
+): MarketChartPoint[] {
+  if (!series.length) return []
+  if (!Number.isFinite(targetPrice ?? NaN) || (targetPrice ?? 0) <= 0) return series
+  const last = series[series.length - 1]?.price ?? 0
+  if (!Number.isFinite(last) || last <= 0) return series
+  
+  const factor = (targetPrice ?? 0) / last
+  if (!Number.isFinite(factor) || factor <= 0) return series
+  
+  // Prevent extreme scaling (max 10x up or down)
+  // If alignment factor is too extreme, don't align
+  if (factor > 10 || factor < 0.1) return series
+  
+  // Also check if the absolute price difference is reasonable
+  const priceDiff = Math.abs(targetPrice! - last)
+  const avgPrice = (targetPrice! + last) / 2
+  const diffPercent = (priceDiff / avgPrice) * 100
+  
+  // If prices differ by more than 500%, don't align (likely data issue)
+  if (diffPercent > 500) return series
+  
+  return series.map((p) => ({ t: p.t, price: p.price * factor }))
 }
 
 function buildPath(
@@ -90,20 +159,17 @@ function buildPath(
   if (points.length < 1) return null
   const normalized =
     points.length === 1
-      ? [
-          points[0]!,
-          { t: points[0]!.t + 1, price: points[0]!.price },
-        ]
+      ? [points[0]!, { t: points[0]!.t + 1, price: points[0]!.price }]
       : points
   const prices = normalized.map((p) => p.price)
   const minP = Math.min(...prices)
   const maxP = Math.max(...prices)
   const span = maxP - minP || 1
   const innerW = width - pad * 2
-  const innerHH = height - pad * 2
+  const innerH = height - pad * 2
   const coords = normalized.map((p, i) => {
     const x = pad + (i / (normalized.length - 1)) * innerW
-    const y = pad + innerHH - ((p.price - minP) / span) * innerHH
+    const y = pad + innerH - ((p.price - minP) / span) * innerH
     return { x, y }
   })
   const d = coords
@@ -112,30 +178,70 @@ function buildPath(
   return { d, minP, maxP }
 }
 
-function ratioSeries(base: MarketChartPoint[], quote: MarketChartPoint[]) {
-  const len = Math.min(base.length, quote.length)
-  if (len < 2) return []
-  const out: MarketChartPoint[] = []
-  for (let i = 0; i < len; i += 1) {
-    const b = base[base.length - len + i]
-    const q = quote[quote.length - len + i]
-    if (!b || !q || q.price <= 0) continue
-    out.push({ t: Math.min(b.t, q.t), price: b.price / q.price })
+function chartCoords(
+  points: { t: number; price: number }[],
+  width: number,
+  height: number,
+  pad: number,
+): { x: number; y: number; t: number; price: number }[] {
+  if (points.length < 1) return []
+  const normalized =
+    points.length === 1
+      ? [points[0]!, { t: points[0]!.t + 1, price: points[0]!.price }]
+      : points
+  const prices = normalized.map((p) => p.price)
+  const minP = Math.min(...prices)
+  const maxP = Math.max(...prices)
+  const span = maxP - minP || 1
+  const innerW = width - pad * 2
+  const innerH = height - pad * 2
+  return normalized.map((p, i) => ({
+    x: pad + (i / (normalized.length - 1)) * innerW,
+    y: pad + innerH - ((p.price - minP) / span) * innerH,
+    t: p.t,
+    price: p.price,
+  }))
+}
+
+function movingAverage(
+  points: { t: number; price: number }[],
+  windowSize: number,
+): { t: number; price: number }[] {
+  if (points.length < windowSize) return []
+  const out: { t: number; price: number }[] = []
+  let sum = 0
+  for (let i = 0; i < points.length; i += 1) {
+    sum += points[i]!.price
+    if (i >= windowSize) {
+      sum -= points[i - windowSize]!.price
+    }
+    if (i >= windowSize - 1) {
+      out.push({
+        t: points[i]!.t,
+        price: sum / windowSize,
+      })
+    }
   }
   return out
 }
 
-function alignSeriesToTarget(
-  series: MarketChartPoint[],
-  targetPrice: number | null,
-): MarketChartPoint[] {
-  if (!series.length) return []
-  if (!Number.isFinite(targetPrice ?? NaN) || (targetPrice ?? 0) <= 0) return series
-  const last = series[series.length - 1]?.price ?? 0
-  if (!Number.isFinite(last) || last <= 0) return series
-  const factor = (targetPrice ?? 0) / last
-  if (!Number.isFinite(factor) || factor <= 0) return series
-  return series.map((p) => ({ t: p.t, price: p.price * factor }))
+function yFromPrice(price: number, minP: number, maxP: number) {
+  const span = maxP - minP || 1
+  const innerH = VB_H - PAD * 2
+  return PAD + innerH - ((price - minP) / span) * innerH
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n))
+}
+
+function formatRangeDuration(ms: number) {
+  const minutes = Math.max(1, Math.round(ms / 60000))
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.round(minutes / 60)
+  if (hours < 48) return `${hours}h`
+  const days = Math.round(hours / 24)
+  return `${days}d`
 }
 
 async function fetchMarketChartWithRetry(
@@ -150,7 +256,6 @@ async function fetchMarketChartWithRetry(
       lastErr = e
       if (i < CHART_HISTORY_RETRY_DELAYS_MS.length) {
         await new Promise((r) => window.setTimeout(r, CHART_HISTORY_RETRY_DELAYS_MS[i]))
-        continue
       }
     }
   }
@@ -163,564 +268,636 @@ export function TokenPriceChart({
   chainId,
   baseAddress,
   quoteAddress,
-  baseDecimals,
-  quoteDecimals,
   routePairPrice,
   routeLoading,
   routeError,
   onDaysChange,
   days = 7,
 }: Props) {
+  const pairLabelQuote = quoteSymbol
   const baseId = coingeckoIdForSymbol(baseSymbol)
   const quoteId = coingeckoIdForSymbol(quoteSymbol)
-  const pairLabelQuote = quoteSymbol
-  const [points, setPoints] = useState<{ t: number; price: number }[]>([])
-  const [historyPoints, setHistoryPoints] = useState<MarketChartPoint[]>([])
-  const [historyLoaded, setHistoryLoaded] = useState(false)
-  const [historySource, setHistorySource] = useState<'kyber' | 'coingecko' | 'live'>('live')
-  const [defaultLoading, setDefaultLoading] = useState(false)
-  const [marketReady, setMarketReady] = useState(false)
-  const [routeSeedPrice, setRouteSeedPrice] = useState<number | null>(null)
-  const [historyReloadTick, setHistoryReloadTick] = useState(0)
-  const lastPairKeyRef = useRef<string>('')
-
   const pairKey = `${chainId}:${baseAddress.toLowerCase()}-${quoteAddress.toLowerCase()}`
-  useEffect(() => {
-    if (lastPairKeyRef.current === pairKey) return
-    lastPairKeyRef.current = pairKey
-    setPoints([])
-    setHistoryPoints([])
-    setHistoryLoaded(false)
-    setHistorySource('live')
-    setRouteSeedPrice(null)
-    setMarketReady(false)
-  }, [pairKey])
+  const usdLike = quoteSymbol.toUpperCase().includes('USD')
 
+  const [points, setPoints] = useState<{ t: number; price: number }[]>([])
+  const [historySource, setHistorySource] = useState<'coingecko' | 'live'>('live')
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [hasCoinGeckoData, setHasCoinGeckoData] = useState(false)
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  const [chartMode, setChartMode] = useState<'line' | 'candle'>('line')
+  const [showMa7, setShowMa7] = useState(true)
+  const [showMa25, setShowMa25] = useState(true)
+  const [timePreset, setTimePreset] = useState<TimePreset>('ALL')
+  const [zoomRange, setZoomRange] = useState<{ start: number; end: number } | null>(null)
+  const [lastFetchTime, setLastFetchTime] = useState<number>(0)
+
+  // Auto-reset state when pair or timeframe changes
   useEffect(() => {
-    const cached = readChartHistoryCache(pairKey, days)
-    if (cached.length > 1) {
-      setHistoryPoints(cached)
-      setHistoryLoaded(true)
-      setHistorySource('coingecko')
-      setMarketReady(true)
-    }
+    console.log('Chart: Pair/timeframe changed, resetting state...')
+    setPoints([])
+    setHistorySource('live')
+    setHasCoinGeckoData(false)
+    setHistoryLoading(false)
+    setLastFetchTime(0)
+    setHoverIdx(null)
+    setZoomRange(null)
   }, [pairKey, days])
 
   useEffect(() => {
-    // If this pair should have public history but is not on CoinGecko yet
-    // (live-only or kyber fallback), periodically retry to upgrade source.
-    if (!baseId || !quoteId) return
-    if (historySource === 'coingecko') return
-    const id = window.setInterval(() => {
-      setHistoryReloadTick((n) => n + 1)
-    }, HISTORY_REVALIDATE_MS)
-    return () => window.clearInterval(id)
-  }, [baseId, quoteId, historySource])
-
-  useEffect(() => {
     let cancelled = false
-    setDefaultLoading(true)
-    void (async () => {
-      try {
-        const amountIn = parseUnits('1', baseDecimals).toString()
-        const { routeSummary } = await fetchKyberRoute({
-          chainId,
-          tokenIn: baseAddress,
-          tokenOut: quoteAddress,
-          amountIn,
-        })
-        const out = Number(formatUnits(BigInt(routeSummary.amountOut), quoteDecimals))
-        if (!cancelled && Number.isFinite(out) && out > 0) {
-          setRouteSeedPrice(out)
-          setPoints((prev) => {
-            if (prev.length > 0) return prev
-            const now = Date.now()
-            return [
-              { t: now - 1, price: out },
-              { t: now, price: out },
-            ]
-          })
-        }
-      } catch {
-        // no-op: keep empty state
-      } finally {
-        if (!cancelled) setDefaultLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
+    const ttlMs = days * 24 * 60 * 60 * 1000
+    const liveCached = readLiveChartCache(pairKey, days)
+    
+    // Show live data immediately if available
+    if (!cancelled && liveCached.length > 1) {
+      setPoints(liveCached.slice(-MAX_POINTS).map((p) => ({ t: p.t, price: p.price })))
+      setHistorySource('live')
+      setHasCoinGeckoData(false)
     }
-  }, [chainId, baseAddress, quoteAddress, baseDecimals, quoteDecimals, days])
-
-  useEffect(() => {
-    // Keep chart responsive with periodic best-route snapshots:
-    // - always in live mode
-    // - also in Kyber-history mode to keep the anchor fresh
-    if (historyLoaded && historySource !== 'kyber') return
-    let stopped = false
-
-    const pollMs =
-      historyLoaded && historySource === 'kyber'
-        ? LIVE_POLL_KYBER_MS
-        : LIVE_ONLY_POLL_MS
-    const dedupeMinGapMs = Math.min(600, Math.floor(pollMs * 0.4))
-
-    const tick = async () => {
-      try {
-        const amountIn = parseUnits('1', baseDecimals).toString()
-        const { routeSummary } = await fetchKyberRoute({
-          chainId,
-          tokenIn: baseAddress,
-          tokenOut: quoteAddress,
-          amountIn,
-        })
-        const out = Number(formatUnits(BigInt(routeSummary.amountOut), quoteDecimals))
-        if (!Number.isFinite(out) || out <= 0 || stopped) return
-        setRouteSeedPrice(out)
-        if (historyLoaded && historySource === 'kyber' && historyPoints.length > 1) {
-          setPoints(alignSeriesToTarget(historyPoints, out))
-          return
-        }
-        const now = Date.now()
-        setPoints((prev) => {
-          const next = [...prev]
-          const last = next[next.length - 1]
-          if (
-            last &&
-            Math.abs(last.price - out) < 1e-12 &&
-            now - last.t < dedupeMinGapMs
-          ) {
-            return next
-          }
-          next.push({ t: now, price: out })
-          if (next.length > MAX_POINTS) next.splice(0, next.length - MAX_POINTS)
-          return next
-        })
-      } catch {
-        // Ignore intermittent polling failures in live-only mode.
+    
+    // If either token has no CoinGecko ID, use live data only
+    if (!baseId || !quoteId) {
+      if (!cancelled) {
+        setHistoryLoading(false)
+        setHasCoinGeckoData(false)
       }
-    }
-
-    const timer = window.setInterval(() => {
-      void tick()
-    }, pollMs)
-    void tick()
-
-    return () => {
-      stopped = true
-      window.clearInterval(timer)
-    }
-  }, [
-    historyLoaded,
-    historySource,
-    historyPoints,
-    chainId,
-    baseAddress,
-    quoteAddress,
-    baseDecimals,
-    quoteDecimals,
-  ])
-
-  useEffect(() => {
-    let cancelled = false
-    const hadCachedCoingecko = historyLoaded && historySource === 'coingecko'
-    // Live route + interval run immediately (separate effects). Do not block the card on history APIs.
-    setMarketReady(true)
-
-    void (async () => {
-      // Served from cache first (other effect): only refresh CoinGecko, never downgrade on error.
-      if (hadCachedCoingecko) {
-        if (!(baseId && quoteId)) return
-        try {
-          const [base, quote] = await Promise.all([
-            fetchMarketChartWithRetry(baseId, days),
-            fetchMarketChartWithRetry(quoteId, days),
-          ])
-          const series: MarketChartPoint[] = ratioSeries(base, quote)
-          if (!cancelled && series.length > 1) {
-            writeChartHistoryCache(pairKey, days, series)
-            setHistoryPoints(series)
-            setHistoryLoaded(true)
-            setHistorySource('coingecko')
-          }
-        } catch {
-          // keep existing cached series
-        }
-        return
-      }
-
-      // Perceived pipeline: Live (instant) → Kyber history when ready → CoinGecko replaces when ready.
-      // Network: fetch Kyber + CoinGecko in parallel; final winner CoinGecko > Kyber > Live.
-      let coingeckoApplied = false
-      let kyberApplied = false
-
-      const tryApplyCoingecko = (series: MarketChartPoint[]) => {
-        if (cancelled || series.length <= 1) return
-        coingeckoApplied = true
-        kyberApplied = true
-        writeChartHistoryCache(pairKey, days, series)
-        setHistoryPoints(series)
-        setHistoryLoaded(true)
-        setHistorySource('coingecko')
-      }
-
-      const tryApplyKyber = (series: MarketChartPoint[]) => {
-        if (cancelled || coingeckoApplied || series.length <= 1) return
-        kyberApplied = true
-        setHistoryPoints(series)
-        setHistoryLoaded(true)
-        setHistorySource('kyber')
-      }
-
-      const runCoingecko = async () => {
-        if (!(baseId && quoteId)) return
-        try {
-          const [base, quote] = await Promise.all([
-            fetchMarketChartWithRetry(baseId, days),
-            fetchMarketChartWithRetry(quoteId, days),
-          ])
-          tryApplyCoingecko(ratioSeries(base, quote))
-        } catch {
-          // Kyber / live remain
-        }
-      }
-
-      const runKyber = async () => {
-        try {
-          const kyberSeries = await fetchKyberPairHistory({
-            baseSymbol,
-            quoteSymbol,
-            days,
-          })
-          tryApplyKyber(kyberSeries)
-        } catch {
-          // live remains
-        }
-      }
-
-      await Promise.all([runKyber(), runCoingecko()])
-
-      if (!cancelled && !coingeckoApplied && !kyberApplied) {
-        setHistoryPoints([])
-        setHistoryLoaded(false)
-        setHistorySource('live')
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [
-    pairKey,
-    baseSymbol,
-    quoteSymbol,
-    baseId,
-    quoteId,
-    days,
-    historyReloadTick,
-    historyLoaded,
-    historySource,
-  ])
-
-  useEffect(() => {
-    if (historyPoints.length > 0) {
-      const target = routePairPrice ?? routeSeedPrice
-      setPoints(alignSeriesToTarget(historyPoints, target))
       return
     }
-    if (!Number.isFinite(routePairPrice ?? NaN) || (routePairPrice ?? 0) <= 0) return
-    const now = Date.now()
-    setPoints((prev) => {
-      const next = [...prev]
-      const last = next[next.length - 1]
-      if (last && Math.abs(last.price - (routePairPrice ?? 0)) < 1e-12) {
-        if (now - last.t < 8_000) return next
+    
+    setHistoryLoading(true)
+    
+    ;(async () => {
+      try {
+        // Check cache first (instant if available)
+        const cached = readChartHistoryCache(pairKey, days)
+        if (!cancelled && cached.length > 1) {
+          const mergedCached = mergeSeries(cached, liveCached, ttlMs)
+          const aligned = alignSeriesToTarget(mergedCached, routePairPrice)
+          if (aligned.length > 0) {
+            setPoints(aligned.slice(-MAX_POINTS).map((p) => ({ t: p.t, price: p.price })))
+            setHistorySource('coingecko')
+            setHasCoinGeckoData(true)
+          }
+        }
+
+        // Fetch fresh data in background
+        const [baseSeries, quoteSeries] = await Promise.all([
+          fetchMarketChartWithRetry(baseId, days),
+          fetchMarketChartWithRetry(quoteId, days),
+        ])
+        if (cancelled) return
+        
+        const ratio = ratioSeries(baseSeries, quoteSeries)
+        
+        // Only use CoinGecko data if we got meaningful results
+        if (ratio.length > 1) {
+          writeChartHistoryCache(pairKey, days, ratio)
+          const merged = mergeSeries(ratio, liveCached, ttlMs)
+          const aligned = alignSeriesToTarget(merged, routePairPrice)
+          
+          // Final validation: ensure aligned data looks reasonable
+          if (aligned.length > 0) {
+            const prices = aligned.map((p) => p.price)
+            const minPrice = Math.min(...prices)
+            const maxPrice = Math.max(...prices)
+            
+            // If range is too extreme (>1000x), use live data only
+            if (maxPrice / minPrice < 1000) {
+              if (!cancelled) {
+                setPoints(aligned.slice(-MAX_POINTS).map((p) => ({ t: p.t, price: p.price })))
+                setHistorySource('coingecko')
+                setHasCoinGeckoData(true)
+                setLastFetchTime(Date.now())
+              }
+            } else {
+              console.warn('Chart: CoinGecko data too volatile, using live only')
+              if (!cancelled) setHasCoinGeckoData(false)
+            }
+          }
+        } else {
+          if (!cancelled) setHasCoinGeckoData(false)
+        }
+      } catch (err) {
+        // keep live source only
+        if (!cancelled) setHasCoinGeckoData(false)
+        console.warn('Chart: CoinGecko fetch failed, using live only', err)
+      } finally {
+        if (!cancelled) setHistoryLoading(false)
       }
-      next.push({ t: now, price: routePairPrice! })
-      if (next.length > MAX_POINTS) next.splice(0, next.length - MAX_POINTS)
-      return next
+    })()
+    
+    return () => {
+      cancelled = true
+    }
+  }, [baseId, quoteId, pairKey, days, routePairPrice])
+
+  useEffect(() => {
+    if (!Number.isFinite(routePairPrice ?? NaN) || (routePairPrice ?? 0) <= 0) return
+    
+    setPoints((prev) => {
+      const now = Date.now()
+      const ttlMs = days * 24 * 60 * 60 * 1000
+      
+      // Validate against previous points to prevent outliers
+      if (prev.length > 0) {
+        const recentPoints = prev.slice(-5) // Check last 5 points
+        const avgRecent = recentPoints.reduce((sum, p) => sum + p.price, 0) / recentPoints.length
+        
+        // Reject price if it's more than 10x different from recent average
+        // This prevents erratic jumps from bad quotes
+        if (Math.abs(routePairPrice! - avgRecent) > avgRecent * 10) {
+          console.warn('Chart: Rejecting outlier price', { 
+            new: routePairPrice, 
+            avg: avgRecent 
+          })
+          return prev // Keep existing points
+        }
+      }
+      
+      const next = [...prev, { t: now, price: routePairPrice as number }]
+        .filter((p) => now - p.t <= ttlMs)
+        .slice(-MAX_POINTS)
+      const deduped = mergeSeries(next, [], ttlMs).slice(-MAX_POINTS)
+      writeLiveChartCache(pairKey, days, deduped)
+      
+      // Update source to live if no CoinGecko data yet or if live is fresher
+      if (!hasCoinGeckoData) {
+        setHistorySource('live')
+      }
+      
+      return deduped
     })
-  }, [historyPoints, routePairPrice, routeSeedPrice])
+  }, [routePairPrice, days, pairKey, hasCoinGeckoData])
 
-  const path = useMemo(() => {
-    if (!points.length) return null
-    return buildPath(points, VB_W, VB_H, PAD)
-  }, [points])
+  // Auto-refresh CoinGecko data periodically (every 3 minutes)
+  useEffect(() => {
+    if (!baseId || !quoteId || !hasCoinGeckoData) return
+    
+    const AUTO_REFRESH_MS = 3 * 60 * 1000 // 3 minutes
+    const timeSinceLastFetch = Date.now() - lastFetchTime
+    
+    if (timeSinceLastFetch < AUTO_REFRESH_MS) {
+      // Schedule refresh when needed
+      const timer = setTimeout(() => {
+        console.log('Chart: Auto-refreshing CoinGecko data')
+        setLastFetchTime(0) // Trigger re-fetch in main useEffect
+      }, AUTO_REFRESH_MS - timeSinceLastFetch)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [baseId, quoteId, hasCoinGeckoData, lastFetchTime])
 
-  const lastPrice = points.length ? points[points.length - 1]!.price : null
-  const firstT = points.length ? points[0]!.t : null
-  const midT =
-    points.length > 0
-      ? points[Math.floor((points.length - 1) / 2)]!.t
-      : null
-  const lastT = points.length ? points[points.length - 1]!.t : null
+  const basePoints = useMemo(() => {
+    if (points.length < 2 || timePreset === 'ALL') return points
+    const now = points[points.length - 1]?.t ?? Date.now()
+    const presetMs: Record<Exclude<TimePreset, 'ALL'>, number> = {
+      '1H': 60 * 60 * 1000,
+      '4H': 4 * 60 * 60 * 1000,
+      '1D': 24 * 60 * 60 * 1000,
+      '1W': 7 * 24 * 60 * 60 * 1000,
+    }
+    const threshold = now - presetMs[timePreset]
+    const filtered = points.filter((p) => p.t >= threshold)
+    return filtered.length >= 2 ? filtered : points
+  }, [points, timePreset])
 
-  const rangeBarPct = useMemo(() => {
-    if (lastPrice == null || !path) return 50
-    const { minP, maxP } = path
-    const span = maxP - minP
-    if (span <= 0) return 50
-    return Math.min(100, Math.max(0, ((lastPrice - minP) / span) * 100))
-  }, [lastPrice, path])
+  useEffect(() => {
+    if (!zoomRange) return
+    const maxIdx = Math.max(0, basePoints.length - 1)
+    if (zoomRange.start > maxIdx) {
+      setZoomRange(null)
+      return
+    }
+    if (zoomRange.end > maxIdx) {
+      setZoomRange({ start: zoomRange.start, end: maxIdx })
+    }
+  }, [basePoints, zoomRange])
 
-  const yAxisTicks = useMemo(() => {
-    if (!path) return null
-    const mid = (path.minP + path.maxP) / 2
-    return [path.maxP, mid, path.minP]
-  }, [path])
-
-  const changePct = useMemo(() => {
-    if (points.length < 2) return null
-    const a = points[0]!.price
-    const b = points[points.length - 1]!.price
-    if (a === 0) return null
-    return ((b - a) / a) * 100
-  }, [points])
-
-  const dateCompact = days <= 7
-
-  if (marketReady && !routeLoading && !defaultLoading && points.length === 0) {
-    return (
-      <div className="flex min-h-[200px] min-w-0 w-full max-w-full flex-col justify-center rounded-3xl border border-white/[0.1] bg-gradient-to-br from-[#12142e]/90 via-[#0c0e22]/90 to-[#080914] p-5 text-center md:p-6">
-        <p className="text-sm font-medium text-slate-400">
-          {baseSymbol} / {pairLabelQuote}
-        </p>
-        <p className="mt-2 text-xs leading-relaxed text-slate-600">
-          Waiting for best route quote for this pair. Enter an amount to load
-          route-based pricing.
-        </p>
-      </div>
-    )
+  const zoomIn = () => {
+    if (basePoints.length <= MIN_ZOOM_POINTS) return
+    const current = zoomRange ?? { start: 0, end: basePoints.length - 1 }
+    const len = current.end - current.start + 1
+    if (len <= MIN_ZOOM_POINTS) return
+    const nextLen = Math.max(MIN_ZOOM_POINTS, Math.floor(len * 0.7))
+    const end = current.end
+    const start = clamp(end - nextLen + 1, 0, Math.max(0, basePoints.length - nextLen))
+    setZoomRange({ start, end: start + nextLen - 1 })
   }
 
+  const zoomOut = () => {
+    if (basePoints.length <= MIN_ZOOM_POINTS) {
+      setZoomRange(null)
+      return
+    }
+    if (!zoomRange) return
+    const len = zoomRange.end - zoomRange.start + 1
+    const nextLen = Math.min(basePoints.length, Math.ceil(len / 0.7))
+    if (nextLen >= basePoints.length) {
+      setZoomRange(null)
+      return
+    }
+    const end = zoomRange.end
+    const start = clamp(end - nextLen + 1, 0, Math.max(0, basePoints.length - nextLen))
+    setZoomRange({ start, end: start + nextLen - 1 })
+  }
+
+  const renderPoints = useMemo(() => {
+    if (!zoomRange) return basePoints
+    return basePoints.slice(zoomRange.start, zoomRange.end + 1)
+  }, [basePoints, zoomRange])
+
+  const ma7 = useMemo(() => movingAverage(renderPoints, 7), [renderPoints])
+  const ma25 = useMemo(() => movingAverage(renderPoints, 25), [renderPoints])
+  const path = useMemo(() => buildPath(renderPoints, VB_W, VB_H, PAD), [renderPoints])
+  const coords = useMemo(() => chartCoords(renderPoints, VB_W, VB_H, PAD), [renderPoints])
+  const ma7Path = useMemo(
+    () => (showMa7 ? buildPath(ma7, VB_W, VB_H, PAD) : null),
+    [ma7, showMa7],
+  )
+  const ma25Path = useMemo(
+    () => (showMa25 ? buildPath(ma25, VB_W, VB_H, PAD) : null),
+    [ma25, showMa25],
+  )
+  const candleSeries = useMemo<{
+    data: Array<{
+      x: number
+      openY: number
+      closeY: number
+      highY: number
+      lowY: number
+      up: boolean
+    }>
+    candleWidth: number
+  } | null>(() => {
+    if (!path || renderPoints.length < 2) return null
+    const innerW = VB_W - PAD * 2
+    const step = innerW / Math.max(1, renderPoints.length - 1)
+    const candleWidth = Math.max(2, Math.min(8, step * 0.6))
+    const out: Array<{
+      x: number
+      openY: number
+      closeY: number
+      highY: number
+      lowY: number
+      up: boolean
+    }> = []
+    for (let i = 1; i < renderPoints.length; i += 1) {
+      const prev = renderPoints[i - 1]!
+      const cur = renderPoints[i]!
+      const open = prev.price
+      const close = cur.price
+      const high = Math.max(open, close)
+      const low = Math.min(open, close)
+      out.push({
+        x: PAD + i * step,
+        openY: yFromPrice(open, path.minP, path.maxP),
+        closeY: yFromPrice(close, path.minP, path.maxP),
+        highY: yFromPrice(high, path.minP, path.maxP),
+        lowY: yFromPrice(low, path.minP, path.maxP),
+        up: close >= open,
+      })
+    }
+    return { data: out, candleWidth }
+  }, [renderPoints, path])
+  const loading = (routeLoading || historyLoading) && renderPoints.length === 0
+  const error = renderPoints.length === 0 ? routeError : null
+  const latest = renderPoints[renderPoints.length - 1]?.price ?? null
+  const sourceLabel = historySource === 'coingecko' ? 'CoinGecko market' : 'Live route'
+  const activeIdx = hoverIdx != null ? Math.max(0, Math.min(hoverIdx, coords.length - 1)) : null
+  const activePoint = activeIdx != null ? coords[activeIdx] : null
+  const activePrice = activePoint?.price ?? latest
+  const rangeLabel = useMemo(() => {
+    if (renderPoints.length < 2) return `${days}D`
+    const first = renderPoints[0]!.t
+    const last = renderPoints[renderPoints.length - 1]!.t
+    return formatRangeDuration(Math.max(0, last - first))
+  }, [renderPoints, days])
+  const intervalLabel = useMemo(() => {
+    if (renderPoints.length < 2) return '—'
+    const total = renderPoints[renderPoints.length - 1]!.t - renderPoints[0]!.t
+    const avg = total / Math.max(1, renderPoints.length - 1)
+    return formatRangeDuration(Math.max(60000, avg))
+  }, [renderPoints])
+  const yTicks = useMemo(() => {
+    if (!path) return []
+    return Array.from({ length: GRID_ROWS }).map((_, i) => {
+      const ratio = i / (GRID_ROWS - 1)
+      const price = path.maxP - (path.maxP - path.minP) * ratio
+      const y = PAD + ((VB_H - PAD * 2) * i) / (GRID_ROWS - 1)
+      return { y, price }
+    })
+  }, [path])
+  const timeTicks = useMemo(() => {
+    if (renderPoints.length < 2) return []
+    const idxs = [0, Math.floor((renderPoints.length - 1) / 2), renderPoints.length - 1]
+    return idxs.map((idx) => ({
+      idx,
+      label: formatAxisTime(renderPoints[idx]!.t),
+    }))
+  }, [renderPoints])
+  const overviewPath = useMemo(() => buildPath(basePoints, VB_W, 56, 6), [basePoints])
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45 }}
-      className="relative min-w-0 w-full max-w-full overflow-hidden rounded-3xl border border-white/[0.1] bg-gradient-to-br from-[#12142e]/95 via-[#0c0e22]/95 to-[#080914] shadow-[0_24px_48px_-24px_rgba(0,0,0,0.45)]"
-    >
-      <div
-        className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-eon-blue/35 to-transparent"
-        aria-hidden
-      />
-      <div className="relative p-4 md:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">
-              Price
-            </p>
-            <div className="mt-1 flex flex-wrap items-baseline gap-2">
-              <h3 className="text-lg font-semibold text-white">
-                {baseSymbol}
-                <span className="ml-2 text-sm font-normal text-slate-500">
-                  / {pairLabelQuote}
-                </span>
-              </h3>
-            </div>
-            {lastPrice != null && (
-              <p className="mt-1 font-mono text-lg font-medium tabular-nums text-eon-blue md:text-xl">
-                {formatHeadlinePrice(lastPrice, false)}
-              </p>
-            )}
-            <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1">
-              {([7, 30, 90] as const).map((opt) => {
-                const active = days === opt
-                return (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => onDaysChange?.(opt)}
-                    className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${
-                      active
-                        ? 'bg-cyan-400 text-[#04111c]'
-                        : 'text-slate-400 hover:bg-white/10 hover:text-slate-200'
-                    }`}
-                    aria-pressed={active}
-                  >
-                    {opt === 90 ? '3M' : `${opt}D`}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ${
-                historySource === 'kyber'
-                  ? 'bg-cyan-500/12 text-cyan-300 ring-cyan-500/25'
-                  : historySource === 'coingecko'
-                    ? 'bg-indigo-500/12 text-indigo-300 ring-indigo-500/25'
-                    : 'bg-slate-500/12 text-slate-300 ring-slate-500/25'
-              }`}
-            >
-              {historySource === 'kyber'
-                ? 'Kyber History'
-                : historySource === 'coingecko'
-                  ? 'CoinGecko'
-                  : 'Live Only'}
-            </span>
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-1 text-[10px] font-medium ring-1 ${
-                historyLoaded
-                  ? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20'
-                  : 'bg-amber-500/10 text-amber-300 ring-amber-500/20'
-              }`}
-            >
-              {historyLoaded ? 'Market Trend Reference' : 'Execution Reference'}
-            </span>
-            {historyLoaded && changePct != null && (
-              <span
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${
-                  changePct >= 0
-                    ? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20'
-                    : 'bg-red-500/10 text-red-300 ring-red-500/20'
+    <section className="rounded-3xl border border-uni-border bg-uni-surface p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-neutral-500">Pair chart</p>
+          <p
+            className={`rounded-full px-2 py-0.5 text-[10px] transition-colors ${
+              historySource === 'coingecko' 
+                ? 'bg-emerald-500/15 text-emerald-300' 
+                : 'bg-uni-pink/15 text-uni-pink'
+            }`}
+          >
+            {historyLoading && '⟳ '}
+            {baseSymbol}/{quoteSymbol}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-uni-surface-2 px-2 py-0.5 text-[10px] text-neutral-400">
+            {historySource === 'coingecko' ? 'CoinGecko' : 'Live'}
+          </span>
+          <div className="inline-flex rounded-lg border border-uni-border bg-uni-surface-2 p-0.5">
+            {(['line', 'candle'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setChartMode(m)}
+                className={`rounded-md px-2 py-1 text-[10px] uppercase ${
+                  chartMode === m ? 'bg-uni-pink/20 text-uni-pink' : 'text-neutral-400 hover:text-white'
                 }`}
               >
-                <TrendingUp
-                  className={`h-3.5 w-3.5 ${changePct < 0 ? 'rotate-180' : ''}`}
-                  aria-hidden
-                />
-                {changePct >= 0 ? '+' : ''}
-                {changePct.toFixed(2)}% ({days}d)
-              </span>
-            )}
+                {m}
+              </button>
+            ))}
           </div>
-        </div>
-
-        {path && lastPrice != null && (
-          <div
-            className="mt-4 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
-            aria-label="Price range for selected period"
-          >
-            <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
-              Range ({days}d)
-            </p>
-            <div className="mt-2 flex items-center gap-2">
-              <span className="shrink-0 font-mono text-[11px] tabular-nums text-slate-400">
-                {formatAxisPrice(path.minP, false)}
-              </span>
-              <div className="relative h-2 min-w-0 flex-1 rounded-full bg-slate-800/90">
-                <div
-                  className="absolute inset-y-0 left-0 rounded-full bg-eon-blue/35"
-                  style={{ width: `${rangeBarPct}%` }}
-                  aria-hidden
-                />
-                <span
-                  className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#0c0e22] bg-eon-blue shadow-[0_0_0_1px_rgba(0,210,255,0.35)]"
-                  style={{ left: `${rangeBarPct}%` }}
-                  title="Latest in range"
-                />
-              </div>
-              <span className="shrink-0 font-mono text-[11px] tabular-nums text-slate-400">
-                {formatAxisPrice(path.maxP, false)}
-              </span>
-            </div>
-            <p className="mt-1.5 text-center font-mono text-[11px] tabular-nums text-slate-500">
-              Now{' '}
-              <span className="text-slate-300">
-                {formatAxisPrice(lastPrice, false)}
-              </span>
-            </p>
-          </div>
-        )}
-
-        <div className="relative mt-4 h-[148px] w-full md:h-[160px]">
-          {(routeLoading || defaultLoading) && points.length === 0 && (
-            <div className="flex h-full items-center justify-center text-slate-500">
-              <Loader2 className="h-7 w-7 animate-spin" aria-hidden />
-            </div>
-          )}
-          {!routeLoading && !defaultLoading && routeError && points.length === 0 && (
-            <div className="flex h-full items-center justify-center px-4 text-center text-sm text-slate-500">
-              Route quote is unavailable right now. Try another amount or pair.
-            </div>
-          )}
-          {path && points.length > 0 && (
-            <div className="relative h-full w-full">
-              <svg
-                className="h-full w-full"
-                viewBox={`0 0 ${VB_W} ${VB_H}`}
-                preserveAspectRatio="none"
-                aria-hidden
+          <div className="inline-flex rounded-lg border border-uni-border bg-uni-surface-2 p-0.5">
+            {[7, 30, 90].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => onDaysChange?.(d as 7 | 30 | 90)}
+                className={`rounded-md px-2 py-1 text-[10px] uppercase ${
+                  days === d ? 'bg-uni-pink/20 text-uni-pink' : 'text-neutral-400 hover:text-white'
+                }`}
               >
-                <defs>
-                  <linearGradient
-                    id="eon-chart-fill"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="0%" stopColor="rgb(0, 210, 255)" stopOpacity="0.22" />
-                    <stop offset="100%" stopColor="rgb(0, 210, 255)" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                {[0.25, 0.5, 0.75].map((t) => (
-                  <line
-                    key={t}
-                    x1={PAD}
-                    x2={VB_W - PAD}
-                    y1={PAD + t * innerH}
-                    y2={PAD + t * innerH}
-                    stroke="rgba(148,163,184,0.08)"
-                    strokeWidth="1"
-                  />
-                ))}
-                <path
-                  d={`${path.d} L ${VB_W - PAD} ${PAD + innerH} L ${PAD} ${PAD + innerH} Z`}
-                  fill="url(#eon-chart-fill)"
-                />
-                <path
-                  d={path.d}
-                  fill="none"
-                  stroke="rgb(0, 210, 255)"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </svg>
-              {yAxisTicks && (
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex flex-col justify-between pr-1 pt-1 pb-1 font-mono text-[10px] tabular-nums text-slate-500">
-                  {yAxisTicks.map((v, idx) => (
-                    <span key={idx}>{formatAxisPrice(v, false)}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {!routeLoading &&
-          points.length > 0 &&
-          firstT != null &&
-          lastT != null && (
-            <div
-              className="mt-2 flex items-center gap-1 border-t border-white/[0.06] pt-2 font-mono text-[10px] tabular-nums text-slate-500 md:gap-2 md:text-[11px]"
-              aria-label="Chart time range"
+                {d}D
+              </button>
+            ))}
+          </div>
+          <div className="inline-flex rounded-lg border border-uni-border bg-uni-surface-2 p-0.5">
+            {(['1H', '4H', '1D', '1W', 'ALL'] as const).map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => {
+                  setTimePreset(preset)
+                  setZoomRange(null)
+                }}
+                className={`rounded-md px-2 py-1 text-[10px] uppercase ${
+                  timePreset === preset
+                    ? 'bg-uni-pink/20 text-uni-pink'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+          <div className="inline-flex rounded-lg border border-uni-border bg-uni-surface-2 p-0.5">
+            <button
+              type="button"
+              onClick={zoomOut}
+              className="rounded-md px-2 py-1 text-[10px] text-neutral-300 hover:text-white"
             >
-              <span className="min-w-0 flex-1 truncate text-left">
-                {formatChartDate(firstT, dateCompact)}
-              </span>
-              {midT != null && (
-                <span className="min-w-0 flex-1 truncate text-center text-slate-600">
-                  {formatChartDate(midT, dateCompact)}
-                </span>
-              )}
-              <span className="min-w-0 flex-1 truncate text-right">
-                {formatChartDate(lastT, dateCompact)}
-              </span>
-            </div>
-          )}
-
-        <p className="mt-2 text-center text-[10px] text-slate-600">
-          {historySource === 'kyber'
-            ? `${days}d pair trend from Kyber market history, anchored to current best-route price`
-            : historySource === 'coingecko'
-              ? `${days}d pair trend from CoinGecko, anchored to current best-route price`
-              : `Live route price only for ${baseSymbol}/${quoteSymbol}; ${days}d history unavailable now`}
-        </p>
+              -
+            </button>
+            <button
+              type="button"
+              onClick={zoomIn}
+              className="rounded-md px-2 py-1 text-[10px] text-neutral-300 hover:text-white"
+            >
+              +
+            </button>
+          </div>
+        </div>
       </div>
-    </motion.div>
+      <div className="mb-2 flex items-center gap-2 text-[10px] text-neutral-400">
+        <button
+          type="button"
+          onClick={() => setShowMa7((v) => !v)}
+          className={`rounded-md border border-uni-border px-2 py-0.5 ${showMa7 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-uni-surface-2 text-neutral-500'}`}
+        >
+          MA7
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowMa25((v) => !v)}
+          className={`rounded-md border border-uni-border px-2 py-0.5 ${showMa25 ? 'bg-fuchsia-500/15 text-fuchsia-300' : 'bg-uni-surface-2 text-neutral-500'}`}
+        >
+          MA25
+        </button>
+        <span className="text-neutral-500">
+          Data {days}D · View {timePreset} · Range {rangeLabel} · Interval ~{intervalLabel}
+        </span>
+      </div>
+
+      {loading ? (
+        <div className="flex h-44 items-center justify-center text-neutral-400">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Loading chart...
+        </div>
+      ) : error ? (
+        <div className="flex h-44 items-center justify-center text-center text-sm text-rose-300">
+          {error}
+        </div>
+      ) : path ? (
+        <div className="relative">
+          <motion.svg
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.25 }}
+            viewBox={`0 0 ${VB_W} ${VB_H}`}
+            className="h-44 w-full"
+            onMouseLeave={() => setHoverIdx(null)}
+            onMouseMove={(e) => {
+              if (coords.length === 0) return
+              const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect()
+              const x = ((e.clientX - rect.left) / rect.width) * VB_W
+              const idx = Math.round(((x - PAD) / (VB_W - PAD * 2)) * (coords.length - 1))
+              setHoverIdx(idx)
+            }}
+          >
+            <defs>
+              <linearGradient id="chart-stroke" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#ff6b9d" />
+                <stop offset="100%" stopColor="#ff007a" />
+              </linearGradient>
+              <linearGradient id="chart-fill" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="rgba(255,0,122,0.28)" />
+                <stop offset="100%" stopColor="rgba(255,0,122,0.02)" />
+              </linearGradient>
+            </defs>
+
+            {Array.from({ length: GRID_ROWS }).map((_, i) => {
+              const y = PAD + ((VB_H - PAD * 2) * i) / (GRID_ROWS - 1)
+              return (
+                <line
+                  key={`gy-${i}`}
+                  x1={PAD}
+                  y1={y}
+                  x2={VB_W - PAD}
+                  y2={y}
+                  stroke="rgba(148,163,184,0.15)"
+                  strokeWidth="1"
+                />
+              )
+            })}
+            {Array.from({ length: GRID_COLS }).map((_, i) => {
+              const x = PAD + ((VB_W - PAD * 2) * i) / (GRID_COLS - 1)
+              return (
+                <line
+                  key={`gx-${i}`}
+                  x1={x}
+                  y1={PAD}
+                  x2={x}
+                  y2={VB_H - PAD}
+                  stroke="rgba(148,163,184,0.08)"
+                  strokeWidth="1"
+                />
+              )
+            })}
+
+            <path
+              d={`${path.d} L ${VB_W - PAD} ${VB_H - PAD} L ${PAD} ${VB_H - PAD} Z`}
+              fill="url(#chart-fill)"
+              stroke="none"
+            />
+            {chartMode === 'line' ? (
+              <path d={path.d} fill="none" stroke="url(#chart-stroke)" strokeWidth="2.2" strokeLinecap="round" />
+            ) : (
+              candleSeries &&
+              candleSeries.data.map((c, i) => (
+                <g key={`c-${i}`}>
+                  <line x1={c.x} y1={c.highY} x2={c.x} y2={c.lowY} stroke={c.up ? '#00d38b' : '#ff4d7d'} strokeWidth="1.3" />
+                  <rect
+                    x={c.x - candleSeries.candleWidth / 2}
+                    y={Math.min(c.openY, c.closeY)}
+                    width={candleSeries.candleWidth}
+                    height={Math.max(1.2, Math.abs(c.closeY - c.openY))}
+                    fill={c.up ? 'rgba(0,211,139,0.88)' : 'rgba(255,77,125,0.88)'}
+                  />
+                </g>
+              ))
+            )}
+
+            {ma7Path ? (
+              <path d={ma7Path.d} fill="none" stroke="rgba(52,211,153,0.9)" strokeWidth="1.3" strokeDasharray="3 3" />
+            ) : null}
+            {ma25Path ? (
+              <path d={ma25Path.d} fill="none" stroke="rgba(217,70,239,0.9)" strokeWidth="1.3" strokeDasharray="5 4" />
+            ) : null}
+
+            {activePoint ? (
+              <>
+                <line
+                  x1={activePoint.x}
+                  y1={PAD}
+                  x2={activePoint.x}
+                  y2={VB_H - PAD}
+                  stroke="rgba(255,0,122,0.6)"
+                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                />
+                <circle cx={activePoint.x} cy={activePoint.y} r="3.5" fill="#FF007A" />
+                <circle cx={activePoint.x} cy={activePoint.y} r="7" fill="rgba(255,0,122,0.2)" />
+              </>
+            ) : null}
+          </motion.svg>
+
+          {activePoint ? (
+            <div className="pointer-events-none absolute left-2 top-2 rounded-md border border-uni-pink/25 bg-uni-surface/95 px-2 py-1 text-[10px] text-neutral-200">
+              <div className="font-semibold">{formatHeadlinePrice(activePoint.price, usdLike)}</div>
+              <div className="text-neutral-400">{formatTooltipDate(activePoint.t)}</div>
+            </div>
+          ) : null}
+
+          {yTicks.length > 0 ? (
+            <div className="pointer-events-none absolute right-1 top-1 flex h-[calc(100%-0.5rem)] flex-col justify-between">
+              {yTicks.map((tick) => (
+                <span
+                  key={`yt-${tick.y}`}
+                  className="rounded bg-uni-surface/80 px-1 py-0.5 text-[10px] text-neutral-400"
+                >
+                  {formatAxisPrice(tick.price, usdLike)}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="flex h-44 items-center justify-center text-neutral-400">No data</div>
+      )}
+
+      {timeTicks.length > 0 ? (
+        <div className="mt-1 flex items-center justify-between text-[10px] text-neutral-500">
+          {timeTicks.map((tick) => (
+            <span key={`tt-${tick.idx}`}>{tick.label}</span>
+          ))}
+        </div>
+      ) : null}
+
+      {overviewPath && basePoints.length > 8 ? (
+        <div className="mt-2 rounded-md border border-uni-border bg-uni-surface-2 p-1.5">
+          <svg viewBox={`0 0 ${VB_W} 56`} className="h-12 w-full">
+            <path
+              d={`${overviewPath.d} L ${VB_W - 6} 50 L 6 50 Z`}
+              fill="rgba(255,0,122,0.12)"
+            />
+            <path d={overviewPath.d} fill="none" stroke="rgba(255,107,157,0.9)" strokeWidth="1.5" />
+            {zoomRange ? (
+              (() => {
+                const innerW = VB_W - 12
+                const maxIdx = Math.max(1, basePoints.length - 1)
+                const x1 = 6 + (zoomRange.start / maxIdx) * innerW
+                const x2 = 6 + (zoomRange.end / maxIdx) * innerW
+                return (
+                  <rect
+                    x={x1}
+                    y={6}
+                    width={Math.max(1, x2 - x1)}
+                    height={44}
+                    fill="rgba(255,0,122,0.18)"
+                    stroke="rgba(255,0,122,0.7)"
+                  />
+                )
+              })()
+            ) : null}
+          </svg>
+        </div>
+      ) : null}
+
+      <div className="mt-3 flex items-center justify-between text-xs text-neutral-400">
+        <span className="flex items-center gap-1.5">
+          <span className={`h-1.5 w-1.5 rounded-full ${historySource === 'coingecko' ? 'bg-emerald-400' : 'bg-uni-pink animate-pulse'}`} />
+          Source: {sourceLabel}
+          {historyLoading && <span className="text-[10px] text-neutral-500">(updating...)</span>}
+        </span>
+        <span>
+          {activePrice == null ? '—' : formatHeadlinePrice(activePrice, usdLike)} ({pairLabelQuote})
+        </span>
+      </div>
+
+      {path ? (
+        <div className="mt-1 flex items-center justify-between text-[11px] text-neutral-500">
+          <span>Low {formatAxisPrice(path.minP, usdLike)}</span>
+          <span className="inline-flex items-center gap-1">
+            <TrendingUp className="h-3.5 w-3.5" />
+            High {formatAxisPrice(path.maxP, usdLike)}
+          </span>
+        </div>
+      ) : null}
+    </section>
   )
 }

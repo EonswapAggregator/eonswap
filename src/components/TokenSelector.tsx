@@ -2,15 +2,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { erc20Abi, formatUnits, parseUnits } from 'viem'
+import { erc20Abi, formatUnits, getAddress, parseUnits } from 'viem'
 import { getPublicClient } from 'wagmi/actions'
 import { useAccount } from 'wagmi'
-import { useTokenCatalog } from '../hooks/useTokenCatalog'
 import { getEonChain } from '../lib/chains'
 import { coingeckoIdForToken, fetchSimplePricesUsd } from '../lib/coingecko'
+import { fetchEonAmmQuote } from '../lib/eonAmm'
 import { formatBalanceCompact } from '../lib/format'
-import { fetchKyberRoute, fetchKyberTokensByIds } from '../lib/kyber'
-import { mergeTokenCatalog } from '../lib/remoteTokenList'
 import { isNativeToken, tokensForChain, type Token } from '../lib/tokens'
 import { wagmiConfig } from '../wagmi'
 import { TokenLogo } from './TokenLogo'
@@ -42,13 +40,12 @@ export function TokenSelector({
 }: Props) {
   const { address } = useAccount()
   const [q, setQ] = useState('')
-  const { data: remoteList, isLoading, isError } = useTokenCatalog(chainId)
-  const [kyberExtra, setKyberExtra] = useState<Token | null>(null)
-  const [kyberLoading, setKyberLoading] = useState(false)
   const [balancesByAddress, setBalancesByAddress] = useState<Record<string, bigint>>({})
   const [usdByAddress, setUsdByAddress] = useState<Record<string, number>>({})
   const [usdPriceFetchedAt, setUsdPriceFetchedAt] = useState<Record<string, number>>({})
   const [debouncedNeedleLc, setDebouncedNeedleLc] = useState('')
+  const [resolvedAddressToken, setResolvedAddressToken] = useState<Token | null>(null)
+  const [resolvingAddressToken, setResolvingAddressToken] = useState(false)
   const stalePriceMs = Number(import.meta.env.VITE_PRICE_STALE_MS ?? 120000)
   const nowMs = Date.now()
 
@@ -61,10 +58,7 @@ export function TokenSelector({
     return () => document.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  const fullCatalog = useMemo(
-    () => mergeTokenCatalog(chainId, remoteList),
-    [chainId, remoteList],
-  )
+  const fullCatalog = useMemo(() => tokensForChain(chainId), [chainId])
 
   const needle = q.trim()
   const needleLc = needle.toLowerCase()
@@ -78,35 +72,70 @@ export function TokenSelector({
   }, [needleLc])
 
   useEffect(() => {
-    setKyberExtra(null)
-    if (!needle || !ADDR_40.test(needle)) return
+    setResolvedAddressToken(null)
+    setResolvingAddressToken(false)
+    if (!open || !ADDR_40.test(needle) || isNativeToken(needle)) return
 
-    const ac = new AbortController()
-    const t = window.setTimeout(() => {
-      ;(async () => {
-        if (isNativeToken(needle)) {
-          const native = tokensForChain(chainId).find((x) => isNativeToken(x.address))
-          if (native && !ac.signal.aborted) setKyberExtra(native)
+    const lower = needle.toLowerCase()
+    const existing = fullCatalog.find((t) => t.address.toLowerCase() === lower)
+    if (existing) {
+      setResolvedAddressToken(existing)
+      return
+    }
+
+    const chain = getEonChain(chainId)
+    if (!chain) return
+    const client = getPublicClient(wagmiConfig, { chainId: chain.id })
+    if (!client) return
+
+    let cancelled = false
+    setResolvingAddressToken(true)
+    void (async () => {
+      try {
+        const address = getAddress(needle)
+        const [symbolRes, nameRes, decimalsRes] = await Promise.all([
+          client.readContract({
+            address,
+            abi: erc20Abi,
+            functionName: 'symbol',
+          }),
+          client.readContract({
+            address,
+            abi: erc20Abi,
+            functionName: 'name',
+          }),
+          client.readContract({
+            address,
+            abi: erc20Abi,
+            functionName: 'decimals',
+          }),
+        ])
+        if (cancelled) return
+
+        const symbol = String(symbolRes ?? '').trim()
+        const name = String(nameRes ?? '').trim()
+        const decimals = Number(decimalsRes ?? 18)
+        if (!symbol || !Number.isFinite(decimals) || decimals < 0 || decimals > 36) {
+          setResolvedAddressToken(null)
           return
         }
-        setKyberLoading(true)
-        try {
-          const found = await fetchKyberTokensByIds(chainId, [needle])
-          if (!ac.signal.aborted && found[0]) setKyberExtra(found[0]!)
-        } catch {
-          if (!ac.signal.aborted) setKyberExtra(null)
-        } finally {
-          if (!ac.signal.aborted) setKyberLoading(false)
-        }
-      })()
-    }, 350)
+        setResolvedAddressToken({
+          address,
+          symbol,
+          name: name || symbol,
+          decimals,
+        })
+      } catch {
+        if (!cancelled) setResolvedAddressToken(null)
+      } finally {
+        if (!cancelled) setResolvingAddressToken(false)
+      }
+    })()
 
     return () => {
-      ac.abort()
-      window.clearTimeout(t)
-      setKyberLoading(false)
+      cancelled = true
     }
-  }, [needle, chainId])
+  }, [open, needle, chainId, fullCatalog])
 
   const { list: filtered, searchTruncated } = useMemo(() => {
     const base = (() => {
@@ -135,16 +164,14 @@ export function TokenSelector({
     )
 
     if (
-      kyberExtra &&
-      (excludeLc == null ||
-        kyberExtra.address.toLowerCase() !== excludeLc) &&
       needleLc &&
       ADDR_40.test(needle) &&
-      !isNativeToken(needle)
+      resolvedAddressToken &&
+      (excludeLc == null || resolvedAddressToken.address.toLowerCase() !== excludeLc)
     ) {
-      const k = kyberExtra.address.toLowerCase()
-      if (!out.some((t) => t.address.toLowerCase() === k)) {
-        out = [kyberExtra, ...out]
+      const key = resolvedAddressToken.address.toLowerCase()
+      if (!out.some((t) => t.address.toLowerCase() === key)) {
+        out = [resolvedAddressToken, ...out]
       }
     }
 
@@ -176,7 +203,7 @@ export function TokenSelector({
     excludeLc,
     chainId,
     fullCatalog,
-    kyberExtra,
+    resolvedAddressToken,
   ])
 
   useEffect(() => {
@@ -242,20 +269,38 @@ export function TokenSelector({
           if (Number.isFinite(p) && p > 0) priceByAddress[key] = p
         }
 
-        // Route-based fallback for visible tokens with balances but missing USD prices.
-        const quoteToken = current.find((t) => {
-          const sym = t.symbol.toUpperCase()
-          return sym === 'USDC' || sym === 'USDT' || sym === 'DAI'
-        })
-        const quotePriceUsd =
-          quoteToken != null
-            ? (priceByAddress[quoteToken.address.toLowerCase()] ??
-              STABLE_USD_BY_SYMBOL[quoteToken.symbol.toUpperCase()] ??
+        // Fallback: derive missing token USD from on-chain Eon AMM quote against a stable coin.
+        const usdcOrUsdtQuoteToken =
+          current.find((t) => t.symbol.toUpperCase() === 'USDC') ??
+          current.find((t) => t.symbol.toUpperCase() === 'USDT') ??
+          null
+        const wethQuoteToken =
+          current.find((t) => t.symbol.toUpperCase() === 'WETH') ??
+          null
+        const usdcOrUsdtQuoteUsd =
+          usdcOrUsdtQuoteToken != null
+            ? (priceByAddress[usdcOrUsdtQuoteToken.address.toLowerCase()] ??
+              STABLE_USD_BY_SYMBOL[usdcOrUsdtQuoteToken.symbol.toUpperCase()] ??
               0)
             : 0
-        if (quoteToken && quotePriceUsd > 0) {
+        const wethQuoteUsd =
+          wethQuoteToken != null
+            ? (priceByAddress[wethQuoteToken.address.toLowerCase()] ??
+              prices.ethereum ??
+              0)
+            : 0
+        const quoteToken = usdcOrUsdtQuoteUsd > 0
+          ? usdcOrUsdtQuoteToken
+          : wethQuoteUsd > 0
+            ? wethQuoteToken
+            : null
+        const quoteUsd = usdcOrUsdtQuoteUsd > 0 ? usdcOrUsdtQuoteUsd : wethQuoteUsd
+
+        if (quoteToken && quoteUsd > 0) {
           const missingWithBalance = current
             .filter((t) => {
+              if (t.address.toLowerCase() === quoteToken.address.toLowerCase()) return false
+              if (isNativeToken(t.address)) return false
               const key = t.address.toLowerCase()
               const bal = balanceMap[key] ?? 0n
               return bal > 0n && (priceByAddress[key] ?? 0) <= 0
@@ -266,32 +311,28 @@ export function TokenSelector({
               if (aBal === bBal) return 0
               return aBal > bBal ? -1 : 1
             })
-            .slice(0, 10)
+            .slice(0, 8)
 
           for (const t of missingWithBalance) {
             try {
-              if (t.address.toLowerCase() === quoteToken.address.toLowerCase()) {
-                priceByAddress[t.address.toLowerCase()] = quotePriceUsd
-                continue
-              }
-              const oneUnitIn = parseUnits('1', t.decimals).toString()
-              const { routeSummary } = await fetchKyberRoute({
+              const oneIn = parseUnits('1', t.decimals).toString()
+              const q = await fetchEonAmmQuote({
                 chainId,
                 tokenIn: t.address,
                 tokenOut: quoteToken.address,
-                amountIn: oneUnitIn,
+                amountIn: oneIn,
+                sender: address,
               })
-              const quoteOut = Number(
-                formatUnits(BigInt(routeSummary.amountOut), quoteToken.decimals),
-              )
-              if (Number.isFinite(quoteOut) && quoteOut > 0) {
-                priceByAddress[t.address.toLowerCase()] = quoteOut * quotePriceUsd
+              const outQuote = Number(formatUnits(BigInt(q.amountOut), quoteToken.decimals))
+              if (Number.isFinite(outQuote) && outQuote > 0) {
+                priceByAddress[t.address.toLowerCase()] = outQuote * quoteUsd
               }
             } catch {
-              // keep missing if route fallback fails for this token
+              // keep missing if no route/liquidity for this token
             }
           }
         }
+
         const fetchedAt = Date.now()
 
         for (const t of current) {
@@ -376,14 +417,7 @@ export function TokenSelector({
     return list
   }, [filtered, needleLc, usdByAddress, balancesByAddress])
 
-  const catalogHint =
-    remoteList != null
-      ? `${fullCatalog.length.toLocaleString()} tokens — type to search`
-      : isLoading
-        ? 'Loading token list…'
-        : isError
-          ? 'Using short list (token catalog unavailable)'
-          : null
+  const catalogHint = `${fullCatalog.length.toLocaleString()} curated tokens`
 
   if (typeof document === 'undefined') return null
 
@@ -503,14 +537,14 @@ export function TokenSelector({
                   Showing first {MAX_SEARCH_ROWS} matches — refine your search.
                 </li>
               )}
-              {kyberLoading && ADDR_40.test(needle) && (
-                <li className="px-3 py-3 text-center text-xs text-slate-500">
-                  Resolving token via Kyber…
+              {resolvingAddressToken && ADDR_40.test(needle) && (
+                <li className="px-3 py-2 text-center text-xs text-slate-500">
+                  Resolving token from contract address...
                 </li>
               )}
-              {ranked.length === 0 && !kyberLoading && (
+              {ranked.length === 0 && (
                 <li className="px-3 py-8 text-center text-sm text-slate-500">
-                  {needleLc && ADDR_40.test(needle) && !kyberExtra
+                  {needleLc && ADDR_40.test(needle)
                     ? 'No token found for this address on this network.'
                     : 'No tokens match your search.'}
                 </li>

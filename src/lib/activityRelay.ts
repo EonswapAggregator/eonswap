@@ -7,7 +7,7 @@ export type LeaderboardEntry = {
   lastSuccessAt: number
 }
 
-/** Public ranking by wallet: successful swaps/bridges recorded on the relay (requires `VITE_MONITOR_RELAY_URL`). */
+/** Public ranking by wallet: successful swaps recorded on the relay (requires `VITE_MONITOR_RELAY_URL`). */
 export async function fetchRelayLeaderboard(limit = 50): Promise<
   | { ok: true; generatedAt: number; entries: LeaderboardEntry[] }
   | { ok: false; error: string }
@@ -44,10 +44,10 @@ export async function fetchRelayLeaderboard(limit = 50): Promise<
   }
 }
 
-/** Fire-and-forget log to monitoring relay (aggregated admin view). */
+/** Fire-and-forget log to monitoring relay (admin-wide view). */
 export function sendActivityLogToRelay(item: {
   id: string
-  kind: 'swap' | 'bridge'
+  kind: 'swap'
   status: string
   createdAt: number
   summary: string

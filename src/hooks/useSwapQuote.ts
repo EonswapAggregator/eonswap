@@ -1,12 +1,15 @@
 import { useEffect, useRef } from 'react'
 import { parseUnits } from 'viem'
+import { createPublicClient, formatUnits, http } from 'viem'
 import { useAccount, useChainId } from 'wagmi'
-import { isSupportedChain } from '../lib/chains'
+import { getEonChain, isEonAmmSwapChain } from '../lib/chains'
+import { fetchSimplePricesUsd } from '../lib/coingecko'
+import { eonAmmRouteLabel, fetchEonAmmQuote } from '../lib/eonAmm'
 import { formatTokenAmountUi } from '../lib/format'
-import { fetchKyberRoute, kyberRouteExchanges } from '../lib/kyber'
 import { useEonSwapStore } from '../store/useEonSwapStore'
 
 const DEBOUNCE_MS = 450
+const SWAP_GAS_LIMIT_ESTIMATE = 300_000n
 
 const emptyQuoteMeta = {
   amountInUsd: '',
@@ -14,9 +17,30 @@ const emptyQuoteMeta = {
   gasUsd: '',
   l1FeeUsd: '',
   amountOutWei: '',
+  priceImpact: '',
 } as const
 
-export function useKyberQuote() {
+async function estimateGasUsdFallback(chainId: number): Promise<string> {
+  try {
+    const chain = getEonChain(chainId)
+    const rpcUrl = chain?.rpcUrls.default.http[0]
+    if (!rpcUrl) return ''
+    const client = createPublicClient({ chain, transport: http(rpcUrl) })
+    const gasPrice = await client.getGasPrice()
+    if (gasPrice <= 0n) return ''
+    const nativeSpent = Number(formatUnits(gasPrice * SWAP_GAS_LIMIT_ESTIMATE, 18))
+    if (!Number.isFinite(nativeSpent) || nativeSpent <= 0) return ''
+    const prices = await fetchSimplePricesUsd(['ethereum'])
+    const ethUsd = prices.ethereum
+    if (!Number.isFinite(ethUsd) || ethUsd <= 0) return ''
+    const usd = nativeSpent * ethUsd
+    return Number.isFinite(usd) && usd > 0 ? usd.toFixed(4) : ''
+  } catch {
+    return ''
+  }
+}
+
+export function useSwapQuote() {
   const chainId = useChainId()
   const { address } = useAccount()
   const sellToken = useEonSwapStore((s) => s.sellToken)
@@ -28,12 +52,12 @@ export function useKyberQuote() {
   const seq = useRef(0)
 
   useEffect(() => {
-    if (!isSupportedChain(chainId)) {
+    if (!isEonAmmSwapChain(chainId)) {
       setQuoteLoading(false)
       setQuoteResult({
         receiveFormatted: '',
         routeSources: [],
-        error: 'Switch to a supported network in your wallet.',
+        error: 'Switch to Base network your wallet.',
         zid: null,
         ...emptyQuoteMeta,
       })
@@ -92,32 +116,38 @@ export function useKyberQuote() {
     const t = window.setTimeout(() => {
       void (async () => {
         try {
-          const { routeSummary } = await fetchKyberRoute({
+          const quote = await fetchEonAmmQuote({
             chainId,
             tokenIn: sellToken.address,
             tokenOut: buyToken.address,
             amountIn: amountInWei.toString(),
-            origin: address,
+            sender: address,
           })
+          const gasUsd =
+            quote.gasUsd && Number.parseFloat(quote.gasUsd) > 0
+              ? quote.gasUsd
+              : await estimateGasUsdFallback(chainId)
 
+          // ✅ SECURITY FIX (M-2): Prevent race condition - check sequence before setState
           if (seq.current !== id) return
 
           const receive = formatTokenAmountUi(
-            BigInt(routeSummary.amountOut),
+            BigInt(quote.amountOut),
             buyToken.decimals,
           )
-          const sources = kyberRouteExchanges(routeSummary)
 
           setQuoteResult({
             receiveFormatted: receive,
-            routeSources: sources,
+            routeSources: eonAmmRouteLabel(chainId),
             error: null,
-            zid: routeSummary.routeID,
-            amountInUsd: routeSummary.amountInUsd,
-            amountOutUsd: routeSummary.amountOutUsd,
-            gasUsd: routeSummary.gasUsd,
-            l1FeeUsd: routeSummary.l1FeeUsd,
-            amountOutWei: routeSummary.amountOut,
+            zid: quote.routeId,
+            routerAddress: quote.routerAddress,
+            amountInUsd: quote.amountInUsd ?? '',
+            amountOutUsd: quote.amountOutUsd ?? '',
+            gasUsd,
+            l1FeeUsd: '',
+            amountOutWei: quote.amountOut,
+            priceImpact: quote.priceImpact ?? '',
           })
         } catch (e) {
           if (seq.current !== id) return

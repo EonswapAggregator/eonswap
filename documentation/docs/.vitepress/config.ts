@@ -4,7 +4,8 @@ const nav = [
   { text: 'Home', link: '/' },
   { text: 'How It Works', link: '/how-it-works' },
   { text: 'Features', link: '/features' },
-  { text: 'Roadmap', link: '/roadmap' },
+  { text: 'Tokenomics', link: '/tokenomics' },
+  { text: 'API', link: '/api' },
   { text: 'EonSwap', link: 'https://eonswap.us' },
 ]
 
@@ -23,8 +24,16 @@ const sidebar = [
       { text: 'How It Works', link: '/how-it-works' },
       { text: 'Features', link: '/features' },
       { text: 'Advantages', link: '/advantages' },
-      { text: 'Fees & Execution', link: '/fees-execution' },
+      { text: 'Fees', link: '/fees-execution' },
+      { text: 'Tokenomics', link: '/tokenomics' },
       { text: 'Roadmap', link: '/roadmap' },
+    ],
+  },
+  {
+    text: 'Developers',
+    items: [
+      { text: 'API & Contracts', link: '/api' },
+      { text: 'Integration Guide', link: '/guides/integration' },
     ],
   },
   {
@@ -56,22 +65,48 @@ const sidebar = [
 ]
 
 export default defineConfig({
-  title: 'EonSwap Documentation',
-  description: 'Official product documentation for EonSwap users.',
+  title: 'EonSwap Docs',
+  description: 'Official documentation for EonSwap — the decentralized exchange on Base. Learn about swaps, liquidity, farming, staking, and more.',
   base: '/docs/',
   lastUpdated: true,
   cleanUrls: true,
-  head: [['link', { rel: 'icon', href: 'https://eonswap.us/favicon.png' }]],
+  appearance: 'dark',
+  head: [
+    ['link', { rel: 'icon', href: 'https://eonswap.us/favicon.png' }],
+    ['meta', { name: 'theme-color', content: '#ff007a' }],
+    ['meta', { name: 'og:type', content: 'website' }],
+    ['meta', { name: 'og:title', content: 'EonSwap Documentation' }],
+    ['meta', { name: 'og:description', content: 'The official documentation for EonSwap DEX on Base' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+  ],
   themeConfig: {
-    siteTitle: 'EonSwap Docs',
+    siteTitle: 'EonSwap',
     logo: 'https://eonswap.us/favicon.png',
     nav,
     sidebar,
+    outline: {
+      level: [2, 3],
+      label: 'On this page',
+    },
+    editLink: {
+      pattern: 'https://github.com/EonswapRouting/EonSwap/edit/main/documentation/docs/:path',
+      text: 'Edit this page on GitHub',
+    },
+    search: {
+      provider: 'local',
+      options: {
+        detailedView: true,
+      },
+    },
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/EonswapAggregator' },
+      { icon: 'github', link: 'https://github.com/EonswapRouting' },
       { icon: 'x', link: 'https://x.com/eonswapus', ariaLabel: 'EonSwap on X' },
       { icon: 'telegram', link: 'https://t.me/eonswap', ariaLabel: 'EonSwap on Telegram' },
       { icon: 'discord', link: 'https://discord.gg/AAEq22Sqng', ariaLabel: 'EonSwap on Discord' },
     ],
+    footer: {
+      message: 'Built with ❤️ on Base',
+      copyright: `© ${new Date().getFullYear()} EonSwap. All rights reserved.`,
+    },
   },
 })

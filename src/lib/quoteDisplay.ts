@@ -1,4 +1,4 @@
-/** Price impact from Kyber USD notionals: how much less $ you receive vs pay. */
+/** Price impact from route USD notionals: how much less $ you receive vs pay. */
 export function priceImpactPercentFromUsd(
   amountInUsd: string,
   amountOutUsd: string,
@@ -7,6 +7,43 @@ export function priceImpactPercentFromUsd(
   const b = Number.parseFloat(amountOutUsd)
   if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0) return null
   return ((a - b) / a) * 100
+}
+
+/** Calculate price impact from token amounts (decimal-normalized).
+ * This works for any token pair regardless of whether USD prices are available.
+ * Price impact = deviation from no-slippage price due to liquidity depletion
+ * Fee (~0.3%) is NOT included in price impact, only execution slippage
+ */
+export function priceImpactPercentFromAmounts(
+  amountIn: string,
+  amountOut: string,
+  decimalsIn: number,
+  decimalsOut: number,
+): number | null {
+  try {
+    const inBig = BigInt(amountIn)
+    const outBig = BigInt(amountOut)
+    if (inBig <= 0n || outBig <= 0n) return null
+    
+    // Normalize both to same decimal for fair ratio
+    const inNormalized = Number(inBig) * Math.pow(10, Math.max(0, decimalsOut - decimalsIn))
+    const outNormalized = Number(outBig)
+    
+    // Price impact should be 0% if we're getting the expected amount
+    // For Uniswap v2 with 0.3% fee: expectedOut = amountIn * 0.997 in same units
+    // If output < expectedOut, there's additional slippage beyond the fee
+    
+    const feeRate = 0.003 // 0.3% for Uniswap v2
+    const feeAdjustedInput = inNormalized * (1 - feeRate)
+    
+    // Price impact = (expectedOutput - actualOutput) / expectedOutput * 100
+    // If actualOutput >= expectedOutput, impact = 0 (shouldn't happen, but...)
+    const impact = Math.max(0, (feeAdjustedInput - outNormalized) / feeAdjustedInput * 100)
+    
+    return Number.isFinite(impact) ? impact : null
+  } catch {
+    return null
+  }
 }
 
 export function formatPriceImpactLabel(

@@ -6,14 +6,13 @@ import { createPortal } from 'react-dom'
 import { useAccount, useBalance, useDisconnect, useSwitchChain } from 'wagmi'
 import { formatBalanceLabel, truncateAddress } from '../lib/format'
 import { eonChains } from '../lib/chains'
-import { NATIVE_AGGREGATOR } from '../lib/tokens'
-import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
+import { NetworkIconImg } from './NetworkIconImg'
 
 const triggerClass =
-  'flex h-10 items-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.03] px-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-white/[0.14] hover:bg-white/[0.06] sm:px-3'
+  'flex h-10 items-center gap-2 rounded-xl border border-uni-border bg-uni-surface px-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-uni-pink/40 hover:bg-uni-pink/10 sm:px-3'
 
 const menuBtnClass =
-  'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-slate-200 transition hover:bg-white/[0.06] active:scale-[0.99]'
+  'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-slate-200 transition hover:bg-uni-pink/10 hover:text-uni-pink active:scale-[0.99]'
 
 const AVATAR_EMOJIS = ['🦊', '🐼', '🦄', '🐙', '🦁', '🐸', '🐵', '🐧', '🦉', '🐳']
 const AVATAR_GRADIENTS = [
@@ -100,13 +99,13 @@ export function WalletConnectDropdown() {
                   exit={{ opacity: 0, scale: 0.97, y: 6 }}
                   transition={{ duration: 0.16 }}
                   onClick={(e) => e.stopPropagation()}
-                  className="w-full max-w-[380px] overflow-hidden rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-[#151835] to-[#090b1e] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.55)]"
+                  className="w-full max-w-[380px] overflow-hidden rounded-3xl border border-uni-border/70 bg-uni-surface/95 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.55),0_0_48px_-12px_rgba(255,0,199,0.1)] backdrop-blur-xl"
                 >
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-xl font-semibold text-white">Switch Networks</h3>
                     <button
                       type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-uni-border text-slate-300 transition hover:border-uni-pink/40 hover:bg-uni-pink/10 hover:text-uni-pink"
                       onClick={() => setNetworkModalOpen(false)}
                       aria-label="Close network modal"
                     >
@@ -129,15 +128,14 @@ export function WalletConnectDropdown() {
                           }}
                           className={`flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left transition ${
                             active
-                              ? 'bg-cyan-400 text-[#04111c]'
-                              : 'text-slate-200 hover:bg-white/[0.06]'
+                              ? 'bg-uni-pink/20 text-uni-pink ring-1 ring-uni-pink/30'
+                              : 'text-slate-200 hover:bg-uni-pink/10 hover:text-uni-pink'
                           }`}
                         >
-                          <img
-                            src={trustWalletTokenLogoUrl(c.id, NATIVE_AGGREGATOR) ?? undefined}
-                            alt={c.name}
-                            className="h-7 w-7 rounded-full object-cover ring-1 ring-white/15"
-                            loading="lazy"
+                          <NetworkIconImg
+                            chainId={c.id}
+                            name={c.name}
+                            className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-white/15"
                           />
                           <span className="min-w-0 flex-1 truncate font-semibold">
                             {c.name}
@@ -188,7 +186,7 @@ export function WalletConnectDropdown() {
             <button
               type="button"
               onClick={openConnectModal}
-              className={`${triggerClass} justify-center px-4 text-sm font-semibold text-white`}
+              className="flex h-10 items-center justify-center gap-2 rounded-xl border border-uni-pink/40 bg-uni-pink/15 px-4 text-sm font-semibold text-uni-pink shadow-[0_0_12px_rgba(255,0,199,0.15)] transition hover:border-uni-pink/60 hover:bg-uni-pink/25 hover:text-white"
             >
               Connect Wallet
             </button>
@@ -235,17 +233,12 @@ export function WalletConnectDropdown() {
                   {avatarEmoji}
                 </span>
               )}
-              {chain?.hasIcon && chain.iconUrl ? (
-                <span
-                  className="hidden h-5 w-5 shrink-0 overflow-hidden rounded-full sm:block"
-                  style={{ background: chain.iconBackground }}
-                >
-                  <img
-                    src={chain.iconUrl}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                </span>
+              {chain?.id != null ? (
+                <NetworkIconImg
+                  chainId={chain.id}
+                  name={chain.name ?? 'Network'}
+                  className="hidden h-5 w-5 shrink-0 rounded-full object-cover ring-1 ring-white/10 sm:block"
+                />
               ) : null}
               <span className="hidden max-w-[6.5rem] truncate font-mono text-xs text-slate-200 sm:inline md:max-w-[7.5rem]">
                 {truncateAddress(address)}
@@ -266,7 +259,7 @@ export function WalletConnectDropdown() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                  className="absolute right-0 top-[calc(100%+0.5rem)] z-[100] w-[min(19rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-cyan-500/[0.14] bg-gradient-to-b from-[#16182f] to-[#0a0b1c] py-1 shadow-[0_28px_80px_rgba(0,0,0,0.55),0_0_0_1px_rgba(0,210,255,0.06),0_0_48px_-12px_rgba(34,211,238,0.1)]"
+                  className="absolute right-0 top-[calc(100%+0.5rem)] z-[100] w-[min(19rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-uni-border/70 bg-uni-surface/95 py-1 shadow-[0_28px_80px_rgba(0,0,0,0.55),0_0_48px_-12px_rgba(255,0,199,0.1)] backdrop-blur-xl"
                 >
                   <div className="border-b border-white/[0.06] px-3 py-3">
                     {chain?.unsupported ? (

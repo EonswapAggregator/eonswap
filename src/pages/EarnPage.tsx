@@ -3,7 +3,9 @@ import {
   ArrowRight,
   ChevronDown,
   Coins,
+  Droplets,
   ExternalLink,
+  Globe,
   Layers3,
   Loader2,
   Percent,
@@ -13,9 +15,11 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { eonChains } from '../lib/chains'
-import { NATIVE_AGGREGATOR, tokensForChain } from '../lib/tokens'
-import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
+import { eonEarnChains } from '../lib/chains'
+import { tokensForChain } from '../lib/tokens'
+import { TokenLogo } from '../components/TokenLogo'
+import { nativeChainDisplayLogoUrl, tokenDisplayLogoUrl } from '../lib/tokenLogos'
+import { NativePoolSection } from '../components/pool/NativePoolSection'
 
 type LlamaPool = {
   pool: string
@@ -31,12 +35,7 @@ type LlamaPool = {
 }
 
 const CHAIN_ID_TO_LLAMA: Record<number, string> = {
-  1: 'Ethereum',
-  10: 'Optimism',
-  56: 'BSC',
-  137: 'Polygon',
   8453: 'Base',
-  42161: 'Arbitrum',
 }
 
 const FETCH_TIMEOUT_MS = 12000
@@ -133,12 +132,6 @@ function poolPairSymbols(symbol: string): [string, string] {
   return [a, b]
 }
 
-function tokenLogoUrlBySymbol(chainId: number, symbol: string): string | null {
-  const token = tokensForChain(chainId).find((t) => t.symbol.toUpperCase() === symbol.toUpperCase())
-  if (!token) return null
-  return trustWalletTokenLogoUrl(chainId, token.address)
-}
-
 function PoolPairIcon({
   chainId,
   symbol,
@@ -147,23 +140,22 @@ function PoolPairIcon({
   symbol: string
 }) {
   const [a, b] = poolPairSymbols(symbol)
-  const aLogo = tokenLogoUrlBySymbol(chainId, a)
-  const bLogo = tokenLogoUrlBySymbol(chainId, b)
+  const tokenA = tokensForChain(chainId).find((t) => t.symbol.toUpperCase() === a)
+  const tokenB = tokensForChain(chainId).find((t) => t.symbol.toUpperCase() === b)
 
-  const iconClass = 'h-7 w-7 rounded-full object-cover ring-1 ring-white/20'
   const placeholderClass =
     'inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.08] text-[10px] font-semibold text-slate-300 ring-1 ring-white/20'
 
   return (
     <span className="inline-flex items-center shrink-0">
-      {aLogo ? (
-        <img src={aLogo} alt={a} className={iconClass} loading="lazy" />
+      {tokenA ? (
+        <TokenLogo chainId={chainId} token={tokenA} size="sm" className="ring-white/20" />
       ) : (
         <span className={placeholderClass}>{a.slice(0, 1)}</span>
       )}
       <span className="-ml-2.5">
-        {bLogo ? (
-          <img src={bLogo} alt={b} className={iconClass} loading="lazy" />
+        {tokenB ? (
+          <TokenLogo chainId={chainId} token={tokenB} size="sm" className="ring-white/20" />
         ) : (
           <span className={placeholderClass}>{b.slice(0, 1)}</span>
         )}
@@ -268,6 +260,7 @@ function IconSelect({
 }
 
 export function EarnPage() {
+  const [activeTab, setActiveTab] = useState<'native' | 'external'>('native')
   const [chainId, setChainId] = useState<number>(1)
   const [tokenSymbol, setTokenSymbol] = useState<string>(defaultTokenSymbolForChain(1))
   const [query, setQuery] = useState('')
@@ -283,10 +276,10 @@ export function EarnPage() {
   }, [chainId])
   const chainSelectOptions = useMemo<SelectorOption[]>(
     () =>
-      eonChains.map((c) => ({
+      eonEarnChains.map((c) => ({
         value: String(c.id),
         label: c.name,
-        iconUrl: trustWalletTokenLogoUrl(c.id, NATIVE_AGGREGATOR),
+        iconUrl: nativeChainDisplayLogoUrl(c.id),
       })),
     [],
   )
@@ -297,7 +290,7 @@ export function EarnPage() {
         return {
           value: sym,
           label: sym === 'ALL' ? 'All tracked tokens' : sym,
-          iconUrl: sym === 'ALL' || !token ? null : trustWalletTokenLogoUrl(chainId, token.address),
+          iconUrl: sym === 'ALL' || !token ? null : tokenDisplayLogoUrl(chainId, token),
         }
       }),
     [tokenOptions, chainId],
@@ -311,7 +304,7 @@ export function EarnPage() {
       const parsed = JSON.parse(raw) as { chainId?: number; tokenSymbol?: string }
       if (
         typeof parsed.chainId === 'number' &&
-        eonChains.some((c) => c.id === parsed.chainId)
+        eonEarnChains.some((c) => c.id === parsed.chainId)
       ) {
         setChainId(parsed.chainId)
       }
@@ -418,9 +411,8 @@ export function EarnPage() {
               Earn strategy desk
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300 md:text-[15px]">
-              Live pool intelligence for EonSwap's upcoming native Earn engine.
-              We are currently collecting market signals while execution controls
-              remain intentionally inactive.
+              Manage liquidity in Eon AMM native pools or discover yield opportunities
+              across the DeFi ecosystem.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -431,7 +423,7 @@ export function EarnPage() {
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/[0.14] bg-white/[0.04] px-4 text-sm font-medium text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-white/[0.2] hover:bg-white/[0.07] hover:text-white disabled:opacity-60"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              Refresh pools
+              Refresh
             </button>
             <Link
               to="/swap"
@@ -442,6 +434,51 @@ export function EarnPage() {
           </div>
         </motion.div>
 
+        {/* Tab Selector */}
+        <div className="mb-6 flex gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] p-1.5">
+          <button
+            type="button"
+            onClick={() => setActiveTab('native')}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
+              activeTab === 'native'
+                ? 'bg-gradient-to-r from-cyan-400/20 via-cyan-500/15 to-eon-blue/20 text-cyan-300 shadow-[0_0_20px_-6px_rgba(0,210,255,0.3)]'
+                : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
+            }`}
+          >
+            <Droplets className="h-4 w-4" />
+            Eon Native Pools
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('external')}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
+              activeTab === 'external'
+                ? 'bg-gradient-to-r from-cyan-400/20 via-cyan-500/15 to-eon-blue/20 text-cyan-300 shadow-[0_0_20px_-6px_rgba(0,210,255,0.3)]'
+                : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
+            }`}
+          >
+            <Globe className="h-4 w-4" />
+            External Yields
+            <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-300">
+              View-only
+            </span>
+          </button>
+        </div>
+
+        {/* Native Pools Tab */}
+        {activeTab === 'native' && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="rounded-3xl border border-white/[0.1] bg-gradient-to-br from-[#12142e]/90 via-[#0c0e22]/90 to-[#080914]/90 p-6 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.45)]"
+          >
+            <NativePoolSection />
+          </motion.div>
+        )}
+
+        {/* External Yields Tab */}
+        {activeTab === 'external' && (
         <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,392px)_minmax(0,1fr)] lg:gap-6 xl:gap-8">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -688,6 +725,7 @@ export function EarnPage() {
             </div>
           </motion.div>
         </div>
+        )}
       </div>
     </section>
   )

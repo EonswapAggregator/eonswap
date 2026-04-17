@@ -9,7 +9,7 @@ type OneInchRow = {
   decimals: number
 }
 
-/** Public per-chain token map — Kyber has no “list all tokens”; this backs the selector catalog. */
+/** Public per-chain token map used by the token selector catalog. */
 export async function fetch1inchTokenList(chainId: number): Promise<Token[]> {
   if (!EON_CHAIN_IDS.has(chainId)) {
     return tokensForChain(chainId)
@@ -17,13 +17,13 @@ export async function fetch1inchTokenList(chainId: number): Promise<Token[]> {
 
   const res = await fetch(`https://tokens.1inch.io/v1.2/${chainId}`)
   if (!res.ok) {
-    throw new Error(`Token list failed (${res.status})`)
+    return []
   }
 
   const raw = (await res.json()) as Record<string, OneInchRow>
   const nativeLc = NATIVE_AGGREGATOR.toLowerCase()
   const out: Token[] = []
-
+  
   for (const row of Object.values(raw)) {
     if (row.chainId !== chainId) continue
     const addr = row.address

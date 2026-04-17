@@ -27,6 +27,7 @@ jobs:
         run: npm run lint
 
       - name: Build
+        # prebuild: CI runs fetch:token-logos --soft-fail, then validate:token-logos
         run: npm run build
 
       - name: Install Playwright browser

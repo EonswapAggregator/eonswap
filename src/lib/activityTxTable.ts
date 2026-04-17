@@ -7,27 +7,27 @@ export const activityTableClass =
   'w-full min-w-[960px] border-collapse text-left text-[12px]'
 
 export const activityTheadRowClass =
-  'sticky top-0 z-[1] border-b border-white/[0.1] bg-[#0a0b1c]/98 backdrop-blur-md'
+  'sticky top-0 z-[1] border-b border-uni-border bg-uni-bg/98 backdrop-blur-md'
 
 export const activityThClass =
-  'whitespace-nowrap px-3 py-3 font-semibold uppercase tracking-[0.08em] text-slate-500'
+  'whitespace-nowrap px-3 py-3 font-semibold uppercase tracking-[0.08em] text-neutral-500'
 
 export const activityTdClass = 'align-middle px-3 py-3'
 
 export const activityTrClass =
-  'border-b border-white/[0.05] transition-colors hover:bg-white/[0.02]'
+  'border-b border-uni-border transition-colors hover:bg-white/[0.02]'
 
 export const activityCardShellClass =
-  'flex min-w-0 w-full max-w-full flex-col overflow-hidden rounded-3xl border border-white/[0.1] bg-gradient-to-b from-[#12142e]/90 to-[#0a0b1c]/95 shadow-[0_20px_56px_-24px_rgba(0,0,0,0.85),0_0_0_1px_rgba(0,210,255,0.05)]'
+  'flex min-w-0 w-full max-w-full flex-col overflow-hidden rounded-3xl border border-uni-border bg-uni-surface shadow-uni-card'
 
 export const activityTableToolbarClass =
-  'flex min-w-0 flex-col gap-2 border-b border-white/[0.08] bg-black/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:px-5'
+  'flex min-w-0 flex-col gap-2 border-b border-uni-border bg-uni-bg/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:px-5'
 
 export const activityToolbarTitleClass =
-  'text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500'
+  'text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-500'
 
 export const activityToolbarMetaClass =
-  'font-mono text-[11px] text-slate-600'
+  'font-mono text-[11px] text-neutral-600'
 
 /** Same short hash in both tables (8 + … + 6). */
 export function shortTxHash(hash: string) {
@@ -50,9 +50,9 @@ export function formatActivityAge(eventMs: number, nowMs: number) {
 }
 
 export function methodPillClass() {
-  return 'inline-flex rounded-md border border-white/[0.1] bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-slate-400'
+  return 'inline-flex rounded-md border border-uni-border bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-neutral-400'
 }
 
 export function networkPillClass() {
-  return 'whitespace-nowrap rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-slate-400'
+  return 'whitespace-nowrap rounded-lg border border-uni-border bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-neutral-400'
 }

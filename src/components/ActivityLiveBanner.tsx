@@ -1,7 +1,8 @@
 import { useAccount, useBlockNumber } from 'wagmi'
 import { getEonChain, isSupportedChain } from '../lib/chains'
-import { trustWalletTokenLogoUrl } from '../lib/tokenLogos'
-import { NATIVE_AGGREGATOR } from '../lib/tokens'
+import { nativeChainDisplayLogoUrl } from '../lib/tokenLogos'
+import { Link } from 'react-router-dom'
+import { Wallet } from 'lucide-react'
 
 export function ActivityLiveBanner() {
   const { address, chainId, isConnected } = useAccount()
@@ -19,45 +20,73 @@ export function ActivityLiveBanner() {
 
   if (!ok) {
     return (
-      <div className="rounded-2xl border border-white/[0.08] bg-[#070818]/80 px-4 py-3 text-pretty text-sm leading-relaxed text-slate-500">
-        Connect your wallet on a supported network to see the live chain head
-        (like a wallet activity feed).
+      <div className="overflow-hidden rounded-2xl border border-uni-border bg-uni-surface">
+        <div className="flex flex-col items-center justify-center gap-4 px-6 py-8 text-center sm:flex-row sm:text-left">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-uni-surface-2 ring-1 ring-uni-border">
+            <Wallet className="h-6 w-6 text-neutral-500" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-white">Connect Your Wallet</p>
+            <p className="mt-1 text-sm text-neutral-500">
+              See live chain activity and track your transactions in real-time.
+            </p>
+          </div>
+          <Link
+            to="/swap"
+            className="inline-flex items-center gap-2 rounded-xl bg-uni-pink px-5 py-2.5 text-sm font-semibold text-white shadow-glow transition hover:bg-uni-pink-light"
+          >
+            Connect Wallet
+          </Link>
+        </div>
       </div>
     )
   }
 
   const name = getEonChain(chainId)?.name ?? `Chain ${chainId}`
-  const chainLogo = trustWalletTokenLogoUrl(chainId, NATIVE_AGGREGATOR)
+  const chainLogo = nativeChainDisplayLogoUrl(chainId)
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.06] px-4 py-3 text-[13px] text-slate-300">
-      <span className="relative flex h-2.5 w-2.5 shrink-0">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/50" />
-        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
-      </span>
-      <span className="font-semibold text-emerald-200/95">Live</span>
-      <span className="hidden h-4 w-px bg-white/10 sm:block" aria-hidden />
-      <span className="inline-flex items-center gap-1.5 text-slate-400">
-        <span className="text-slate-500">Network</span>{' '}
-        <span className="inline-flex items-center gap-1.5 font-medium text-slate-200">
-          <img
-            src={chainLogo ?? undefined}
-            alt={name}
-            className="h-4 w-4 rounded-full object-cover ring-1 ring-white/15"
-            loading="lazy"
-          />
-          {name}
-        </span>
-      </span>
-      <span className="hidden h-4 w-px bg-white/10 sm:block" aria-hidden />
-      <span className="font-mono tabular-nums text-slate-200">
-        <span className="text-slate-500">Latest block</span>{' '}
-        {block != null ? (
-          <span className="text-eon-blue">#{block.toString()}</span>
-        ) : (
-          <span className="text-slate-500">…</span>
-        )}
-      </span>
+    <div className="overflow-hidden rounded-2xl border border-uni-pink/20 bg-gradient-to-r from-uni-pink/[0.08] via-uni-surface to-uni-surface">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4">
+        {/* Live Indicator */}
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-3 w-3 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-uni-pink/60" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-uni-pink shadow-[0_0_12px_rgba(255,0,122,0.6)]" />
+          </span>
+          <span className="text-sm font-bold text-uni-pink">LIVE</span>
+        </div>
+        
+        <span className="hidden h-5 w-px bg-uni-border sm:block" aria-hidden />
+        
+        {/* Network */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">Network</span>
+          <span className="inline-flex items-center gap-2 rounded-lg bg-uni-surface-2 px-3 py-1.5 ring-1 ring-uni-border">
+            <img
+              src={chainLogo ?? undefined}
+              alt={name}
+              className="h-5 w-5 rounded-full object-cover ring-1 ring-white/10"
+              loading="lazy"
+            />
+            <span className="text-sm font-semibold text-white">{name}</span>
+          </span>
+        </div>
+        
+        <span className="hidden h-5 w-px bg-uni-border sm:block" aria-hidden />
+        
+        {/* Block Number */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">Block</span>
+          {block != null ? (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-uni-pink/10 px-3 py-1.5 font-mono text-sm font-bold tabular-nums text-uni-pink ring-1 ring-uni-pink/20">
+              #{block.toLocaleString()}
+            </span>
+          ) : (
+            <span className="rounded-lg bg-uni-surface-2 px-3 py-1.5 text-sm text-neutral-500">Loading...</span>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

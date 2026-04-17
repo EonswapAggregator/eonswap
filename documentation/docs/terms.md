@@ -6,7 +6,7 @@ By accessing or using EonSwap, you agree to these terms.
 
 ## Service Description
 
-EonSwap provides interfaces and tools to access decentralized swap and bridge functionality. EonSwap does not custody user funds.
+EonSwap provides interfaces and tools to access decentralized swap functionality. EonSwap does not custody user funds.
 
 ## User Responsibilities
 
@@ -16,7 +16,7 @@ EonSwap provides interfaces and tools to access decentralized swap and bridge fu
 
 ## Risk Disclosure
 
-Blockchain transactions are irreversible and may involve smart contract, market, bridge, and network risks. You accept these risks when using the service.
+Blockchain transactions are irreversible and may involve smart contract, market, swap, and network risks. You accept these risks when using the service.
 
 ## Availability
 

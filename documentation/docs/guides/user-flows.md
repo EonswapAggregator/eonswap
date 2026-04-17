@@ -8,7 +8,7 @@
 4. Confirm wallet transaction.
 5. Monitor status until completed.
 
-## Flow B: Bridge
+## Flow B: Swap
 
 1. Choose source and destination chain.
 2. Select tokens and amount.

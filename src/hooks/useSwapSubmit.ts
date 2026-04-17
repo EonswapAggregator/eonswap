@@ -1,27 +1,19 @@
 import { useCallback, useState } from 'react'
 import {
   erc20Abi,
-  maxUint256,
   parseUnits,
   UserRejectedRequestError,
 } from 'viem'
 import { getPublicClient, getWalletClient } from 'wagmi/actions'
 import { useAccount, useSendTransaction } from 'wagmi'
-import { getEonChain, isSupportedChain } from '../lib/chains'
-import {
-  buildKyberSwap,
-  fetchKyberRoute,
-  type KyberRouteSummary,
-} from '../lib/kyber'
+import { getEonChain, isEonAmmSwapChain } from '../lib/chains'
+import { buildEonAmmSwap, fetchEonAmmQuote } from '../lib/eonAmm'
 import { formatTokenAmountUi } from '../lib/format'
 import { isNativeToken } from '../lib/tokens'
 import { toUserFacingErrorMessage } from '../lib/errors'
 import { sendTxEventToRelay } from '../lib/txEvents'
 import { wagmiConfig } from '../wagmi'
 import { useEonSwapStore } from '../store/useEonSwapStore'
-
-const APPROVAL_MODE = String(import.meta.env.VITE_SWAP_APPROVAL_MODE ?? 'exact').toLowerCase()
-const USE_MAX_APPROVAL = APPROVAL_MODE === 'max'
 
 export function useSwapSubmit() {
   const { address, chainId } = useAccount()
@@ -33,14 +25,15 @@ export function useSwapSubmit() {
   const sellAmountInput = useEonSwapStore((s) => s.sellAmountInput)
   const receiveFormatted = useEonSwapStore((s) => s.receiveFormatted)
   const slippageToleranceBps = useEonSwapStore((s) => s.slippageToleranceBps)
+  const deadlineMinutes = useEonSwapStore((s) => s.deadlineMinutes)
   const quoteGasUsd = useEonSwapStore((s) => s.quoteGasUsd)
   const quoteL1FeeUsd = useEonSwapStore((s) => s.quoteL1FeeUsd)
   const addActivity = useEonSwapStore((s) => s.addActivity)
   const patchActivity = useEonSwapStore((s) => s.patchActivity)
 
   const submit = useCallback(async () => {
-    if (!address || !chainId || !isSupportedChain(chainId)) {
-      throw new Error('Connect your wallet on a supported network to swap.')
+    if (!address || !chainId || !isEonAmmSwapChain(chainId)) {
+      throw new Error('Connect your wallet on Base network swap.')
     }
 
     const chain = getEonChain(chainId)
@@ -80,66 +73,96 @@ export function useSwapSubmit() {
     })
 
     try {
-      let routeSummary: KyberRouteSummary
-
-      const initial = await fetchKyberRoute({
+      let quote = await fetchEonAmmQuote({
         chainId,
         tokenIn: sellToken.address,
         tokenOut: buyToken.address,
         amountIn: amountInWei.toString(),
-        origin: address,
+        sender: address,
       })
-      routeSummary = initial.routeSummary
+      const eonAmmMode = String(quote.buildPayload?.mode ?? '').trim()
+      const skipAllowanceForUnwrap = eonAmmMode === 'unwrap-native'
 
-      if (!isNativeToken(sellToken.address)) {
+      if (!isNativeToken(sellToken.address) && !skipAllowanceForUnwrap) {
         const allowance = await publicClient.readContract({
           address: sellToken.address as `0x${string}`,
           abi: erc20Abi,
           functionName: 'allowance',
-          args: [address, initial.routerAddress],
+          args: [address, quote.routerAddress],
         })
 
         if (allowance < amountInWei) {
           const walletClient = await getWalletClient(wagmiConfig)
           if (!walletClient) throw new Error('Wallet not available')
-          const approvalAmount = USE_MAX_APPROVAL ? maxUint256 : amountInWei
+          // ✅ SECURITY FIX (H-1): Always use exact approval (no unlimited)
+          const approvalAmount = amountInWei
 
           const approveHash = await walletClient.writeContract({
             chain,
             address: sellToken.address as `0x${string}`,
             abi: erc20Abi,
             functionName: 'approve',
-            args: [initial.routerAddress, approvalAmount],
+            args: [quote.routerAddress, approvalAmount],
           })
 
           await publicClient.waitForTransactionReceipt({ hash: approveHash })
         }
 
-        const refreshed = await fetchKyberRoute({
+        quote = await fetchEonAmmQuote({
           chainId,
           tokenIn: sellToken.address,
           tokenOut: buyToken.address,
           amountIn: amountInWei.toString(),
-          origin: address,
+          sender: address,
         })
-        routeSummary = refreshed.routeSummary
       }
 
-      const built = await buildKyberSwap({
+      const built = await buildEonAmmSwap({
         chainId,
-        routeSummary,
+        quote,
         sender: address,
         recipient: address,
-        origin: address,
-        slippageTolerance: slippageToleranceBps,
+        slippageToleranceBps,
+        deadlineMinutes,
       })
+
+      // Sanity-check server-provided gas against a client-side estimate.
+      // Allow the server gas only if it's within a safe multiplier (1.2x) of the estimate.
+      let gasToUse: bigint | undefined
+      try {
+        const gasEstimate = await publicClient.estimateGas({
+          account: address,
+          to: built.routerAddress as `0x${string}`,
+          data: built.data as `0x${string}`,
+          value: BigInt(built.transactionValue),
+        })
+        const estimateBig = BigInt(gasEstimate)
+        const providedGas = BigInt((built.gas ?? '0').toString() || '0')
+        const maxAllowed = (estimateBig * 12n) / 10n // 1.2x
+        if (providedGas > 0n) {
+          if (providedGas > maxAllowed) {
+            throw new Error('Server-provided gas exceeds safe estimate; aborting for safety.')
+          }
+          gasToUse = providedGas
+        } else {
+          // No gas provided by server; use estimated * 1.2 as a safe upper bound.
+          gasToUse = maxAllowed
+        }
+      } catch {
+        // If estimate failed, fall back to server gas if present, otherwise abort.
+        if (built.gas && built.gas !== '0') {
+          gasToUse = BigInt(built.gas)
+        } else {
+          throw new Error('Unable to estimate gas and no server gas provided; aborting.')
+        }
+      }
 
       const hash = await sendTransactionAsync({
         chainId: chain.id,
         to: built.routerAddress,
         data: built.data,
         value: BigInt(built.transactionValue),
-        gas: BigInt(built.gas),
+        gas: gasToUse,
       })
 
       patchActivity(activityId, { txHash: hash })
@@ -194,6 +217,7 @@ export function useSwapSubmit() {
     patchActivity,
     sendTransactionAsync,
     slippageToleranceBps,
+    deadlineMinutes,
     quoteGasUsd,
     quoteL1FeeUsd,
   ])
