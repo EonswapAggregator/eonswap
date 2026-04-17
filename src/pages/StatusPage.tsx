@@ -6,7 +6,7 @@ import { eonChains } from '../lib/chains'
 import { fetchSimplePricesUsd } from '../lib/coingecko'
 import { toUserFacingErrorMessage } from '../lib/errors'
 import { truncateAddress } from '../lib/format'
-import { getMonitorRelayBaseUrl } from '../lib/monitorRelayUrl'
+import { formatRelayUrlForDisplay, getMonitorRelayBaseUrl } from '../lib/monitorRelayUrl'
 import { fetchEvmTxStatus, type EvmTxStatus } from '../lib/txStatus'
 
 type HealthStatus = 'checking' | 'ok' | 'degraded'
@@ -50,8 +50,9 @@ function healthPill(status: HealthStatus) {
 
 function StatusDot({ status, pulse }: { status: HealthStatus; pulse?: boolean }) {
   const color = status === 'ok' ? 'bg-emerald-500' : status === 'checking' ? 'bg-amber-500' : 'bg-rose-500'
+  const label = status === 'ok' ? 'Operational' : status === 'checking' ? 'Checking' : 'Issue detected'
   return (
-    <span className="relative flex h-3 w-3">
+    <span className="relative flex h-3 w-3" role="status" aria-label={label}>
       {pulse && status === 'ok' && (
         <motion.span {...pulseRing} className={`absolute inline-flex h-full w-full rounded-full ${color} opacity-75`} />
       )}
@@ -402,7 +403,7 @@ export function StatusPage() {
                 </div>
                 <div className="bg-uni-surface p-5">
                   <div className="flex items-center gap-2 text-neutral-500"><Globe className="h-4 w-4" /><p className="text-[10px] font-semibold uppercase tracking-wider">Relay URL</p></div>
-                  <p className="mt-3 truncate font-mono text-sm text-white">{getMonitorRelayBaseUrl() || 'N/A'}</p>
+                  <p className="mt-3 truncate font-mono text-sm text-white">{formatRelayUrlForDisplay(getMonitorRelayBaseUrl())}</p>
                 </div>
                 <div className="bg-uni-surface p-5">
                   <div className="flex items-center gap-2 text-neutral-500"><Clock className="h-4 w-4" /><p className="text-[10px] font-semibold uppercase tracking-wider">Last Health Check</p></div>

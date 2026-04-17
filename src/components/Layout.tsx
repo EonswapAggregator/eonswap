@@ -62,7 +62,7 @@ export function Layout() {
     >
       <Header />
       <ChainTokenSync />
-      <main className="min-w-0">
+      <main className="min-w-0 [overflow-wrap:anywhere]">
         <Outlet />
       </main>
       <footer className="relative border-t border-uni-border/50 bg-gradient-to-b from-uni-bg via-uni-bg to-uni-surface/20">

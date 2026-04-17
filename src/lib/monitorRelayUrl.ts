@@ -20,3 +20,15 @@ export function getMonitorRelayBaseUrl(): string | null {
   }
   return normalizeMonitorRelayBaseUrl(raw)
 }
+
+/** Format relay URL for display - show hostname only for readability */
+export function formatRelayUrlForDisplay(url: string | null): string {
+  if (!url) return 'N/A'
+  if (url === DEV_RELAY_PROXY_PREFIX) return 'localhost (dev proxy)'
+  try {
+    const parsed = new URL(url)
+    return parsed.hostname
+  } catch {
+    return url.length > 30 ? `${url.slice(0, 27)}...` : url
+  }
+}

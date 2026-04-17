@@ -179,8 +179,18 @@ export function FarmCard({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.45 }}
-      className="group relative overflow-hidden rounded-3xl border border-uni-border bg-uni-surface shadow-uni-card transition-all duration-300 hover:border-uni-pink/30 hover:shadow-[0_0_30px_-10px_rgba(255,0,122,0.25)]"
+      className="group relative overflow-visible rounded-3xl border border-uni-border bg-uni-surface shadow-uni-card transition-all duration-300 hover:border-uni-pink/30 hover:shadow-[0_0_30px_-10px_rgba(255,0,122,0.25)]"
     >
+      {/* Featured Badge - floating at top */}
+      {isEonSwapPool(pool) && (
+        <div className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2">
+          <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-uni-pink via-uni-purple to-uni-pink px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-white shadow-lg shadow-uni-pink/30">
+            <Sparkles className="h-3 w-3" />
+            Featured
+          </span>
+        </div>
+      )}
+
       {/* Gradient glow on hover */}
       <div
         className="pointer-events-none absolute -inset-px rounded-3xl bg-gradient-to-b from-uni-pink/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
@@ -188,7 +198,7 @@ export function FarmCard({
       />
 
       {/* Header */}
-      <div className="relative p-5 md:p-6">
+      <div className={`relative p-5 md:p-6 ${isEonSwapPool(pool) ? 'pt-7' : ''}`}>
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
             {/* Token pair icons */}
@@ -216,23 +226,14 @@ export function FarmCard({
             </div>
 
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-semibold text-white">
-                  {pool.lpSymbol0}/{pool.lpSymbol1}
-                </h3>
-                {/* EonSwap Featured Badge */}
-                {isEonSwapPool(pool) && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-uni-pink/20 via-uni-purple/20 to-uni-pink/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-uni-pink ring-1 ring-uni-pink/40">
-                    <Sparkles className="h-3 w-3" />
-                    Featured
-                  </span>
-                )}
-              </div>
+              <h3 className="text-lg font-semibold text-white">
+                {pool.lpSymbol0}/{pool.lpSymbol1}
+              </h3>
               <p className="text-xs text-neutral-500">Farm #{pool.pid} • Base</p>
             </div>
           </div>
 
-          {/* APR Badge */}
+          {/* APR Badge - inside card */}
           <div className="text-right">
             <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
               APR

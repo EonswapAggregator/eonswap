@@ -31,6 +31,7 @@ function formatEstfUsd(n: number): string {
 
 export function EstfPriceChip({ className = '' }: { className?: string }) {
   const [usd, setUsd] = useState<number | null>(null)
+  const [prevUsd, setPrevUsd] = useState<number | null>(null)
   const [err, setErr] = useState(false)
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export function EstfPriceChip({ className = '' }: { className?: string }) {
             v = typeof cg === 'number' && cg > 0 ? cg : null
           }
           if (!cancelled) {
+            setPrevUsd(usd)
             setUsd(v)
             setErr(false)
           }
@@ -67,7 +69,7 @@ export function EstfPriceChip({ className = '' }: { className?: string }) {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [])
+  }, [usd])
 
   const label =
     usd != null
@@ -76,16 +78,53 @@ export function EstfPriceChip({ className = '' }: { className?: string }) {
         ? '—'
         : '…'
 
+  // Determine price direction
+  const isUp = usd != null && prevUsd != null && usd > prevUsd
+  const isDown = usd != null && prevUsd != null && usd < prevUsd
+
   return (
     <a
       href={ESTF_BASESCAN_URL}
       target="_blank"
       rel="noopener noreferrer"
       title="View ESTF on BaseScan"
-      className={`inline-flex items-center gap-1.5 rounded-lg border border-uni-border bg-uni-surface px-2 py-1.5 text-xs tabular-nums text-slate-200 transition hover:border-uni-pink/40 hover:bg-uni-pink/10 ${className}`}
+      className={`group relative inline-flex items-center gap-2 overflow-hidden rounded-xl border border-uni-pink/30 bg-gradient-to-r from-uni-pink/10 via-purple-500/10 to-blue-500/10 px-3 py-1.5 text-sm tabular-nums transition-all duration-300 hover:border-uni-pink/60 hover:shadow-[0_0_20px_rgba(252,114,255,0.25)] ${className}`}
     >
-      <span className="font-semibold text-uni-pink">{ESTF_SYMBOL}</span>
-      <span className="text-slate-400">{label}</span>
+      {/* Animated glow effect */}
+      <span className="absolute inset-0 -z-10 bg-gradient-to-r from-uni-pink/20 via-purple-500/20 to-uni-pink/20 opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-100" />
+      
+      {/* ESTF Logo */}
+      <img 
+        src="/tokens/0x7bd09674b3c721e35973993d5b6a79cda7da9c7f.svg" 
+        alt="ESTF"
+        className="h-5 w-5 shrink-0 rounded-full"
+      />
+      
+      {/* Symbol */}
+      <span className="font-bold tracking-wide text-white">{ESTF_SYMBOL}</span>
+      
+      {/* Price with direction indicator */}
+      <span className="flex items-center gap-1">
+        {isUp && (
+          <svg className="h-3 w-3 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+          </svg>
+        )}
+        {isDown && (
+          <svg className="h-3 w-3 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+        )}
+        <span className={`font-semibold ${isUp ? 'text-green-400' : isDown ? 'text-red-400' : 'text-slate-200'}`}>
+          {label}
+        </span>
+      </span>
+      
+      {/* Live indicator dot */}
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+      </span>
     </a>
   )
 }

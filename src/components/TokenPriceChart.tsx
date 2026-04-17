@@ -600,8 +600,8 @@ export function TokenPriceChart({
 
   return (
     <section className="rounded-3xl border border-uni-border bg-uni-surface p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 shrink-0">
           <p className="text-xs uppercase tracking-widest text-neutral-500">Pair chart</p>
           <p
             className={`rounded-full px-2 py-0.5 text-[10px] transition-colors ${
@@ -614,7 +614,7 @@ export function TokenPriceChart({
             {baseSymbol}/{quoteSymbol}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <span className="rounded-full bg-uni-surface-2 px-2 py-0.5 text-[10px] text-neutral-400">
             {historySource === 'coingecko' ? 'CoinGecko' : 'Live'}
           </span>
@@ -624,7 +624,7 @@ export function TokenPriceChart({
                 key={m}
                 type="button"
                 onClick={() => setChartMode(m)}
-                className={`rounded-md px-2 py-1 text-[10px] uppercase ${
+                className={`rounded-md px-1.5 py-1 text-[10px] uppercase sm:px-2 ${
                   chartMode === m ? 'bg-uni-pink/20 text-uni-pink' : 'text-neutral-400 hover:text-white'
                 }`}
               >
@@ -638,7 +638,7 @@ export function TokenPriceChart({
                 key={d}
                 type="button"
                 onClick={() => onDaysChange?.(d as 7 | 30 | 90)}
-                className={`rounded-md px-2 py-1 text-[10px] uppercase ${
+                className={`rounded-md px-1.5 py-1 text-[10px] uppercase sm:px-2 ${
                   days === d ? 'bg-uni-pink/20 text-uni-pink' : 'text-neutral-400 hover:text-white'
                 }`}
               >
@@ -655,7 +655,7 @@ export function TokenPriceChart({
                   setTimePreset(preset)
                   setZoomRange(null)
                 }}
-                className={`rounded-md px-2 py-1 text-[10px] uppercase ${
+                className={`rounded-md px-1 py-1 text-[10px] uppercase sm:px-2 ${
                   timePreset === preset
                     ? 'bg-uni-pink/20 text-uni-pink'
                     : 'text-neutral-400 hover:text-white'
@@ -683,22 +683,22 @@ export function TokenPriceChart({
           </div>
         </div>
       </div>
-      <div className="mb-2 flex items-center gap-2 text-[10px] text-neutral-400">
+      <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[10px] text-neutral-400 sm:gap-2">
         <button
           type="button"
           onClick={() => setShowMa7((v) => !v)}
-          className={`rounded-md border border-uni-border px-2 py-0.5 ${showMa7 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-uni-surface-2 text-neutral-500'}`}
+          className={`shrink-0 rounded-md border border-uni-border px-2 py-0.5 ${showMa7 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-uni-surface-2 text-neutral-500'}`}
         >
           MA7
         </button>
         <button
           type="button"
           onClick={() => setShowMa25((v) => !v)}
-          className={`rounded-md border border-uni-border px-2 py-0.5 ${showMa25 ? 'bg-fuchsia-500/15 text-fuchsia-300' : 'bg-uni-surface-2 text-neutral-500'}`}
+          className={`shrink-0 rounded-md border border-uni-border px-2 py-0.5 ${showMa25 ? 'bg-fuchsia-500/15 text-fuchsia-300' : 'bg-uni-surface-2 text-neutral-500'}`}
         >
           MA25
         </button>
-        <span className="text-neutral-500">
+        <span className="min-w-0 break-words text-neutral-500">
           Data {days}D · View {timePreset} · Range {rangeLabel} · Interval ~{intervalLabel}
         </span>
       </div>
