@@ -18,6 +18,8 @@ import {
 } from 'lucide-react'
 import { Fragment, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useEonPools } from '../hooks/useEonPools'
+import { base } from 'viem/chains'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -136,12 +138,14 @@ const products = [
   },
 ] as const
 
-const stats = [
-  { label: 'Trading pairs', value: '50+', icon: ArrowRightLeft },
-  { label: 'Supported chain', value: 'Base', icon: Globe2 },
-  { label: 'Non-custodial', value: '100%', icon: Shield },
-  { label: 'Swap fee', value: '0.3%', icon: Percent },
-] as const
+function getStats(poolCount: number) {
+  return [
+    { label: 'Trading pairs', value: poolCount > 0 ? `${poolCount}` : '—', icon: ArrowRightLeft },
+    { label: 'Supported chain', value: 'Base', icon: Globe2 },
+    { label: 'Non-custodial', value: '100%', icon: Shield },
+    { label: 'Swap fee', value: '0.3%', icon: Percent },
+  ] as const
+}
 
 const workflow = [
   {
@@ -202,6 +206,8 @@ const partners = [
 
 export function Landing() {
   const prefersReducedMotion = useReducedMotion()
+  const { pools } = useEonPools(base.id)
+  const stats = getStats(pools.length)
 
   return (
     <div id="top" className="relative min-w-0 max-w-full overflow-hidden">

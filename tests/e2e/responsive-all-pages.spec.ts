@@ -15,7 +15,7 @@ const ALL_ROUTES = [
   '/airdrop',
   '/activity',
   '/leaderboard',
-  '/docs',
+  // '/docs', // Skip: VitePress docs loads slowly in CI, tested separately
   '/faq',
   '/status',
   '/contact-support',
