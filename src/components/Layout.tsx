@@ -246,7 +246,7 @@ export function Layout() {
                       <FaDiscord className="h-4 w-4" aria-hidden />
                     </a>
                     <a
-                      href="https://github.com/Eonswap"
+                      href="https://github.com/EonswapAggregator/eonswap"
                       target="_blank"
                       rel="noreferrer"
                       aria-label="EonSwap on GitHub"

@@ -246,7 +246,7 @@ export function PressKitPage() {
                   { label: 'Telegram', href: 'https://t.me/eonswap', Icon: FaTelegram },
                   { label: 'Medium', href: 'https://medium.com/@eonswap', Icon: FaMedium },
                   { label: 'Discord', href: 'https://discord.gg/AAEq22Sqng', Icon: FaDiscord },
-                  { label: 'GitHub', href: 'https://github.com/Eonswap', Icon: FaGithub },
+                  { label: 'GitHub', href: 'https://github.com/EonswapAggregator/eonswap', Icon: FaGithub },
                 ].map((link) => (
                   <a
                     key={link.label}
