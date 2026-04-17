@@ -1,5 +1,10 @@
-# Proxy API requests to Vercel
-/api/*  https://eonswap-henna.vercel.app/api/:splat  200
+# Netlify Functions API
+/api/health    /.netlify/functions/health    200
+/api/tokens    /.netlify/functions/tokens    200
+/api/prices    /.netlify/functions/prices    200
+/api/quote     /.netlify/functions/quote     200
+/api/pairs     /.netlify/functions/pairs     200
+/api/status    /.netlify/functions/status    200
 
 # SPA fallback - must be last
 /*  /index.html  200
