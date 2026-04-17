@@ -195,8 +195,9 @@ test.describe('Liquidity - Smart Contract UI', () => {
     
     if (await poolCard.isVisible()) {
       // Pool cards might have Add/Remove buttons on hover or always visible
-      const hasAddBtn = await page.getByRole('button', { name: /add|deposit/i }).isVisible().catch(() => false)
-      const hasRemoveBtn = await page.getByRole('button', { name: /remove|withdraw/i }).isVisible().catch(() => false)
+      // Just verify the buttons exist without crashing
+      await page.getByRole('button', { name: /add|deposit/i }).isVisible().catch(() => false)
+      await page.getByRole('button', { name: /remove|withdraw/i }).isVisible().catch(() => false)
       
       // Just verify it doesn't crash
       expect(true).toBe(true)
@@ -229,9 +230,9 @@ test.describe('Farm - Smart Contract UI', () => {
 
     // APR should be visible on farm cards
     const aprText = page.getByText(/apr|apy|%/i).first()
-    const hasApr = await aprText.isVisible().catch(() => false)
+    // Check if APR is visible (either shows APR or no farms available - both valid)
+    await aprText.isVisible().catch(() => false)
     
-    // Either shows APR or no farms available - both valid
     expect(true).toBe(true)
   })
 
@@ -333,11 +334,8 @@ test.describe('Transaction States', () => {
     const sellInput = page.locator('input[type="text"], input[type="number"]').first()
     await sellInput.fill('10')
 
-    // Look for loading indicators
-    const loadingSpinner = page.locator('[class*="animate-spin"], [class*="loading"]')
-    const loadingText = page.getByText(/loading|fetching|calculating/i)
-    
-    // Either shows loading or completes quickly
+    // Look for loading indicators (either shows loading or completes quickly)
+    // Just verify UI doesn't crash during quote fetch
     await page.waitForTimeout(500)
     await expect(page.locator('main')).toBeVisible()
   })
@@ -351,10 +349,8 @@ test.describe('Transaction States', () => {
     // Wait for quote
     await page.waitForTimeout(3000)
 
-    // Look for price impact warning
-    const priceImpactWarning = page.getByText(/price impact|high impact|warning/i)
-    
-    // May or may not show depending on liquidity - just check no crash
+    // May or may not show price impact warning depending on liquidity
+    // Just check no crash
     await expect(page.locator('main')).toBeVisible()
   })
 })
@@ -370,8 +366,7 @@ test.describe('Contract Error Handling', () => {
     if (!await submitBtn.isDisabled()) {
       await submitBtn.click()
       
-      // Should show error message
-      const errorText = page.getByText(/error|invalid|required|select|enter/i)
+      // Should show error message - wait for any validation feedback
       await page.waitForTimeout(500)
       
       // Either shows error or button was disabled - both valid

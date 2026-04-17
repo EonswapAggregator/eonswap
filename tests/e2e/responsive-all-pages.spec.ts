@@ -97,7 +97,7 @@ async function getOverflowResultWithRetry(page: Page, maxRetries = 3): Promise<O
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await checkOverflow(page)
-    } catch (e) {
+    } catch {
       if (i === maxRetries - 1) {
         return {
           hasHorizontalOverflow: false,

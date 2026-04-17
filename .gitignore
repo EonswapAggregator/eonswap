@@ -8,6 +8,7 @@ dist
 !.env.production
 relay/data/*.jsonl
 test-results/
+.vscode/
 
 # Local QA / manual check screenshots (not for version control)
 desktop-*-check.png
