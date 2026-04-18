@@ -23,6 +23,7 @@ import type { EonAmmPool, EonAmmUserPosition } from "../../lib/amm/poolTypes";
 import { Pagination } from "../Pagination";
 import { usePagination } from "../../hooks/usePagination";
 import { sendTxEventToRelay } from "../../lib/txEvents";
+import { useEonSwapStore } from "../../store/useEonSwapStore";
 
 /** EonSwap branded token addresses on Base mainnet */
 const EONSWAP_TOKENS = [
@@ -276,6 +277,8 @@ function AddLiquidityModal({
 }: AddLiquidityModalProps) {
   const { address: userAddress } = useAccount();
   const routerAddress = EON_AMM_ROUTER_FALLBACK[chainId];
+  const addActivity = useEonSwapStore((s) => s.addActivity);
+  const patchActivity = useEonSwapStore((s) => s.patchActivity);
 
   const [amount0, setAmount0] = useState("");
   const [amount1, setAmount1] = useState("");
@@ -425,6 +428,23 @@ function AddLiquidityModal({
     const amountAMin = (parsedAmount0 * slippageFactor) / 10000n;
     const amountBMin = (parsedAmount1 * slippageFactor) / 10000n;
 
+    const poolName = `${pool.symbol0}/${pool.symbol1}`;
+    const summary = `Add ${amount0} ${pool.symbol0} + ${amount1} ${pool.symbol1}`;
+    const activityId = crypto.randomUUID();
+
+    addActivity({
+      id: activityId,
+      kind: "lp_add",
+      status: "pending",
+      summary,
+      chainId,
+      from: userAddress,
+    });
+
+    const toastId = toast.loading("Adding liquidity...", {
+      description: summary,
+    });
+
     let result;
     if (isToken0Native) {
       result = await addLiquidityETH({
@@ -460,9 +480,8 @@ function AddLiquidityModal({
     }
 
     if (result) {
+      patchActivity(activityId, { txHash: result, status: "success" });
       // Send Telegram notification
-      const poolName = `${pool.symbol0}/${pool.symbol1}`;
-      const summary = `${amount0} ${pool.symbol0} + ${amount1} ${pool.symbol1}`;
       void sendTxEventToRelay({
         kind: "lp_add",
         status: "success",
@@ -474,9 +493,13 @@ function AddLiquidityModal({
         at: Date.now(),
       });
       toast.success("Liquidity Added!", {
+        id: toastId,
         description: summary,
       });
       onSuccess();
+    } else {
+      patchActivity(activityId, { status: "failed" });
+      toast.dismiss(toastId);
     }
   };
 
@@ -772,6 +795,8 @@ function RemoveLiquidityModal({
 }: RemoveLiquidityModalProps) {
   const { address: userAddress } = useAccount();
   const routerAddress = EON_AMM_ROUTER_FALLBACK[chainId];
+  const addActivity = useEonSwapStore((s) => s.addActivity);
+  const patchActivity = useEonSwapStore((s) => s.patchActivity);
 
   const [percent, setPercent] = useState(100);
   const [slippage, setSlippage] = useState(0.5);
@@ -841,6 +866,23 @@ function RemoveLiquidityModal({
     const amountAMin = (expectedToken0 * slippageFactor) / 10000n;
     const amountBMin = (expectedToken1 * slippageFactor) / 10000n;
 
+    const poolName = `${pool.symbol0}/${pool.symbol1}`;
+    const summary = `Remove ${percent}% of ${poolName} LP`;
+    const activityId = crypto.randomUUID();
+
+    addActivity({
+      id: activityId,
+      kind: "lp_remove",
+      status: "pending",
+      summary,
+      chainId,
+      from: userAddress,
+    });
+
+    const toastId = toast.loading("Removing liquidity...", {
+      description: summary,
+    });
+
     let result;
     if (isToken0Native) {
       result = await removeLiquidityETH({
@@ -873,9 +915,8 @@ function RemoveLiquidityModal({
     }
 
     if (result) {
+      patchActivity(activityId, { txHash: result, status: "success" });
       // Send Telegram notification
-      const poolName = `${pool.symbol0}/${pool.symbol1}`;
-      const summary = `${percent}% of ${poolName} LP`;
       void sendTxEventToRelay({
         kind: "lp_remove",
         status: "success",
@@ -887,9 +928,13 @@ function RemoveLiquidityModal({
         at: Date.now(),
       });
       toast.success("Liquidity Removed!", {
+        id: toastId,
         description: summary,
       });
       onSuccess();
+    } else {
+      patchActivity(activityId, { status: "failed" });
+      toast.dismiss(toastId);
     }
   };
 

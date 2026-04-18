@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { FarmGrid } from "../components/farm/FarmGrid";
 import { useEonFarm } from "../hooks/useEonFarm";
 import { sendTxEventToRelay } from "../lib/txEvents";
+import { useEonSwapStore } from "../store/useEonSwapStore";
 
 const CHAIN_ID = base.id;
 
@@ -73,22 +74,42 @@ export function FarmPage() {
   // Track transaction for potential UI feedback
   useWaitForTransactionReceipt({ hash: pendingTxHash });
 
+  const addActivity = useEonSwapStore((s) => s.addActivity);
+  const patchActivity = useEonSwapStore((s) => s.patchActivity);
+
   // Wrapper functions that handle tx state
   const handleDeposit = useCallback(
     async (pid: number, amount: bigint) => {
+      const pool = pools.find((p) => p.pid === pid);
+      const poolName = pool
+        ? `${pool.lpSymbol0}/${pool.lpSymbol1}`
+        : `Pool #${pid}`;
+      const amountStr = `${formatUnits(amount, 18)} LP`;
+      const summary = `Stake ${amountStr} in ${poolName}`;
+      const activityId = crypto.randomUUID();
+
+      addActivity({
+        id: activityId,
+        kind: "farm_deposit",
+        status: "pending",
+        summary,
+        chainId: CHAIN_ID,
+        from: userAddress,
+      });
+
       const hash = await deposit(pid, amount);
       setPendingTxHash(hash);
-      const pool = pools.find((p) => p.pid === pid);
+      patchActivity(activityId, { txHash: hash });
+
+      const toastId = toast.loading("Staking...", {
+        description: `${amountStr} in ${poolName}`,
+      });
       // Wait for confirmation and send notification
       if (publicClient) {
         publicClient
           .waitForTransactionReceipt({ hash })
           .then((receipt) => {
             if (receipt.status === "success") {
-              const poolName = pool
-                ? `${pool.lpSymbol0}/${pool.lpSymbol1}`
-                : `Pool #${pid}`;
-              const amountStr = `${formatUnits(amount, 18)} LP`;
               void sendTxEventToRelay({
                 kind: "farm_deposit",
                 status: "success",
@@ -99,11 +120,18 @@ export function FarmPage() {
                 amount: amountStr,
                 at: Date.now(),
               });
+              patchActivity(activityId, {
+                status: "success",
+                blockNumber: Number(receipt.blockNumber),
+              });
               toast.success("Staked Successfully!", {
+                id: toastId,
                 description: `${amountStr} staked in ${poolName}`,
               });
             } else {
+              patchActivity(activityId, { status: "failed" });
               toast.error("Stake Failed", {
+                id: toastId,
                 description: "Transaction reverted on-chain",
               });
             }
@@ -111,8 +139,10 @@ export function FarmPage() {
             void refresh();
           })
           .catch(() => {
+            patchActivity(activityId, { status: "failed" });
             setPendingTxHash(undefined);
             toast.error("Stake Failed", {
+              id: toastId,
               description: "Transaction failed",
             });
           });
@@ -123,23 +153,48 @@ export function FarmPage() {
         }, 3000);
       }
     },
-    [deposit, refresh, publicClient, pools, userAddress],
+    [
+      deposit,
+      refresh,
+      publicClient,
+      pools,
+      userAddress,
+      addActivity,
+      patchActivity,
+    ],
   );
 
   const handleWithdraw = useCallback(
     async (pid: number, amount: bigint) => {
+      const pool = pools.find((p) => p.pid === pid);
+      const poolName = pool
+        ? `${pool.lpSymbol0}/${pool.lpSymbol1}`
+        : `Pool #${pid}`;
+      const amountStr = `${formatUnits(amount, 18)} LP`;
+      const summary = `Unstake ${amountStr} from ${poolName}`;
+      const activityId = crypto.randomUUID();
+
+      addActivity({
+        id: activityId,
+        kind: "farm_withdraw",
+        status: "pending",
+        summary,
+        chainId: CHAIN_ID,
+        from: userAddress,
+      });
+
       const hash = await withdraw(pid, amount);
       setPendingTxHash(hash);
-      const pool = pools.find((p) => p.pid === pid);
+      patchActivity(activityId, { txHash: hash });
+
+      const toastId = toast.loading("Unstaking...", {
+        description: `${amountStr} from ${poolName}`,
+      });
       if (publicClient) {
         publicClient
           .waitForTransactionReceipt({ hash })
           .then((receipt) => {
             if (receipt.status === "success") {
-              const poolName = pool
-                ? `${pool.lpSymbol0}/${pool.lpSymbol1}`
-                : `Pool #${pid}`;
-              const amountStr = `${formatUnits(amount, 18)} LP`;
               void sendTxEventToRelay({
                 kind: "farm_withdraw",
                 status: "success",
@@ -150,11 +205,18 @@ export function FarmPage() {
                 amount: amountStr,
                 at: Date.now(),
               });
+              patchActivity(activityId, {
+                status: "success",
+                blockNumber: Number(receipt.blockNumber),
+              });
               toast.success("Unstaked Successfully!", {
+                id: toastId,
                 description: `${amountStr} withdrawn from ${poolName}`,
               });
             } else {
+              patchActivity(activityId, { status: "failed" });
               toast.error("Unstake Failed", {
+                id: toastId,
                 description: "Transaction reverted on-chain",
               });
             }
@@ -162,8 +224,10 @@ export function FarmPage() {
             void refresh();
           })
           .catch(() => {
+            patchActivity(activityId, { status: "failed" });
             setPendingTxHash(undefined);
             toast.error("Unstake Failed", {
+              id: toastId,
               description: "Transaction failed",
             });
           });
@@ -174,26 +238,51 @@ export function FarmPage() {
         }, 3000);
       }
     },
-    [withdraw, refresh, publicClient, pools, userAddress],
+    [
+      withdraw,
+      refresh,
+      publicClient,
+      pools,
+      userAddress,
+      addActivity,
+      patchActivity,
+    ],
   );
 
   const handleHarvest = useCallback(
     async (pid: number) => {
-      const hash = await harvest(pid);
-      setPendingTxHash(hash);
       const pool = pools.find((p) => p.pid === pid);
       const userPos = userPositions.find((p) => p.pid === pid);
+      const poolName = pool
+        ? `${pool.lpSymbol0}/${pool.lpSymbol1}`
+        : `Pool #${pid}`;
+      const rewardsStr = userPos?.pendingEon
+        ? `${formatUnits(userPos.pendingEon, 18)} EON`
+        : "Rewards";
+      const summary = `Harvest ${rewardsStr} from ${poolName}`;
+      const activityId = crypto.randomUUID();
+
+      addActivity({
+        id: activityId,
+        kind: "farm_harvest",
+        status: "pending",
+        summary,
+        chainId: CHAIN_ID,
+        from: userAddress,
+      });
+
+      const hash = await harvest(pid);
+      setPendingTxHash(hash);
+      patchActivity(activityId, { txHash: hash });
+
+      const toastId = toast.loading("Harvesting...", {
+        description: `${rewardsStr} from ${poolName}`,
+      });
       if (publicClient) {
         publicClient
           .waitForTransactionReceipt({ hash })
           .then((receipt) => {
             if (receipt.status === "success") {
-              const poolName = pool
-                ? `${pool.lpSymbol0}/${pool.lpSymbol1}`
-                : `Pool #${pid}`;
-              const rewardsStr = userPos?.pendingEon
-                ? `${formatUnits(userPos.pendingEon, 18)} EON`
-                : "Rewards";
               void sendTxEventToRelay({
                 kind: "farm_harvest",
                 status: "success",
@@ -204,11 +293,18 @@ export function FarmPage() {
                 rewards: rewardsStr,
                 at: Date.now(),
               });
+              patchActivity(activityId, {
+                status: "success",
+                blockNumber: Number(receipt.blockNumber),
+              });
               toast.success("Rewards Harvested!", {
+                id: toastId,
                 description: `${rewardsStr} claimed from ${poolName}`,
               });
             } else {
+              patchActivity(activityId, { status: "failed" });
               toast.error("Harvest Failed", {
+                id: toastId,
                 description: "Transaction reverted on-chain",
               });
             }
@@ -216,8 +312,10 @@ export function FarmPage() {
             void refresh();
           })
           .catch(() => {
+            patchActivity(activityId, { status: "failed" });
             setPendingTxHash(undefined);
             toast.error("Harvest Failed", {
+              id: toastId,
               description: "Transaction failed",
             });
           });
@@ -228,7 +326,16 @@ export function FarmPage() {
         }, 3000);
       }
     },
-    [harvest, refresh, publicClient, pools, userPositions, userAddress],
+    [
+      harvest,
+      refresh,
+      publicClient,
+      pools,
+      userPositions,
+      userAddress,
+      addActivity,
+      patchActivity,
+    ],
   );
 
   const handleApprove = useCallback(

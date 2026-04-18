@@ -172,6 +172,11 @@ export function useSwapSubmit() {
 
       patchActivity(activityId, { txHash: hash });
 
+      // Show loading toast while waiting for confirmation
+      const toastId = toast.loading("Swap pending...", {
+        description: summary,
+      });
+
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       patchActivity(activityId, {
         status: receipt.status === "success" ? "success" : "failed",
@@ -196,6 +201,7 @@ export function useSwapSubmit() {
         // Toast notification
         const txExplorerUrl = explorerTxUrl(chainId, hash);
         toast.success(summary, {
+          id: toastId,
           description: "Transaction confirmed",
           action: txExplorerUrl
             ? {
@@ -206,6 +212,7 @@ export function useSwapSubmit() {
         });
       } else {
         toast.error("Swap Failed", {
+          id: toastId,
           description: "Transaction reverted on-chain",
         });
       }

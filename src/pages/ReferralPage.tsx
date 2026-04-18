@@ -11,7 +11,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   useAccount,
   useReadContract,
@@ -42,6 +42,7 @@ import {
   getTierName,
   Tier,
 } from "../lib/referralContract";
+import { useEonSwapStore } from "../store/useEonSwapStore";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -83,6 +84,12 @@ export function ReferralPage() {
   const [copied, setCopied] = useState(false);
   const [stats, setStats] = useState<ReferralStats | null>(null);
   const [pendingReferrer, setPendingReferrer] = useState<string | null>(null);
+  const claimToastId = useRef<string | number | undefined>(undefined);
+  const registerToastId = useRef<string | number | undefined>(undefined);
+  const claimActivityId = useRef<string | undefined>(undefined);
+
+  const addActivity = useEonSwapStore((s) => s.addActivity);
+  const patchActivity = useEonSwapStore((s) => s.patchActivity);
 
   // Get contract address for current chain
   const contractAddress = chain?.id
@@ -161,11 +168,20 @@ export function ReferralPage() {
   useEffect(() => {
     if (isClaimSuccess) {
       void refetchStats();
+      if (claimActivityId.current) {
+        patchActivity(claimActivityId.current, {
+          status: "success",
+          txHash: claimHash,
+        });
+        claimActivityId.current = undefined;
+      }
       toast.success("Rewards Claimed!", {
+        id: claimToastId.current,
         description: "Your referral rewards have been sent to your wallet",
       });
+      claimToastId.current = undefined;
     }
-  }, [isClaimSuccess, refetchStats]);
+  }, [isClaimSuccess, refetchStats, patchActivity, claimHash]);
 
   // Check if user is already registered on-chain
   const isRegisteredOnChain =
@@ -188,8 +204,10 @@ export function ReferralPage() {
   useEffect(() => {
     if (isRegisterSuccess) {
       toast.success("Referral Registered!", {
+        id: registerToastId.current,
         description: "You are now linked to your referrer on-chain",
       });
+      registerToastId.current = undefined;
       setPendingReferrer(null);
     }
   }, [isRegisterSuccess]);
@@ -228,6 +246,9 @@ export function ReferralPage() {
       !registerHash
     ) {
       // User has pending referrer, not registered, prompt registration
+      registerToastId.current = toast.loading("Registering referral...", {
+        description: "Linking you to your referrer on-chain",
+      });
       registerOnChain({
         address: contractAddress,
         abi: EON_REFERRAL_ABI,
@@ -269,13 +290,30 @@ export function ReferralPage() {
   }, [referralLink]);
 
   const handleClaimRewards = useCallback(() => {
-    if (!contractAddress || !stats || stats.pendingRewards <= 0) return;
+    if (!contractAddress || !stats || stats.pendingRewards <= 0 || !chain?.id)
+      return;
+    const summary = `Claim ${stats.pendingRewards.toFixed(6)} ETH referral rewards`;
+    const activityId = crypto.randomUUID();
+    claimActivityId.current = activityId;
+
+    addActivity({
+      id: activityId,
+      kind: "referral_claim",
+      status: "pending",
+      summary,
+      chainId: chain.id,
+      from: address,
+    });
+
+    claimToastId.current = toast.loading("Claiming rewards...", {
+      description: `${stats.pendingRewards.toFixed(6)} ETH pending`,
+    });
     writeContract({
       address: contractAddress,
       abi: EON_REFERRAL_ABI,
       functionName: "claimRewards",
     });
-  }, [contractAddress, stats, writeContract]);
+  }, [contractAddress, stats, writeContract, chain?.id, address, addActivity]);
 
   const canClaim = stats && stats.pendingRewards > 0;
   const isProcessingClaim = isClaiming || isWaitingClaim;
