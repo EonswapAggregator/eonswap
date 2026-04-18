@@ -72,7 +72,7 @@ export function NotifySubscription({
         setStatus("idle");
         setContactValue("");
       }, 2000);
-    } catch (error) {
+    } catch (_error) {
       setStatus("error");
       toast.error("Failed to subscribe", {
         description: "Please try again later",
