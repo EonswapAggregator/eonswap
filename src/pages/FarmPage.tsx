@@ -1,16 +1,30 @@
-import { motion, useReducedMotion } from 'framer-motion'
-import { Link } from 'react-router-dom'
-import { useCallback, useState } from 'react'
-import { Sprout, RefreshCw, Pause, Play, Coins, Shield, ArrowRight, Wallet } from 'lucide-react'
-import { formatUnits, type Address } from 'viem'
-import { useAccount, usePublicClient, useWaitForTransactionReceipt } from 'wagmi'
-import { base } from 'viem/chains'
+import { motion, useReducedMotion } from "framer-motion";
+import { Link } from "react-router-dom";
+import { useCallback, useState } from "react";
+import {
+  Sprout,
+  RefreshCw,
+  Pause,
+  Play,
+  Coins,
+  Shield,
+  ArrowRight,
+  Wallet,
+} from "lucide-react";
+import { formatUnits, type Address } from "viem";
+import {
+  useAccount,
+  usePublicClient,
+  useWaitForTransactionReceipt,
+} from "wagmi";
+import { base } from "viem/chains";
+import { toast } from "sonner";
 
-import { FarmGrid } from '../components/farm/FarmGrid'
-import { useEonFarm } from '../hooks/useEonFarm'
-import { sendTxEventToRelay } from '../lib/txEvents'
+import { FarmGrid } from "../components/farm/FarmGrid";
+import { useEonFarm } from "../hooks/useEonFarm";
+import { sendTxEventToRelay } from "../lib/txEvents";
 
-const CHAIN_ID = base.id
+const CHAIN_ID = base.id;
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -23,20 +37,20 @@ const fadeUp = {
       ease: [0.22, 1, 0.36, 1] as const,
     },
   }),
-}
+};
 
 function formatEonPerDay(eonPerSecond: bigint): string {
-  const perDay = Number(formatUnits(eonPerSecond * 86400n, 18))
-  if (perDay < 1) return perDay.toFixed(4)
-  if (perDay < 1000) return perDay.toFixed(2)
-  if (perDay < 1_000_000) return (perDay / 1000).toFixed(2) + 'K'
-  return (perDay / 1_000_000).toFixed(2) + 'M'
+  const perDay = Number(formatUnits(eonPerSecond * 86400n, 18));
+  if (perDay < 1) return perDay.toFixed(4);
+  if (perDay < 1000) return perDay.toFixed(2);
+  if (perDay < 1_000_000) return (perDay / 1000).toFixed(2) + "K";
+  return (perDay / 1_000_000).toFixed(2) + "M";
 }
 
 export function FarmPage() {
-  const prefersReducedMotion = useReducedMotion()
-  const { address: userAddress } = useAccount()
-  const publicClient = usePublicClient({ chainId: CHAIN_ID })
+  const prefersReducedMotion = useReducedMotion();
+  const { address: userAddress } = useAccount();
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const {
     pools,
     userPositions,
@@ -51,141 +65,188 @@ export function FarmPage() {
     approve,
     getAllowance,
     getLpBalance,
-  } = useEonFarm(CHAIN_ID)
+  } = useEonFarm(CHAIN_ID);
 
-  const [pendingTxHash, setPendingTxHash] = useState<`0x${string}` | undefined>()
+  const [pendingTxHash, setPendingTxHash] = useState<
+    `0x${string}` | undefined
+  >();
   // Track transaction for potential UI feedback
-  useWaitForTransactionReceipt({ hash: pendingTxHash })
+  useWaitForTransactionReceipt({ hash: pendingTxHash });
 
   // Wrapper functions that handle tx state
   const handleDeposit = useCallback(
     async (pid: number, amount: bigint) => {
-      const hash = await deposit(pid, amount)
-      setPendingTxHash(hash)
-      const pool = pools.find((p) => p.pid === pid)
+      const hash = await deposit(pid, amount);
+      setPendingTxHash(hash);
+      const pool = pools.find((p) => p.pid === pid);
       // Wait for confirmation and send notification
       if (publicClient) {
-        publicClient.waitForTransactionReceipt({ hash }).then((receipt) => {
-          if (receipt.status === 'success') {
-            const poolName = pool ? `${pool.lpSymbol0}/${pool.lpSymbol1}` : `Pool #${pid}`
-            const amountStr = `${formatUnits(amount, 18)} LP`
-            void sendTxEventToRelay({
-              kind: 'farm_deposit',
-              status: 'success',
-              txHash: hash,
-              chainId: CHAIN_ID,
-              wallet: userAddress,
-              poolName,
-              amount: amountStr,
-              at: Date.now(),
-            })
-          }
-          setPendingTxHash(undefined)
-          void refresh()
-        }).catch(() => {
-          setPendingTxHash(undefined)
-        })
+        publicClient
+          .waitForTransactionReceipt({ hash })
+          .then((receipt) => {
+            if (receipt.status === "success") {
+              const poolName = pool
+                ? `${pool.lpSymbol0}/${pool.lpSymbol1}`
+                : `Pool #${pid}`;
+              const amountStr = `${formatUnits(amount, 18)} LP`;
+              void sendTxEventToRelay({
+                kind: "farm_deposit",
+                status: "success",
+                txHash: hash,
+                chainId: CHAIN_ID,
+                wallet: userAddress,
+                poolName,
+                amount: amountStr,
+                at: Date.now(),
+              });
+              toast.success("Staked Successfully!", {
+                description: `${amountStr} staked in ${poolName}`,
+              });
+            } else {
+              toast.error("Stake Failed", {
+                description: "Transaction reverted on-chain",
+              });
+            }
+            setPendingTxHash(undefined);
+            void refresh();
+          })
+          .catch(() => {
+            setPendingTxHash(undefined);
+            toast.error("Stake Failed", {
+              description: "Transaction failed",
+            });
+          });
       } else {
         setTimeout(() => {
-          setPendingTxHash(undefined)
-          void refresh()
-        }, 3000)
+          setPendingTxHash(undefined);
+          void refresh();
+        }, 3000);
       }
     },
-    [deposit, refresh, publicClient, pools, userAddress]
-  )
+    [deposit, refresh, publicClient, pools, userAddress],
+  );
 
   const handleWithdraw = useCallback(
     async (pid: number, amount: bigint) => {
-      const hash = await withdraw(pid, amount)
-      setPendingTxHash(hash)
-      const pool = pools.find((p) => p.pid === pid)
+      const hash = await withdraw(pid, amount);
+      setPendingTxHash(hash);
+      const pool = pools.find((p) => p.pid === pid);
       if (publicClient) {
-        publicClient.waitForTransactionReceipt({ hash }).then((receipt) => {
-          if (receipt.status === 'success') {
-            const poolName = pool ? `${pool.lpSymbol0}/${pool.lpSymbol1}` : `Pool #${pid}`
-            const amountStr = `${formatUnits(amount, 18)} LP`
-            void sendTxEventToRelay({
-              kind: 'farm_withdraw',
-              status: 'success',
-              txHash: hash,
-              chainId: CHAIN_ID,
-              wallet: userAddress,
-              poolName,
-              amount: amountStr,
-              at: Date.now(),
-            })
-          }
-          setPendingTxHash(undefined)
-          void refresh()
-        }).catch(() => {
-          setPendingTxHash(undefined)
-        })
+        publicClient
+          .waitForTransactionReceipt({ hash })
+          .then((receipt) => {
+            if (receipt.status === "success") {
+              const poolName = pool
+                ? `${pool.lpSymbol0}/${pool.lpSymbol1}`
+                : `Pool #${pid}`;
+              const amountStr = `${formatUnits(amount, 18)} LP`;
+              void sendTxEventToRelay({
+                kind: "farm_withdraw",
+                status: "success",
+                txHash: hash,
+                chainId: CHAIN_ID,
+                wallet: userAddress,
+                poolName,
+                amount: amountStr,
+                at: Date.now(),
+              });
+              toast.success("Unstaked Successfully!", {
+                description: `${amountStr} withdrawn from ${poolName}`,
+              });
+            } else {
+              toast.error("Unstake Failed", {
+                description: "Transaction reverted on-chain",
+              });
+            }
+            setPendingTxHash(undefined);
+            void refresh();
+          })
+          .catch(() => {
+            setPendingTxHash(undefined);
+            toast.error("Unstake Failed", {
+              description: "Transaction failed",
+            });
+          });
       } else {
         setTimeout(() => {
-          setPendingTxHash(undefined)
-          void refresh()
-        }, 3000)
+          setPendingTxHash(undefined);
+          void refresh();
+        }, 3000);
       }
     },
-    [withdraw, refresh, publicClient, pools, userAddress]
-  )
+    [withdraw, refresh, publicClient, pools, userAddress],
+  );
 
   const handleHarvest = useCallback(
     async (pid: number) => {
-      const hash = await harvest(pid)
-      setPendingTxHash(hash)
-      const pool = pools.find((p) => p.pid === pid)
-      const userPos = userPositions.find((p) => p.pid === pid)
+      const hash = await harvest(pid);
+      setPendingTxHash(hash);
+      const pool = pools.find((p) => p.pid === pid);
+      const userPos = userPositions.find((p) => p.pid === pid);
       if (publicClient) {
-        publicClient.waitForTransactionReceipt({ hash }).then((receipt) => {
-          if (receipt.status === 'success') {
-            const poolName = pool ? `${pool.lpSymbol0}/${pool.lpSymbol1}` : `Pool #${pid}`
-            const rewardsStr = userPos?.pendingEon
-              ? `${formatUnits(userPos.pendingEon, 18)} EON`
-              : 'Rewards'
-            void sendTxEventToRelay({
-              kind: 'farm_harvest',
-              status: 'success',
-              txHash: hash,
-              chainId: CHAIN_ID,
-              wallet: userAddress,
-              poolName,
-              rewards: rewardsStr,
-              at: Date.now(),
-            })
-          }
-          setPendingTxHash(undefined)
-          void refresh()
-        }).catch(() => {
-          setPendingTxHash(undefined)
-        })
+        publicClient
+          .waitForTransactionReceipt({ hash })
+          .then((receipt) => {
+            if (receipt.status === "success") {
+              const poolName = pool
+                ? `${pool.lpSymbol0}/${pool.lpSymbol1}`
+                : `Pool #${pid}`;
+              const rewardsStr = userPos?.pendingEon
+                ? `${formatUnits(userPos.pendingEon, 18)} EON`
+                : "Rewards";
+              void sendTxEventToRelay({
+                kind: "farm_harvest",
+                status: "success",
+                txHash: hash,
+                chainId: CHAIN_ID,
+                wallet: userAddress,
+                poolName,
+                rewards: rewardsStr,
+                at: Date.now(),
+              });
+              toast.success("Rewards Harvested!", {
+                description: `${rewardsStr} claimed from ${poolName}`,
+              });
+            } else {
+              toast.error("Harvest Failed", {
+                description: "Transaction reverted on-chain",
+              });
+            }
+            setPendingTxHash(undefined);
+            void refresh();
+          })
+          .catch(() => {
+            setPendingTxHash(undefined);
+            toast.error("Harvest Failed", {
+              description: "Transaction failed",
+            });
+          });
       } else {
         setTimeout(() => {
-          setPendingTxHash(undefined)
-          void refresh()
-        }, 3000)
+          setPendingTxHash(undefined);
+          void refresh();
+        }, 3000);
       }
     },
-    [harvest, refresh, publicClient, pools, userPositions, userAddress]
-  )
+    [harvest, refresh, publicClient, pools, userPositions, userAddress],
+  );
 
   const handleApprove = useCallback(
     async (lpToken: Address, amount: bigint) => {
-      const hash = await approve(lpToken, amount)
-      setPendingTxHash(hash)
+      const hash = await approve(lpToken, amount);
+      setPendingTxHash(hash);
       setTimeout(() => {
-        setPendingTxHash(undefined)
-      }, 3000)
+        setPendingTxHash(undefined);
+      }, 3000);
     },
-    [approve]
-  )
+    [approve],
+  );
 
   // Calculate total pending rewards for user
   const totalPendingEon = userPositions.reduce(
     (sum, pos) => sum + pos.pendingEon,
-    0n
-  )
+    0n,
+  );
 
   return (
     <div className="relative min-w-0 max-w-full overflow-hidden">
@@ -196,13 +257,17 @@ export function FarmPage() {
         <div
           className="absolute -left-32 top-[-10%] h-[min(420px,45vw)] w-[min(420px,45vw)] rounded-full bg-uni-pink/10 blur-[100px]"
           style={{
-            animation: prefersReducedMotion ? 'none' : 'eon-gradient-drift 22s ease-in-out infinite',
+            animation: prefersReducedMotion
+              ? "none"
+              : "eon-gradient-drift 22s ease-in-out infinite",
           }}
         />
         <div
           className="absolute -right-24 top-[30%] h-[min(360px,40vw)] w-[min(360px,40vw)] rounded-full bg-uni-purple/[0.08] blur-[90px]"
           style={{
-            animation: prefersReducedMotion ? 'none' : 'eon-gradient-drift 28s ease-in-out infinite reverse',
+            animation: prefersReducedMotion
+              ? "none"
+              : "eon-gradient-drift 28s ease-in-out infinite reverse",
           }}
         />
       </div>
@@ -246,8 +311,8 @@ export function FarmPage() {
             variants={fadeUp}
             className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-neutral-400 md:text-lg"
           >
-            Stake your LP tokens into farm pools to earn ESTF emissions. 
-            The longer you stake, the more rewards you accumulate.
+            Stake your LP tokens into farm pools to earn ESTF emissions. The
+            longer you stake, the more rewards you accumulate.
           </motion.p>
 
           <motion.div
@@ -270,7 +335,9 @@ export function FarmPage() {
               disabled={loading}
               className="inline-flex items-center justify-center gap-2 rounded-2xl border border-uni-border bg-transparent px-6 py-3 text-sm font-medium text-white transition hover:bg-uni-surface disabled:opacity-60"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+              />
               Refresh
             </button>
           </motion.div>
@@ -302,7 +369,7 @@ export function FarmPage() {
                   Active Farms
                 </p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
-                  {loading ? '...' : pools.length}
+                  {loading ? "..." : pools.length}
                 </p>
               </div>
 
@@ -317,7 +384,11 @@ export function FarmPage() {
                   ESTF / Day
                 </p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
-                  {loading ? '...' : masterChefState ? formatEonPerDay(masterChefState.eonPerSecond) : '—'}
+                  {loading
+                    ? "..."
+                    : masterChefState
+                      ? formatEonPerDay(masterChefState.eonPerSecond)
+                      : "—"}
                 </p>
               </div>
 
@@ -336,7 +407,9 @@ export function FarmPage() {
                   Status
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-white">
-                  {loading ? '...' : masterChefState?.paused ? (
+                  {loading ? (
+                    "..."
+                  ) : masterChefState?.paused ? (
                     <span className="text-amber-400">Paused</span>
                   ) : (
                     <span className="text-uni-pink">Active</span>
@@ -356,10 +429,10 @@ export function FarmPage() {
                 </p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
                   {loading
-                    ? '...'
+                    ? "..."
                     : userAddress
                       ? `${Number(formatUnits(totalPendingEon, 18)).toFixed(4)} ESTF`
-                      : '—'}
+                      : "—"}
                 </p>
               </div>
             </div>
@@ -397,5 +470,5 @@ export function FarmPage() {
         )}
       </section>
     </div>
-  )
+  );
 }

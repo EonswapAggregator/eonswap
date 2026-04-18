@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { motion } from "framer-motion";
 import {
   Droplets,
   Loader2,
@@ -8,66 +8,69 @@ import {
   Check,
   Percent,
   Sparkles,
-} from 'lucide-react'
-import { useState, useMemo, useCallback, useEffect } from 'react'
-import { formatUnits, parseUnits, type Address, maxUint256 } from 'viem'
-import { useAccount, useBalance } from 'wagmi'
-import { base } from 'viem/chains'
+} from "lucide-react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { formatUnits, parseUnits, type Address, maxUint256 } from "viem";
+import { useAccount, useBalance } from "wagmi";
+import { base } from "viem/chains";
+import { toast } from "sonner";
 
-import { useEonLiquidity } from '../../hooks/useEonLiquidity'
-import { TokenLogo } from '../TokenLogo'
-import { tokensForChain, type Token } from '../../lib/tokens'
-import { EON_AMM_ROUTER_FALLBACK } from '../../lib/amm/config'
-import type { EonAmmPool, EonAmmUserPosition } from '../../lib/amm/poolTypes'
-import { Pagination } from '../Pagination'
-import { usePagination } from '../../hooks/usePagination'
-import { sendTxEventToRelay } from '../../lib/txEvents'
+import { useEonLiquidity } from "../../hooks/useEonLiquidity";
+import { TokenLogo } from "../TokenLogo";
+import { tokensForChain, type Token } from "../../lib/tokens";
+import { EON_AMM_ROUTER_FALLBACK } from "../../lib/amm/config";
+import type { EonAmmPool, EonAmmUserPosition } from "../../lib/amm/poolTypes";
+import { Pagination } from "../Pagination";
+import { usePagination } from "../../hooks/usePagination";
+import { sendTxEventToRelay } from "../../lib/txEvents";
 
 /** EonSwap branded token addresses on Base mainnet */
 const EONSWAP_TOKENS = [
-  '0x7bd09674b3c721e35973993d5b6a79cda7da9c7f', // ESTF
-  '0xbc11e3093afdbeb88d32ef893027202fc2b84f9d', // ESR
-]
+  "0x7bd09674b3c721e35973993d5b6a79cda7da9c7f", // ESTF
+  "0xbc11e3093afdbeb88d32ef893027202fc2b84f9d", // ESR
+];
 
 /** Check if the pool contains EonSwap branded token (ESTF or ESR) */
 function isEonSwapPool(pool: EonAmmPool): boolean {
-  const t0 = pool.token0.toLowerCase()
-  const t1 = pool.token1.toLowerCase()
-  return EONSWAP_TOKENS.some((addr) => addr === t0 || addr === t1)
+  const t0 = pool.token0.toLowerCase();
+  const t1 = pool.token1.toLowerCase();
+  return EONSWAP_TOKENS.some((addr) => addr === t0 || addr === t1);
 }
 
 function formatUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '$0.00'
-  if (value < 1) return `$${value.toFixed(4)}`
-  if (value < 1000) return `$${value.toFixed(2)}`
-  if (value < 1_000_000) return `$${(value / 1000).toFixed(2)}K`
-  if (value < 1_000_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
-  return `$${(value / 1_000_000_000).toFixed(2)}B`
+  if (!Number.isFinite(value) || value <= 0) return "$0.00";
+  if (value < 1) return `$${value.toFixed(4)}`;
+  if (value < 1000) return `$${value.toFixed(2)}`;
+  if (value < 1_000_000) return `$${(value / 1000).toFixed(2)}K`;
+  if (value < 1_000_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  return `$${(value / 1_000_000_000).toFixed(2)}B`;
 }
 
 function formatTokenAmount(value: bigint, decimals: number): string {
-  const num = Number(formatUnits(value, decimals))
-  if (num < 0.0001) return '< 0.0001'
-  if (num < 1) return num.toFixed(6)
-  if (num < 1000) return num.toFixed(4)
-  if (num < 1_000_000) return (num / 1000).toFixed(2) + 'K'
-  return (num / 1_000_000).toFixed(2) + 'M'
+  const num = Number(formatUnits(value, decimals));
+  if (num < 0.0001) return "< 0.0001";
+  if (num < 1) return num.toFixed(6);
+  if (num < 1000) return num.toFixed(4);
+  if (num < 1_000_000) return (num / 1000).toFixed(2) + "K";
+  return (num / 1_000_000).toFixed(2) + "M";
 }
 
 function findToken(chainId: number, address: Address): Token | null {
-  return tokensForChain(chainId).find(
-    (t: Token) => t.address.toLowerCase() === address.toLowerCase()
-  ) ?? null
+  return (
+    tokensForChain(chainId).find(
+      (t: Token) => t.address.toLowerCase() === address.toLowerCase(),
+    ) ?? null
+  );
 }
 
 type PoolCardProps = {
-  pool: EonAmmPool
-  userPosition?: EonAmmUserPosition
-  chainId: number
-  index: number
-  onAddLiquidity: (pool: EonAmmPool) => void
-  onRemoveLiquidity: (pool: EonAmmPool, position: EonAmmUserPosition) => void
-}
+  pool: EonAmmPool;
+  userPosition?: EonAmmUserPosition;
+  chainId: number;
+  index: number;
+  onAddLiquidity: (pool: EonAmmPool) => void;
+  onRemoveLiquidity: (pool: EonAmmPool, position: EonAmmUserPosition) => void;
+};
 
 function PoolCard({
   pool,
@@ -77,12 +80,12 @@ function PoolCard({
   onAddLiquidity,
   onRemoveLiquidity,
 }: PoolCardProps) {
-  const token0 = findToken(chainId, pool.token0)
-  const token1 = findToken(chainId, pool.token1)
+  const token0 = findToken(chainId, pool.token0);
+  const token1 = findToken(chainId, pool.token1);
 
   const sharePercent = userPosition
     ? (userPosition.shareOfPool * 100).toFixed(4)
-    : '0'
+    : "0";
 
   return (
     <motion.div
@@ -108,7 +111,9 @@ function PoolCard({
       />
 
       {/* Header */}
-      <div className={`relative p-5 md:p-6 ${isEonSwapPool(pool) ? 'pt-7' : ''}`}>
+      <div
+        className={`relative p-5 md:p-6 ${isEonSwapPool(pool) ? "pt-7" : ""}`}
+      >
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
             {/* Token pair icons */}
@@ -186,7 +191,9 @@ function PoolCard({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Percent className="h-4 w-4 text-uni-pink" />
-                <span className="text-xs font-medium text-uni-pink">Your Position</span>
+                <span className="text-xs font-medium text-uni-pink">
+                  Your Position
+                </span>
               </div>
               <span className="text-sm font-semibold text-white">
                 {formatUsd(userPosition.valueUsd)}
@@ -251,27 +258,32 @@ function PoolCard({
         </div>
       </div>
     </motion.div>
-  )
+  );
 }
 
 type AddLiquidityModalProps = {
-  pool: EonAmmPool
-  chainId: number
-  onClose: () => void
-  onSuccess: () => void
-}
+  pool: EonAmmPool;
+  chainId: number;
+  onClose: () => void;
+  onSuccess: () => void;
+};
 
-function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityModalProps) {
-  const { address: userAddress } = useAccount()
-  const routerAddress = EON_AMM_ROUTER_FALLBACK[chainId]
+function AddLiquidityModal({
+  pool,
+  chainId,
+  onClose,
+  onSuccess,
+}: AddLiquidityModalProps) {
+  const { address: userAddress } = useAccount();
+  const routerAddress = EON_AMM_ROUTER_FALLBACK[chainId];
 
-  const [amount0, setAmount0] = useState('')
-  const [amount1, setAmount1] = useState('')
-  const [slippage, setSlippage] = useState(0.5)
-  const [approving0, setApproving0] = useState(false)
-  const [approving1, setApproving1] = useState(false)
-  const [needsApproval0, setNeedsApproval0] = useState(true)
-  const [needsApproval1, setNeedsApproval1] = useState(true)
+  const [amount0, setAmount0] = useState("");
+  const [amount1, setAmount1] = useState("");
+  const [slippage, setSlippage] = useState(0.5);
+  const [approving0, setApproving0] = useState(false);
+  const [approving1, setApproving1] = useState(false);
+  const [needsApproval0, setNeedsApproval0] = useState(true);
+  const [needsApproval1, setNeedsApproval1] = useState(true);
 
   const {
     addLiquidity,
@@ -281,86 +293,103 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
     status,
     error: txError,
     hash,
-  } = useEonLiquidity(chainId)
+  } = useEonLiquidity(chainId);
 
-  const token0 = findToken(chainId, pool.token0)
-  const token1 = findToken(chainId, pool.token1)
+  // Show toast on liquidity error
+  useEffect(() => {
+    if (txError) {
+      toast.error("Liquidity Failed", {
+        description: txError.slice(0, 100),
+      });
+    }
+  }, [txError]);
 
-  const isToken0Native = pool.symbol0 === 'WETH'
-  const isToken1Native = pool.symbol1 === 'WETH'
+  const token0 = findToken(chainId, pool.token0);
+  const token1 = findToken(chainId, pool.token1);
+
+  const isToken0Native = pool.symbol0 === "WETH";
+  const isToken1Native = pool.symbol1 === "WETH";
 
   const { data: balance0 } = useBalance({
     address: userAddress,
     token: isToken0Native ? undefined : (pool.token0 as Address),
     chainId,
-  })
+  });
   const { data: balance1 } = useBalance({
     address: userAddress,
     token: isToken1Native ? undefined : (pool.token1 as Address),
     chainId,
-  })
+  });
 
   const parsedAmount0 = useMemo(() => {
     try {
-      return parseUnits(amount0 || '0', pool.decimals0)
+      return parseUnits(amount0 || "0", pool.decimals0);
     } catch {
-      return 0n
+      return 0n;
     }
-  }, [amount0, pool.decimals0])
+  }, [amount0, pool.decimals0]);
 
   const parsedAmount1 = useMemo(() => {
     try {
-      return parseUnits(amount1 || '0', pool.decimals1)
+      return parseUnits(amount1 || "0", pool.decimals1);
     } catch {
-      return 0n
+      return 0n;
     }
-  }, [amount1, pool.decimals1])
+  }, [amount1, pool.decimals1]);
 
   const calculateAmount1 = useCallback(
     (a0: string) => {
-      if (!a0 || pool.reserve0 === 0n) return ''
+      if (!a0 || pool.reserve0 === 0n) return "";
       try {
-        const parsed = parseUnits(a0, pool.decimals0)
-        const optimal = (parsed * pool.reserve1) / pool.reserve0
-        return formatUnits(optimal, pool.decimals1)
+        const parsed = parseUnits(a0, pool.decimals0);
+        const optimal = (parsed * pool.reserve1) / pool.reserve0;
+        return formatUnits(optimal, pool.decimals1);
       } catch {
-        return ''
+        return "";
       }
     },
-    [pool.reserve0, pool.reserve1, pool.decimals0, pool.decimals1]
-  )
+    [pool.reserve0, pool.reserve1, pool.decimals0, pool.decimals1],
+  );
 
   const calculateAmount0 = useCallback(
     (a1: string) => {
-      if (!a1 || pool.reserve1 === 0n) return ''
+      if (!a1 || pool.reserve1 === 0n) return "";
       try {
-        const parsed = parseUnits(a1, pool.decimals1)
-        const optimal = (parsed * pool.reserve0) / pool.reserve1
-        return formatUnits(optimal, pool.decimals0)
+        const parsed = parseUnits(a1, pool.decimals1);
+        const optimal = (parsed * pool.reserve0) / pool.reserve1;
+        return formatUnits(optimal, pool.decimals0);
       } catch {
-        return ''
+        return "";
       }
     },
-    [pool.reserve0, pool.reserve1, pool.decimals0, pool.decimals1]
-  )
+    [pool.reserve0, pool.reserve1, pool.decimals0, pool.decimals1],
+  );
 
   useEffect(() => {
-    if (!userAddress || !routerAddress) return
+    if (!userAddress || !routerAddress) return;
     const check = async () => {
       if (!isToken0Native && parsedAmount0 > 0n) {
-        const has = await checkAllowance(pool.token0, routerAddress, parsedAmount0)
-        setNeedsApproval0(!has)
+        const has = await checkAllowance(
+          pool.token0,
+          routerAddress,
+          parsedAmount0,
+        );
+        setNeedsApproval0(!has);
       } else {
-        setNeedsApproval0(false)
+        setNeedsApproval0(false);
       }
       if (!isToken1Native && parsedAmount1 > 0n) {
-        const has = await checkAllowance(pool.token1, routerAddress, parsedAmount1)
-        setNeedsApproval1(!has)
+        const has = await checkAllowance(
+          pool.token1,
+          routerAddress,
+          parsedAmount1,
+        );
+        setNeedsApproval1(!has);
       } else {
-        setNeedsApproval1(false)
+        setNeedsApproval1(false);
       }
-    }
-    void check()
+    };
+    void check();
   }, [
     userAddress,
     routerAddress,
@@ -371,32 +400,32 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
     checkAllowance,
     isToken0Native,
     isToken1Native,
-  ])
+  ]);
 
   const handleApprove0 = async () => {
-    if (!routerAddress) return
-    setApproving0(true)
-    await approveToken(pool.token0, routerAddress, maxUint256)
-    setNeedsApproval0(false)
-    setApproving0(false)
-  }
+    if (!routerAddress) return;
+    setApproving0(true);
+    await approveToken(pool.token0, routerAddress, maxUint256);
+    setNeedsApproval0(false);
+    setApproving0(false);
+  };
 
   const handleApprove1 = async () => {
-    if (!routerAddress) return
-    setApproving1(true)
-    await approveToken(pool.token1, routerAddress, maxUint256)
-    setNeedsApproval1(false)
-    setApproving1(false)
-  }
+    if (!routerAddress) return;
+    setApproving1(true);
+    await approveToken(pool.token1, routerAddress, maxUint256);
+    setNeedsApproval1(false);
+    setApproving1(false);
+  };
 
   const handleAdd = async () => {
-    if (!userAddress) return
+    if (!userAddress) return;
 
-    const slippageFactor = BigInt(Math.floor((1 - slippage / 100) * 10000))
-    const amountAMin = (parsedAmount0 * slippageFactor) / 10000n
-    const amountBMin = (parsedAmount1 * slippageFactor) / 10000n
+    const slippageFactor = BigInt(Math.floor((1 - slippage / 100) * 10000));
+    const amountAMin = (parsedAmount0 * slippageFactor) / 10000n;
+    const amountBMin = (parsedAmount1 * slippageFactor) / 10000n;
 
-    let result
+    let result;
     if (isToken0Native) {
       result = await addLiquidityETH({
         token: pool.token1,
@@ -406,7 +435,7 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
         to: userAddress,
         deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
         value: parsedAmount0,
-      })
+      });
     } else if (isToken1Native) {
       result = await addLiquidityETH({
         token: pool.token0,
@@ -416,7 +445,7 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
         to: userAddress,
         deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
         value: parsedAmount1,
-      })
+      });
     } else {
       result = await addLiquidity({
         tokenA: pool.token0,
@@ -427,36 +456,39 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
         amountBMin,
         to: userAddress,
         deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-      })
+      });
     }
 
     if (result) {
       // Send Telegram notification
-      const poolName = `${pool.symbol0}/${pool.symbol1}`
-      const summary = `${amount0} ${pool.symbol0} + ${amount1} ${pool.symbol1}`
+      const poolName = `${pool.symbol0}/${pool.symbol1}`;
+      const summary = `${amount0} ${pool.symbol0} + ${amount1} ${pool.symbol1}`;
       void sendTxEventToRelay({
-        kind: 'lp_add',
-        status: 'success',
+        kind: "lp_add",
+        status: "success",
         txHash: result,
         chainId,
         wallet: userAddress,
         poolName,
         summary,
         at: Date.now(),
-      })
-      onSuccess()
+      });
+      toast.success("Liquidity Added!", {
+        description: summary,
+      });
+      onSuccess();
     }
-  }
+  };
 
-  const insufficientBalance0 = balance0 && parsedAmount0 > balance0.value
-  const insufficientBalance1 = balance1 && parsedAmount1 > balance1.value
+  const insufficientBalance0 = balance0 && parsedAmount0 > balance0.value;
+  const insufficientBalance1 = balance1 && parsedAmount1 > balance1.value;
   const canAdd =
     parsedAmount0 > 0n &&
     parsedAmount1 > 0n &&
     !insufficientBalance0 &&
     !insufficientBalance1 &&
     !needsApproval0 &&
-    !needsApproval1
+    !needsApproval1;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -480,8 +512,22 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
           {/* Pool info */}
           <div className="mb-4 flex items-center gap-3 rounded-xl border border-uni-border bg-uni-surface-2 p-3">
             <div className="flex items-center -space-x-2">
-              {token0 && <TokenLogo chainId={chainId} token={token0} size="sm" className="ring-2 ring-uni-surface-2" />}
-              {token1 && <TokenLogo chainId={chainId} token={token1} size="sm" className="ring-2 ring-uni-surface-2" />}
+              {token0 && (
+                <TokenLogo
+                  chainId={chainId}
+                  token={token0}
+                  size="sm"
+                  className="ring-2 ring-uni-surface-2"
+                />
+              )}
+              {token1 && (
+                <TokenLogo
+                  chainId={chainId}
+                  token={token1}
+                  size="sm"
+                  className="ring-2 ring-uni-surface-2"
+                />
+              )}
             </div>
             <p className="font-medium text-white">
               {pool.symbol0}/{pool.symbol1}
@@ -492,7 +538,9 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
           <div className="space-y-3">
             <div className="rounded-xl border border-uni-border bg-uni-surface-2 p-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-neutral-500">{pool.symbol0}</span>
+                <span className="text-xs font-medium text-neutral-500">
+                  {pool.symbol0}
+                </span>
               </div>
               <input
                 type="text"
@@ -500,24 +548,32 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
                 placeholder="0.0"
                 value={amount0}
                 onChange={(e) => {
-                  setAmount0(e.target.value)
+                  setAmount0(e.target.value);
                   if (pool.reserve0 > 0n) {
-                    setAmount1(calculateAmount1(e.target.value))
+                    setAmount1(calculateAmount1(e.target.value));
                   }
                 }}
                 className="w-full bg-transparent text-xl font-medium text-white outline-none placeholder:text-neutral-600"
               />
               <div className="mt-1 flex items-center justify-between text-xs text-neutral-500">
                 <span>
-                  Balance: {balance0 ? Number(formatUnits(balance0.value, balance0.decimals)).toFixed(4) : '—'}
+                  Balance:{" "}
+                  {balance0
+                    ? Number(
+                        formatUnits(balance0.value, balance0.decimals),
+                      ).toFixed(4)
+                    : "—"}
                 </span>
                 {balance0 && (
                   <button
                     type="button"
                     onClick={() => {
-                      const max = formatUnits(balance0.value, balance0.decimals)
-                      setAmount0(max)
-                      setAmount1(calculateAmount1(max))
+                      const max = formatUnits(
+                        balance0.value,
+                        balance0.decimals,
+                      );
+                      setAmount0(max);
+                      setAmount1(calculateAmount1(max));
                     }}
                     className="text-uni-pink hover:underline"
                   >
@@ -526,13 +582,17 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
                 )}
               </div>
               {insufficientBalance0 && (
-                <p className="mt-1 text-xs text-rose-400">Insufficient balance</p>
+                <p className="mt-1 text-xs text-rose-400">
+                  Insufficient balance
+                </p>
               )}
             </div>
 
             <div className="rounded-xl border border-uni-border bg-uni-surface-2 p-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-neutral-500">{pool.symbol1}</span>
+                <span className="text-xs font-medium text-neutral-500">
+                  {pool.symbol1}
+                </span>
               </div>
               <input
                 type="text"
@@ -540,24 +600,32 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
                 placeholder="0.0"
                 value={amount1}
                 onChange={(e) => {
-                  setAmount1(e.target.value)
+                  setAmount1(e.target.value);
                   if (pool.reserve1 > 0n) {
-                    setAmount0(calculateAmount0(e.target.value))
+                    setAmount0(calculateAmount0(e.target.value));
                   }
                 }}
                 className="w-full bg-transparent text-xl font-medium text-white outline-none placeholder:text-neutral-600"
               />
               <div className="mt-1 flex items-center justify-between text-xs text-neutral-500">
                 <span>
-                  Balance: {balance1 ? Number(formatUnits(balance1.value, balance1.decimals)).toFixed(4) : '—'}
+                  Balance:{" "}
+                  {balance1
+                    ? Number(
+                        formatUnits(balance1.value, balance1.decimals),
+                      ).toFixed(4)
+                    : "—"}
                 </span>
                 {balance1 && (
                   <button
                     type="button"
                     onClick={() => {
-                      const max = formatUnits(balance1.value, balance1.decimals)
-                      setAmount1(max)
-                      setAmount0(calculateAmount0(max))
+                      const max = formatUnits(
+                        balance1.value,
+                        balance1.decimals,
+                      );
+                      setAmount1(max);
+                      setAmount0(calculateAmount0(max));
                     }}
                     className="text-uni-pink hover:underline"
                   >
@@ -566,7 +634,9 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
                 )}
               </div>
               {insufficientBalance1 && (
-                <p className="mt-1 text-xs text-rose-400">Insufficient balance</p>
+                <p className="mt-1 text-xs text-rose-400">
+                  Insufficient balance
+                </p>
               )}
             </div>
           </div>
@@ -574,8 +644,12 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
           {/* Slippage */}
           <div className="mt-3 rounded-xl border border-uni-border bg-uni-surface-2 p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-neutral-500">Slippage Tolerance</span>
-              <span className="text-xs font-semibold text-white">{slippage}%</span>
+              <span className="text-xs font-medium text-neutral-500">
+                Slippage Tolerance
+              </span>
+              <span className="text-xs font-semibold text-white">
+                {slippage}%
+              </span>
             </div>
             <div className="flex gap-2">
               {[0.1, 0.5, 1.0, 3.0].map((s) => (
@@ -585,8 +659,8 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
                   onClick={() => setSlippage(s)}
                   className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
                     slippage === s
-                      ? 'border-uni-pink/40 bg-uni-pink/15 text-uni-pink'
-                      : 'border-uni-border bg-uni-surface text-neutral-400 hover:bg-uni-surface-3'
+                      ? "border-uni-pink/40 bg-uni-pink/15 text-uni-pink"
+                      : "border-uni-border bg-uni-surface text-neutral-400 hover:bg-uni-surface-3"
                   }`}
                 >
                   {s}%
@@ -596,32 +670,42 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
           </div>
 
           {/* Approvals */}
-          {(needsApproval0 || needsApproval1) && parsedAmount0 > 0n && parsedAmount1 > 0n && (
-            <div className="mt-3 flex gap-2">
-              {needsApproval0 && !isToken0Native && (
-                <button
-                  type="button"
-                  onClick={handleApprove0}
-                  disabled={approving0}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-uni-pink/30 bg-uni-pink/10 py-2 text-xs font-medium text-uni-pink transition hover:bg-uni-pink/20 disabled:opacity-60"
-                >
-                  {approving0 ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Approve {pool.symbol0}
-                </button>
-              )}
-              {needsApproval1 && !isToken1Native && (
-                <button
-                  type="button"
-                  onClick={handleApprove1}
-                  disabled={approving1}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-uni-pink/30 bg-uni-pink/10 py-2 text-xs font-medium text-uni-pink transition hover:bg-uni-pink/20 disabled:opacity-60"
-                >
-                  {approving1 ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Approve {pool.symbol1}
-                </button>
-              )}
-            </div>
-          )}
+          {(needsApproval0 || needsApproval1) &&
+            parsedAmount0 > 0n &&
+            parsedAmount1 > 0n && (
+              <div className="mt-3 flex gap-2">
+                {needsApproval0 && !isToken0Native && (
+                  <button
+                    type="button"
+                    onClick={handleApprove0}
+                    disabled={approving0}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-uni-pink/30 bg-uni-pink/10 py-2 text-xs font-medium text-uni-pink transition hover:bg-uni-pink/20 disabled:opacity-60"
+                  >
+                    {approving0 ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Check className="h-3.5 w-3.5" />
+                    )}
+                    Approve {pool.symbol0}
+                  </button>
+                )}
+                {needsApproval1 && !isToken1Native && (
+                  <button
+                    type="button"
+                    onClick={handleApprove1}
+                    disabled={approving1}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-uni-pink/30 bg-uni-pink/10 py-2 text-xs font-medium text-uni-pink transition hover:bg-uni-pink/20 disabled:opacity-60"
+                  >
+                    {approving1 ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Check className="h-3.5 w-3.5" />
+                    )}
+                    Approve {pool.symbol1}
+                  </button>
+                )}
+              </div>
+            )}
 
           {/* Error / Success */}
           {txError && (
@@ -631,11 +715,16 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
             </div>
           )}
 
-          {status === 'success' && hash && (
+          {status === "success" && hash && (
             <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-xs text-emerald-300">
               <Check className="h-3.5 w-3.5 shrink-0" />
-              Liquidity added!{' '}
-              <a href={`https://basescan.org/tx/${hash}`} target="_blank" rel="noopener noreferrer" className="underline">
+              Liquidity added!{" "}
+              <a
+                href={`https://basescan.org/tx/${hash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
                 View tx
               </a>
             </div>
@@ -645,13 +734,13 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
           <button
             type="button"
             onClick={handleAdd}
-            disabled={!canAdd || status === 'pending' || status === 'approving'}
+            disabled={!canAdd || status === "pending" || status === "approving"}
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-uni-pink py-3 text-sm font-semibold text-white transition hover:bg-uni-pink-light disabled:opacity-50"
           >
-            {status === 'pending' || status === 'approving' ? (
+            {status === "pending" || status === "approving" ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {status === 'approving' ? 'Approving...' : 'Adding...'}
+                {status === "approving" ? "Approving..." : "Adding..."}
               </>
             ) : (
               <>
@@ -663,16 +752,16 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
         </div>
       </motion.div>
     </div>
-  )
+  );
 }
 
 type RemoveLiquidityModalProps = {
-  pool: EonAmmPool
-  position: EonAmmUserPosition
-  chainId: number
-  onClose: () => void
-  onSuccess: () => void
-}
+  pool: EonAmmPool;
+  position: EonAmmUserPosition;
+  chainId: number;
+  onClose: () => void;
+  onSuccess: () => void;
+};
 
 function RemoveLiquidityModal({
   pool,
@@ -681,13 +770,13 @@ function RemoveLiquidityModal({
   onClose,
   onSuccess,
 }: RemoveLiquidityModalProps) {
-  const { address: userAddress } = useAccount()
-  const routerAddress = EON_AMM_ROUTER_FALLBACK[chainId]
+  const { address: userAddress } = useAccount();
+  const routerAddress = EON_AMM_ROUTER_FALLBACK[chainId];
 
-  const [percent, setPercent] = useState(100)
-  const [slippage, setSlippage] = useState(0.5)
-  const [needsApproval, setNeedsApproval] = useState(true)
-  const [approving, setApproving] = useState(false)
+  const [percent, setPercent] = useState(100);
+  const [slippage, setSlippage] = useState(0.5);
+  const [needsApproval, setNeedsApproval] = useState(true);
+  const [approving, setApproving] = useState(false);
 
   const {
     removeLiquidity,
@@ -697,43 +786,62 @@ function RemoveLiquidityModal({
     status,
     error: txError,
     hash,
-  } = useEonLiquidity(chainId)
+  } = useEonLiquidity(chainId);
 
-  const token0 = findToken(chainId, pool.token0)
-  const token1 = findToken(chainId, pool.token1)
+  // Show toast on liquidity error
+  useEffect(() => {
+    if (txError) {
+      toast.error("Remove Liquidity Failed", {
+        description: txError.slice(0, 100),
+      });
+    }
+  }, [txError]);
 
-  const isToken0Native = pool.symbol0 === 'WETH'
-  const isToken1Native = pool.symbol1 === 'WETH'
+  const token0 = findToken(chainId, pool.token0);
+  const token1 = findToken(chainId, pool.token1);
 
-  const liquidityToRemove = (position.lpBalance * BigInt(percent)) / 100n
+  const isToken0Native = pool.symbol0 === "WETH";
+  const isToken1Native = pool.symbol1 === "WETH";
 
-  const expectedToken0 = (position.token0Amount * BigInt(percent)) / 100n
-  const expectedToken1 = (position.token1Amount * BigInt(percent)) / 100n
+  const liquidityToRemove = (position.lpBalance * BigInt(percent)) / 100n;
+
+  const expectedToken0 = (position.token0Amount * BigInt(percent)) / 100n;
+  const expectedToken1 = (position.token1Amount * BigInt(percent)) / 100n;
 
   useEffect(() => {
-    if (!userAddress || !routerAddress) return
+    if (!userAddress || !routerAddress) return;
     const check = async () => {
-      const has = await checkAllowance(pool.address, routerAddress, liquidityToRemove)
-      setNeedsApproval(!has)
-    }
-    void check()
-  }, [userAddress, routerAddress, pool.address, liquidityToRemove, checkAllowance])
+      const has = await checkAllowance(
+        pool.address,
+        routerAddress,
+        liquidityToRemove,
+      );
+      setNeedsApproval(!has);
+    };
+    void check();
+  }, [
+    userAddress,
+    routerAddress,
+    pool.address,
+    liquidityToRemove,
+    checkAllowance,
+  ]);
 
   const handleApproveLP = async () => {
-    setApproving(true)
-    await approveLP(pool.address, maxUint256)
-    setNeedsApproval(false)
-    setApproving(false)
-  }
+    setApproving(true);
+    await approveLP(pool.address, maxUint256);
+    setNeedsApproval(false);
+    setApproving(false);
+  };
 
   const handleRemove = async () => {
-    if (!userAddress) return
+    if (!userAddress) return;
 
-    const slippageFactor = BigInt(Math.floor((1 - slippage / 100) * 10000))
-    const amountAMin = (expectedToken0 * slippageFactor) / 10000n
-    const amountBMin = (expectedToken1 * slippageFactor) / 10000n
+    const slippageFactor = BigInt(Math.floor((1 - slippage / 100) * 10000));
+    const amountAMin = (expectedToken0 * slippageFactor) / 10000n;
+    const amountBMin = (expectedToken1 * slippageFactor) / 10000n;
 
-    let result
+    let result;
     if (isToken0Native) {
       result = await removeLiquidityETH({
         token: pool.token1,
@@ -742,7 +850,7 @@ function RemoveLiquidityModal({
         amountETHMin: amountAMin,
         to: userAddress,
         deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-      })
+      });
     } else if (isToken1Native) {
       result = await removeLiquidityETH({
         token: pool.token0,
@@ -751,7 +859,7 @@ function RemoveLiquidityModal({
         amountETHMin: amountBMin,
         to: userAddress,
         deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-      })
+      });
     } else {
       result = await removeLiquidity({
         tokenA: pool.token0,
@@ -761,26 +869,29 @@ function RemoveLiquidityModal({
         amountBMin,
         to: userAddress,
         deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-      })
+      });
     }
 
     if (result) {
       // Send Telegram notification
-      const poolName = `${pool.symbol0}/${pool.symbol1}`
-      const summary = `${percent}% of ${poolName} LP`
+      const poolName = `${pool.symbol0}/${pool.symbol1}`;
+      const summary = `${percent}% of ${poolName} LP`;
       void sendTxEventToRelay({
-        kind: 'lp_remove',
-        status: 'success',
+        kind: "lp_remove",
+        status: "success",
         txHash: result,
         chainId,
         wallet: userAddress,
         poolName,
         summary,
         at: Date.now(),
-      })
-      onSuccess()
+      });
+      toast.success("Liquidity Removed!", {
+        description: summary,
+      });
+      onSuccess();
     }
-  }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -790,7 +901,9 @@ function RemoveLiquidityModal({
         className="w-full max-w-[400px] max-h-[85vh] overflow-hidden rounded-2xl border border-uni-border bg-uni-surface shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-uni-border px-4 py-3">
-          <h3 className="text-base font-semibold text-white">Remove Liquidity</h3>
+          <h3 className="text-base font-semibold text-white">
+            Remove Liquidity
+          </h3>
           <button
             type="button"
             onClick={onClose}
@@ -804,8 +917,22 @@ function RemoveLiquidityModal({
           {/* Pool info */}
           <div className="mb-4 flex items-center gap-3 rounded-xl border border-uni-border bg-uni-surface-2 p-3">
             <div className="flex items-center -space-x-2">
-              {token0 && <TokenLogo chainId={chainId} token={token0} size="sm" className="ring-2 ring-uni-surface-2" />}
-              {token1 && <TokenLogo chainId={chainId} token={token1} size="sm" className="ring-2 ring-uni-surface-2" />}
+              {token0 && (
+                <TokenLogo
+                  chainId={chainId}
+                  token={token0}
+                  size="sm"
+                  className="ring-2 ring-uni-surface-2"
+                />
+              )}
+              {token1 && (
+                <TokenLogo
+                  chainId={chainId}
+                  token={token1}
+                  size="sm"
+                  className="ring-2 ring-uni-surface-2"
+                />
+              )}
             </div>
             <p className="font-medium text-white">
               {pool.symbol0}/{pool.symbol1}
@@ -815,7 +942,9 @@ function RemoveLiquidityModal({
           {/* Percent slider */}
           <div className="rounded-xl border border-uni-border bg-uni-surface-2 p-4">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-neutral-500">Amount to remove</span>
+              <span className="text-xs font-medium text-neutral-500">
+                Amount to remove
+              </span>
               <span className="text-2xl font-bold text-white">{percent}%</span>
             </div>
             <input
@@ -834,8 +963,8 @@ function RemoveLiquidityModal({
                   onClick={() => setPercent(p)}
                   className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
                     percent === p
-                      ? 'border-uni-pink/40 bg-uni-pink/15 text-uni-pink'
-                      : 'border-uni-border bg-uni-surface text-neutral-400 hover:bg-uni-surface-3'
+                      ? "border-uni-pink/40 bg-uni-pink/15 text-uni-pink"
+                      : "border-uni-border bg-uni-surface text-neutral-400 hover:bg-uni-surface-3"
                   }`}
                 >
                   {p}%
@@ -846,12 +975,18 @@ function RemoveLiquidityModal({
 
           {/* Expected output */}
           <div className="mt-3 rounded-xl border border-uni-border bg-uni-surface-2 p-3">
-            <p className="text-xs font-medium text-neutral-500 mb-2">You will receive</p>
+            <p className="text-xs font-medium text-neutral-500 mb-2">
+              You will receive
+            </p>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  {token0 && <TokenLogo chainId={chainId} token={token0} size="sm" />}
-                  <span className="text-sm text-neutral-300">{pool.symbol0}</span>
+                  {token0 && (
+                    <TokenLogo chainId={chainId} token={token0} size="sm" />
+                  )}
+                  <span className="text-sm text-neutral-300">
+                    {pool.symbol0}
+                  </span>
                 </div>
                 <span className="text-sm font-semibold tabular-nums text-white">
                   {formatTokenAmount(expectedToken0, pool.decimals0)}
@@ -859,8 +994,12 @@ function RemoveLiquidityModal({
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  {token1 && <TokenLogo chainId={chainId} token={token1} size="sm" />}
-                  <span className="text-sm text-neutral-300">{pool.symbol1}</span>
+                  {token1 && (
+                    <TokenLogo chainId={chainId} token={token1} size="sm" />
+                  )}
+                  <span className="text-sm text-neutral-300">
+                    {pool.symbol1}
+                  </span>
                 </div>
                 <span className="text-sm font-semibold tabular-nums text-white">
                   {formatTokenAmount(expectedToken1, pool.decimals1)}
@@ -872,8 +1011,12 @@ function RemoveLiquidityModal({
           {/* Slippage */}
           <div className="mt-3 rounded-xl border border-uni-border bg-uni-surface-2 p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-neutral-500">Slippage Tolerance</span>
-              <span className="text-xs font-semibold text-white">{slippage}%</span>
+              <span className="text-xs font-medium text-neutral-500">
+                Slippage Tolerance
+              </span>
+              <span className="text-xs font-semibold text-white">
+                {slippage}%
+              </span>
             </div>
             <div className="flex gap-2">
               {[0.1, 0.5, 1.0, 3.0].map((s) => (
@@ -883,8 +1026,8 @@ function RemoveLiquidityModal({
                   onClick={() => setSlippage(s)}
                   className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
                     slippage === s
-                      ? 'border-uni-pink/40 bg-uni-pink/15 text-uni-pink'
-                      : 'border-uni-border bg-uni-surface text-neutral-400 hover:bg-uni-surface-3'
+                      ? "border-uni-pink/40 bg-uni-pink/15 text-uni-pink"
+                      : "border-uni-border bg-uni-surface text-neutral-400 hover:bg-uni-surface-3"
                   }`}
                 >
                   {s}%
@@ -901,7 +1044,11 @@ function RemoveLiquidityModal({
               disabled={approving}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-uni-pink/30 bg-uni-pink/10 py-2.5 text-xs font-medium text-uni-pink transition hover:bg-uni-pink/20 disabled:opacity-60"
             >
-              {approving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              {approving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
               Approve LP Token
             </button>
           )}
@@ -914,11 +1061,16 @@ function RemoveLiquidityModal({
             </div>
           )}
 
-          {status === 'success' && hash && (
+          {status === "success" && hash && (
             <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-xs text-emerald-300">
               <Check className="h-3.5 w-3.5 shrink-0" />
-              Liquidity removed!{' '}
-              <a href={`https://basescan.org/tx/${hash}`} target="_blank" rel="noopener noreferrer" className="underline">
+              Liquidity removed!{" "}
+              <a
+                href={`https://basescan.org/tx/${hash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
                 View tx
               </a>
             </div>
@@ -928,10 +1080,12 @@ function RemoveLiquidityModal({
           <button
             type="button"
             onClick={handleRemove}
-            disabled={needsApproval || status === 'pending' || status === 'approving'}
+            disabled={
+              needsApproval || status === "pending" || status === "approving"
+            }
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-rose-500/50 bg-rose-500/20 py-3 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/30 disabled:opacity-50"
           >
-            {status === 'pending' || status === 'approving' ? (
+            {status === "pending" || status === "approving" ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Removing...
@@ -946,54 +1100,64 @@ function RemoveLiquidityModal({
         </div>
       </motion.div>
     </div>
-  )
+  );
 }
 
 type PoolGridProps = {
-  pools: EonAmmPool[]
-  userPositions: EonAmmUserPosition[]
-  loading: boolean
-  onRefresh: () => void
-}
+  pools: EonAmmPool[];
+  userPositions: EonAmmUserPosition[];
+  loading: boolean;
+  onRefresh: () => void;
+};
 
-const POOLS_PER_PAGE = 6
+const POOLS_PER_PAGE = 6;
 
-export function PoolGrid({ pools, userPositions, loading, onRefresh }: PoolGridProps) {
-  const [addLiquidityPool, setAddLiquidityPool] = useState<EonAmmPool | null>(null)
+export function PoolGrid({
+  pools,
+  userPositions,
+  loading,
+  onRefresh,
+}: PoolGridProps) {
+  const [addLiquidityPool, setAddLiquidityPool] = useState<EonAmmPool | null>(
+    null,
+  );
   const [removeLiquidityData, setRemoveLiquidityData] = useState<{
-    pool: EonAmmPool
-    position: EonAmmUserPosition
-  } | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
+    pool: EonAmmPool;
+    position: EonAmmUserPosition;
+  } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Sort pools: EonSwap-branded pools first, then by TVL
   const sortedPools = useMemo(() => {
     return [...pools].sort((a, b) => {
-      const aIsEon = isEonSwapPool(a)
-      const bIsEon = isEonSwapPool(b)
-      if (aIsEon && !bIsEon) return -1
-      if (!aIsEon && bIsEon) return 1
-      return b.tvlUsd - a.tvlUsd // Then by TVL descending
-    })
-  }, [pools])
+      const aIsEon = isEonSwapPool(a);
+      const bIsEon = isEonSwapPool(b);
+      if (aIsEon && !bIsEon) return -1;
+      if (!aIsEon && bIsEon) return 1;
+      return b.tvlUsd - a.tvlUsd; // Then by TVL descending
+    });
+  }, [pools]);
 
-  const { totalPages, getPageItems } = usePagination(sortedPools, POOLS_PER_PAGE)
-  const currentPools = getPageItems(currentPage)
+  const { totalPages, getPageItems } = usePagination(
+    sortedPools,
+    POOLS_PER_PAGE,
+  );
+  const currentPools = getPageItems(currentPage);
 
   // Reset to page 1 when pools change
   useEffect(() => {
-    setCurrentPage(1)
-  }, [pools.length])
+    setCurrentPage(1);
+  }, [pools.length]);
 
   const handleAddSuccess = () => {
-    setAddLiquidityPool(null)
-    void onRefresh()
-  }
+    setAddLiquidityPool(null);
+    void onRefresh();
+  };
 
   const handleRemoveSuccess = () => {
-    setRemoveLiquidityData(null)
-    void onRefresh()
-  }
+    setRemoveLiquidityData(null);
+    void onRefresh();
+  };
 
   if (loading && pools.length === 0) {
     return (
@@ -1001,19 +1165,21 @@ export function PoolGrid({ pools, userPositions, loading, onRefresh }: PoolGridP
         <Loader2 className="h-6 w-6 animate-spin text-uni-pink" />
         <span className="text-neutral-400">Loading pools...</span>
       </div>
-    )
+    );
   }
 
   if (pools.length === 0) {
     return (
       <div className="rounded-3xl border border-uni-border bg-uni-surface py-16 text-center">
         <Droplets className="mx-auto h-12 w-12 text-neutral-600" />
-        <p className="mt-4 text-lg font-medium text-neutral-400">No pools found</p>
+        <p className="mt-4 text-lg font-medium text-neutral-400">
+          No pools found
+        </p>
         <p className="mt-1 text-sm text-neutral-500">
           Be the first to add liquidity to Eon AMM
         </p>
       </div>
-    )
+    );
   }
 
   return (
@@ -1021,8 +1187,8 @@ export function PoolGrid({ pools, userPositions, loading, onRefresh }: PoolGridP
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {currentPools.map((pool, index) => {
           const position = userPositions.find(
-            (p) => p.poolAddress.toLowerCase() === pool.address.toLowerCase()
-          )
+            (p) => p.poolAddress.toLowerCase() === pool.address.toLowerCase(),
+          );
           return (
             <PoolCard
               key={pool.address}
@@ -1031,9 +1197,11 @@ export function PoolGrid({ pools, userPositions, loading, onRefresh }: PoolGridP
               chainId={base.id}
               index={index}
               onAddLiquidity={setAddLiquidityPool}
-              onRemoveLiquidity={(p, pos) => setRemoveLiquidityData({ pool: p, position: pos })}
+              onRemoveLiquidity={(p, pos) =>
+                setRemoveLiquidityData({ pool: p, position: pos })
+              }
             />
-          )
+          );
         })}
       </div>
 
@@ -1068,5 +1236,5 @@ export function PoolGrid({ pools, userPositions, loading, onRefresh }: PoolGridP
         />
       )}
     </>
-  )
+  );
 }

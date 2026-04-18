@@ -1,375 +1,443 @@
-import { appendFile, mkdir, readFile, stat, rename } from 'node:fs/promises'
-import { createServer } from 'node:http'
-import { dirname, join } from 'node:path'
-import { URL, fileURLToPath } from 'node:url'
+import { appendFile, mkdir, readFile, stat, rename } from "node:fs/promises";
+import { createServer } from "node:http";
+import { dirname, join } from "node:path";
+import { URL, fileURLToPath } from "node:url";
+import {
+  createTrackerFromEnv,
+  ReferralTrackerService,
+} from "./referralTracker.mjs";
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
+// Global tracker instance for on-chain tracking
+let referralTracker = null;
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const ACTIVITY_LOG_PATH =
-  process.env.RELAY_ACTIVITY_LOG_PATH?.trim() || join(__dirname, 'data', 'activities.jsonl')
+  process.env.RELAY_ACTIVITY_LOG_PATH?.trim() ||
+  join(__dirname, "data", "activities.jsonl");
 const TX_EVENT_LOG_PATH =
-  process.env.RELAY_TX_EVENT_LOG_PATH?.trim() || join(__dirname, 'data', 'tx-events.jsonl')
+  process.env.RELAY_TX_EVENT_LOG_PATH?.trim() ||
+  join(__dirname, "data", "tx-events.jsonl");
 const REFERRAL_LOG_PATH =
-  process.env.RELAY_REFERRAL_LOG_PATH?.trim() || join(__dirname, 'data', 'referrals.jsonl')
-const RELAY_ADMIN_SECRET = process.env.RELAY_ADMIN_SECRET?.trim() || ''
+  process.env.RELAY_REFERRAL_LOG_PATH?.trim() ||
+  join(__dirname, "data", "referrals.jsonl");
+const RELAY_ADMIN_SECRET = process.env.RELAY_ADMIN_SECRET?.trim() || "";
 
-const PORT = Number(process.env.PORT || process.env.RELAY_PORT || 8787)
+const PORT = Number(process.env.PORT || process.env.RELAY_PORT || 8787);
 /** Railway/Render/Fly expect HTTP on $PORT and often require binding all interfaces. */
-const LISTEN_HOST = process.env.HOST?.trim() || '0.0.0.0'
-const CHECK_TIMEOUT_MS = 12_000
-const POLL_MS = 300_000
-const ALERT_WEBHOOK_URL = process.env.RELAY_ALERT_WEBHOOK_URL?.trim() || ''
-const ALERT_COOLDOWN_MS = Number(process.env.RELAY_ALERT_COOLDOWN_MS || 180_000)
-const TELEGRAM_BOT_TOKEN = process.env.RELAY_TELEGRAM_BOT_TOKEN?.trim() || ''
-const TELEGRAM_CHAT_ID = process.env.RELAY_TELEGRAM_CHAT_ID?.trim() || ''
-const TELEGRAM_BANNER_URL = process.env.RELAY_TELEGRAM_BANNER_URL?.trim() || ''
+const LISTEN_HOST = process.env.HOST?.trim() || "0.0.0.0";
+const CHECK_TIMEOUT_MS = 12_000;
+const POLL_MS = 300_000;
+const ALERT_WEBHOOK_URL = process.env.RELAY_ALERT_WEBHOOK_URL?.trim() || "";
+const ALERT_COOLDOWN_MS = Number(
+  process.env.RELAY_ALERT_COOLDOWN_MS || 180_000,
+);
+const TELEGRAM_BOT_TOKEN = process.env.RELAY_TELEGRAM_BOT_TOKEN?.trim() || "";
+const TELEGRAM_CHAT_ID = process.env.RELAY_TELEGRAM_CHAT_ID?.trim() || "";
+const TELEGRAM_BANNER_URL = process.env.RELAY_TELEGRAM_BANNER_URL?.trim() || "";
 const TELEGRAM_BANNER_LOCAL_PATH =
   process.env.RELAY_TELEGRAM_BANNER_LOCAL_PATH?.trim() ||
-  join(__dirname, '..', 'public', 'hero-banner.png')
+  join(__dirname, "..", "public", "hero-banner.png");
 /** Comma-separated list, or `*` when unset / empty (dev). Entries match after trimming trailing `/`. */
 // Require explicit allowed origin in production; default to empty (no wildcard)
-const RELAY_CORS_RAW = process.env.RELAY_ALLOWED_ORIGIN?.trim() ?? ''
-const CORS_ALLOW_ALL = RELAY_CORS_RAW === '*'
+const RELAY_CORS_RAW = process.env.RELAY_ALLOWED_ORIGIN?.trim() ?? "";
+const CORS_ALLOW_ALL = RELAY_CORS_RAW === "*";
 function normalizeCorsOrigin(s) {
-  return String(s).trim().replace(/\/+$/u, '')
+  return String(s).trim().replace(/\/+$/u, "");
 }
 const CORS_ALLOWED_NORMALIZED = CORS_ALLOW_ALL
   ? new Set()
   : new Set(
-      RELAY_CORS_RAW.split(',')
+      RELAY_CORS_RAW.split(",")
         .map((s) => normalizeCorsOrigin(s))
         .filter(Boolean),
-    )
+    );
 
 function corsOriginHeader(req) {
-  if (CORS_ALLOW_ALL) return '*'
-  const o = String(req.headers.origin ?? '').trim()
-  if (!o) return null
-  if (CORS_ALLOWED_NORMALIZED.has(normalizeCorsOrigin(o))) return o
-  return null
+  if (CORS_ALLOW_ALL) return "*";
+  const o = String(req.headers.origin ?? "").trim();
+  if (!o) return null;
+  if (CORS_ALLOWED_NORMALIZED.has(normalizeCorsOrigin(o))) return o;
+  return null;
 }
-const EVENT_RATE_LIMIT_PER_MIN = Number(process.env.RELAY_EVENTS_RATE_LIMIT_PER_MIN || 60)
-const EXPLORER_RATE_LIMIT_PER_MIN = Number(process.env.RELAY_EXPLORER_RATE_LIMIT_PER_MIN || 20)
+const EVENT_RATE_LIMIT_PER_MIN = Number(
+  process.env.RELAY_EVENTS_RATE_LIMIT_PER_MIN || 60,
+);
+const EXPLORER_RATE_LIMIT_PER_MIN = Number(
+  process.env.RELAY_EXPLORER_RATE_LIMIT_PER_MIN || 20,
+);
 const LEADERBOARD_RATE_LIMIT_PER_MIN = Number(
   process.env.RELAY_LEADERBOARD_RATE_LIMIT_PER_MIN || 30,
-)
-const EVENT_MAX_BODY_BYTES = Number(process.env.RELAY_EVENTS_MAX_BODY_BYTES || 262_144)
-const EXPLORER_ACCESS_TOKEN = process.env.RELAY_EXPLORER_ACCESS_TOKEN?.trim() || ''
+);
+const EVENT_MAX_BODY_BYTES = Number(
+  process.env.RELAY_EVENTS_MAX_BODY_BYTES || 262_144,
+);
+const EXPLORER_ACCESS_TOKEN =
+  process.env.RELAY_EXPLORER_ACCESS_TOKEN?.trim() || "";
 const WARN_LATENCY_MS = {
   eonswap: Number(process.env.RELAY_WARN_EONSWAP_MS || 2500),
   coingecko: Number(process.env.RELAY_WARN_COINGECKO_MS || 2500),
   etherscan: Number(process.env.RELAY_WARN_ETHERSCAN_MS || 3000),
-}
+};
 
 // Log rotation / size limits
-const MAX_LOG_BYTES = Number(process.env.RELAY_MAX_LOG_BYTES || 10 * 1024 * 1024) // 10MB
+const MAX_LOG_BYTES = Number(
+  process.env.RELAY_MAX_LOG_BYTES || 10 * 1024 * 1024,
+); // 10MB
 
 if (!RELAY_ADMIN_SECRET) {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('FATAL: RELAY_ADMIN_SECRET must be set in production. Exiting.')
-    process.exit(1)
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "FATAL: RELAY_ADMIN_SECRET must be set in production. Exiting.",
+    );
+    process.exit(1);
   } else {
-    console.warn('Warning: RELAY_ADMIN_SECRET is not set; running in insecure mode.')
+    console.warn(
+      "Warning: RELAY_ADMIN_SECRET is not set; running in insecure mode.",
+    );
   }
 }
 
 const windows = {
   h1: 60 * 60 * 1000,
   h24: 24 * 60 * 60 * 1000,
-}
+};
 
 const samples = {
   eonswap: [],
   coingecko: [],
   etherscan: [],
-}
+};
 
 const status = {
   checkedAt: null,
   providers: {
-    eonswap: { ok: false, detail: 'not checked', latencyMs: null, h1: 100, h24: 100 },
-    coingecko: { ok: false, detail: 'not checked', latencyMs: null, h1: 100, h24: 100 },
-    etherscan: { ok: false, detail: 'not checked', latencyMs: null, h1: 100, h24: 100 },
+    eonswap: {
+      ok: false,
+      detail: "not checked",
+      latencyMs: null,
+      h1: 100,
+      h24: 100,
+    },
+    coingecko: {
+      ok: false,
+      detail: "not checked",
+      latencyMs: null,
+      h1: 100,
+      h24: 100,
+    },
+    etherscan: {
+      ok: false,
+      detail: "not checked",
+      latencyMs: null,
+      h1: 100,
+      h24: 100,
+    },
   },
-}
-let lastAlertAt = 0
-const eventRateMap = new Map()
-const explorerRateMap = new Map()
-const leaderboardRateMap = new Map()
-const referralRateMap = new Map()
-const recentTxEvents = new Map()
+};
+let lastAlertAt = 0;
+const eventRateMap = new Map();
+const explorerRateMap = new Map();
+const leaderboardRateMap = new Map();
+const referralRateMap = new Map();
+const recentTxEvents = new Map();
 
 function classifyError(error) {
-  const msg = String(error?.message || error || '')
-  if (/abort|timeout/i.test(msg)) return 'Timeout'
-  if (/429|rate/i.test(msg)) return 'Rate limited (429)'
-  if (/cors/i.test(msg)) return 'CORS blocked'
-  return msg.slice(0, 120) || 'Unknown error'
+  const msg = String(error?.message || error || "");
+  if (/abort|timeout/i.test(msg)) return "Timeout";
+  if (/429|rate/i.test(msg)) return "Rate limited (429)";
+  if (/cors/i.test(msg)) return "CORS blocked";
+  return msg.slice(0, 120) || "Unknown error";
 }
 
 function escapeHtml(value) {
   return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function explorerTxUrl(chainId, txHash) {
   const prefixByChain = {
-    1: 'https://etherscan.io/tx/',
-    10: 'https://optimistic.etherscan.io/tx/',
-    56: 'https://bscscan.com/tx/',
-    137: 'https://polygonscan.com/tx/',
-    8453: 'https://basescan.org/tx/',
-    42161: 'https://arbiscan.io/tx/',
-  }
-  const prefix = prefixByChain[Number(chainId)] || 'https://etherscan.io/tx/'
-  return `${prefix}${txHash}`
+    1: "https://etherscan.io/tx/",
+    10: "https://optimistic.etherscan.io/tx/",
+    56: "https://bscscan.com/tx/",
+    137: "https://polygonscan.com/tx/",
+    8453: "https://basescan.org/tx/",
+    42161: "https://arbiscan.io/tx/",
+  };
+  const prefix = prefixByChain[Number(chainId)] || "https://etherscan.io/tx/";
+  return `${prefix}${txHash}`;
 }
 
 function explorerAddressUrl(chainId, wallet) {
   const prefixByChain = {
-    1: 'https://etherscan.io/address/',
-    10: 'https://optimistic.etherscan.io/address/',
-    56: 'https://bscscan.com/address/',
-    137: 'https://polygonscan.com/address/',
-    8453: 'https://basescan.org/address/',
-    42161: 'https://arbiscan.io/address/',
-  }
-  const prefix = prefixByChain[Number(chainId)]
-  if (!prefix) return null
-  return `${prefix}${wallet}`
+    1: "https://etherscan.io/address/",
+    10: "https://optimistic.etherscan.io/address/",
+    56: "https://bscscan.com/address/",
+    137: "https://polygonscan.com/address/",
+    8453: "https://basescan.org/address/",
+    42161: "https://arbiscan.io/address/",
+  };
+  const prefix = prefixByChain[Number(chainId)];
+  if (!prefix) return null;
+  return `${prefix}${wallet}`;
 }
 
 function chainLabel(chainId) {
   const labels = {
-    1: 'Ethereum',
-    10: 'Optimism',
-    56: 'BNB Smart Chain',
-    137: 'Polygon',
-    8453: 'Base',
-    42161: 'Arbitrum',
-  }
-  const id = Number(chainId)
-  const name = labels[id]
-  return name ? `${name} (${id})` : `Unknown (${id || 'n/a'})`
+    1: "Ethereum",
+    10: "Optimism",
+    56: "BNB Smart Chain",
+    137: "Polygon",
+    8453: "Base",
+    42161: "Arbitrum",
+  };
+  const id = Number(chainId);
+  const name = labels[id];
+  return name ? `${name} (${id})` : `Unknown (${id || "n/a"})`;
 }
 
 function shortHex(value, start = 8, end = 6) {
-  const v = String(value || '')
-  return v.length > start + end + 3 ? `${v.slice(0, start)}...${v.slice(-end)}` : v
+  const v = String(value || "");
+  return v.length > start + end + 3
+    ? `${v.slice(0, start)}...${v.slice(-end)}`
+    : v;
 }
 
 function parsePriceSnapshot(summary) {
-  const s = String(summary || '').trim()
-  const arrow = s.includes('→') ? '→' : s.includes('->') ? '->' : null
-  if (!arrow) return null
-  const [leftRaw, rightRaw] = s.split(arrow)
-  const left = leftRaw
-    ?.replace(/^\s*Swap\s+/iu, '')
-    .trim()
+  const s = String(summary || "").trim();
+  const arrow = s.includes("→") ? "→" : s.includes("->") ? "->" : null;
+  if (!arrow) return null;
+  const [leftRaw, rightRaw] = s.split(arrow);
+  const left = leftRaw?.replace(/^\s*Swap\s+/iu, "").trim();
   const right = rightRaw
-    ?.replace(/\((done|failed|rejected)\)\s*$/iu, '')
-    .trim()
-  if (!left && !right) return null
+    ?.replace(/\((done|failed|rejected)\)\s*$/iu, "")
+    .trim();
+  if (!left && !right) return null;
   return {
-    from: left || '',
-    to: right || '',
-  }
+    from: left || "",
+    to: right || "",
+  };
 }
 
 async function fetchJson(url) {
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), CHECK_TIMEOUT_MS)
-  const started = Date.now()
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), CHECK_TIMEOUT_MS);
+  const started = Date.now();
   try {
-    const res = await fetch(url, { signal: ctrl.signal, headers: { accept: 'application/json' } })
-    const json = await res.json().catch(() => null)
-    return { res, json, latencyMs: Date.now() - started }
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers: { accept: "application/json" },
+    });
+    const json = await res.json().catch(() => null);
+    return { res, json, latencyMs: Date.now() - started };
   } finally {
-    clearTimeout(timer)
+    clearTimeout(timer);
   }
 }
 
 async function fetchJsonWithFallback(urls) {
-  let lastErr = null
+  let lastErr = null;
   for (const url of urls) {
     try {
-      return await fetchJson(url)
+      return await fetchJson(url);
     } catch (error) {
-      lastErr = error
+      lastErr = error;
     }
   }
-  throw lastErr ?? new Error('All fallback endpoints failed')
+  throw lastErr ?? new Error("All fallback endpoints failed");
 }
 
 function updateSla(provider, ok) {
-  const now = Date.now()
-  samples[provider].push({ at: now, ok })
-  samples[provider] = samples[provider].filter((s) => now - s.at <= windows.h24)
-  const h1s = samples[provider].filter((s) => now - s.at <= windows.h1)
-  const h24s = samples[provider]
-  const h1 = h1s.length ? Math.round((h1s.filter((s) => s.ok).length / h1s.length) * 100) : 100
-  const h24 = h24s.length ? Math.round((h24s.filter((s) => s.ok).length / h24s.length) * 100) : 100
-  status.providers[provider].h1 = h1
-  status.providers[provider].h24 = h24
+  const now = Date.now();
+  samples[provider].push({ at: now, ok });
+  samples[provider] = samples[provider].filter(
+    (s) => now - s.at <= windows.h24,
+  );
+  const h1s = samples[provider].filter((s) => now - s.at <= windows.h1);
+  const h24s = samples[provider];
+  const h1 = h1s.length
+    ? Math.round((h1s.filter((s) => s.ok).length / h1s.length) * 100)
+    : 100;
+  const h24 = h24s.length
+    ? Math.round((h24s.filter((s) => s.ok).length / h24s.length) * 100)
+    : 100;
+  status.providers[provider].h1 = h1;
+  status.providers[provider].h24 = h24;
 }
 
 function getClientIp(req) {
-  const xff = String(req.headers['x-forwarded-for'] || '')
-  return xff.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown'
+  const xff = String(req.headers["x-forwarded-for"] || "");
+  return xff.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
 }
 
 function isRateLimited(req) {
-  const now = Date.now()
-  const key = getClientIp(req)
-  const entry = eventRateMap.get(key) || { count: 0, resetAt: now + 60_000 }
+  const now = Date.now();
+  const key = getClientIp(req);
+  const entry = eventRateMap.get(key) || { count: 0, resetAt: now + 60_000 };
   if (now > entry.resetAt) {
-    entry.count = 0
-    entry.resetAt = now + 60_000
+    entry.count = 0;
+    entry.resetAt = now + 60_000;
   }
-  entry.count += 1
-  eventRateMap.set(key, entry)
-  return entry.count > EVENT_RATE_LIMIT_PER_MIN
+  entry.count += 1;
+  eventRateMap.set(key, entry);
+  return entry.count > EVENT_RATE_LIMIT_PER_MIN;
 }
 
 function isExplorerRateLimited(req) {
-  const now = Date.now()
-  const key = getClientIp(req)
-  const entry = explorerRateMap.get(key) || { count: 0, resetAt: now + 60_000 }
+  const now = Date.now();
+  const key = getClientIp(req);
+  const entry = explorerRateMap.get(key) || { count: 0, resetAt: now + 60_000 };
   if (now > entry.resetAt) {
-    entry.count = 0
-    entry.resetAt = now + 60_000
+    entry.count = 0;
+    entry.resetAt = now + 60_000;
   }
-  entry.count += 1
-  explorerRateMap.set(key, entry)
-  return entry.count > EXPLORER_RATE_LIMIT_PER_MIN
+  entry.count += 1;
+  explorerRateMap.set(key, entry);
+  return entry.count > EXPLORER_RATE_LIMIT_PER_MIN;
 }
 
 function isLeaderboardRateLimited(req) {
-  const now = Date.now()
-  const key = getClientIp(req)
-  const entry = leaderboardRateMap.get(key) || { count: 0, resetAt: now + 60_000 }
+  const now = Date.now();
+  const key = getClientIp(req);
+  const entry = leaderboardRateMap.get(key) || {
+    count: 0,
+    resetAt: now + 60_000,
+  };
   if (now > entry.resetAt) {
-    entry.count = 0
-    entry.resetAt = now + 60_000
+    entry.count = 0;
+    entry.resetAt = now + 60_000;
   }
-  entry.count += 1
-  leaderboardRateMap.set(key, entry)
-  return entry.count > LEADERBOARD_RATE_LIMIT_PER_MIN
+  entry.count += 1;
+  leaderboardRateMap.set(key, entry);
+  return entry.count > LEADERBOARD_RATE_LIMIT_PER_MIN;
 }
 
-const REFERRAL_RATE_LIMIT_PER_MIN = Number(process.env.RELAY_REFERRAL_RATE_LIMIT_PER_MIN || 30)
+const REFERRAL_RATE_LIMIT_PER_MIN = Number(
+  process.env.RELAY_REFERRAL_RATE_LIMIT_PER_MIN || 30,
+);
 
 function isReferralRateLimited(req) {
-  const now = Date.now()
-  const key = getClientIp(req)
-  const entry = referralRateMap.get(key) || { count: 0, resetAt: now + 60_000 }
+  const now = Date.now();
+  const key = getClientIp(req);
+  const entry = referralRateMap.get(key) || { count: 0, resetAt: now + 60_000 };
   if (now > entry.resetAt) {
-    entry.count = 0
-    entry.resetAt = now + 60_000
+    entry.count = 0;
+    entry.resetAt = now + 60_000;
   }
-  entry.count += 1
-  referralRateMap.set(key, entry)
-  return entry.count > REFERRAL_RATE_LIMIT_PER_MIN
+  entry.count += 1;
+  referralRateMap.set(key, entry);
+  return entry.count > REFERRAL_RATE_LIMIT_PER_MIN;
 }
 
 // ==================== REFERRAL DATA HANDLING ====================
 
 async function appendReferralRecord(record) {
-  await mkdir(dirname(REFERRAL_LOG_PATH), { recursive: true })
-  const line = JSON.stringify(record) + '\n'
+  await mkdir(dirname(REFERRAL_LOG_PATH), { recursive: true });
+  const line = JSON.stringify(record) + "\n";
   try {
-    const st = await stat(REFERRAL_LOG_PATH)
+    const st = await stat(REFERRAL_LOG_PATH);
     if (st.size > MAX_LOG_BYTES) {
-      const bak = `${REFERRAL_LOG_PATH}.${Date.now()}.bak`
-      await rename(REFERRAL_LOG_PATH, bak)
+      const bak = `${REFERRAL_LOG_PATH}.${Date.now()}.bak`;
+      await rename(REFERRAL_LOG_PATH, bak);
     }
-  } catch { /* file doesn't exist yet */ }
-  await appendFile(REFERRAL_LOG_PATH, line, 'utf8')
+  } catch {
+    /* file doesn't exist yet */
+  }
+  await appendFile(REFERRAL_LOG_PATH, line, "utf8");
 }
 
 async function readReferralsMerged(maxLines = 50_000) {
-  let raw = ''
+  let raw = "";
   try {
-    raw = await readFile(REFERRAL_LOG_PATH, 'utf8')
+    raw = await readFile(REFERRAL_LOG_PATH, "utf8");
   } catch {
-    return []
+    return [];
   }
-  const lines = raw.split('\n').filter((l) => l.trim())
-  const slice = lines.length > maxLines ? lines.slice(-maxLines) : lines
-  const records = []
+  const lines = raw.split("\n").filter((l) => l.trim());
+  const slice = lines.length > maxLines ? lines.slice(-maxLines) : lines;
+  const records = [];
   for (const line of slice) {
     try {
-      const obj = JSON.parse(line)
-      records.push(obj)
+      const obj = JSON.parse(line);
+      records.push(obj);
     } catch {
       // skip corrupt line
     }
   }
-  return records
+  return records;
 }
 
 function generateReferralCode(address) {
-  if (!address || address.length < 10) return ''
-  const clean = address.toLowerCase().replace('0x', '')
-  return clean.slice(0, 4) + clean.slice(-4)
+  if (!address || address.length < 10) return "";
+  const clean = address.toLowerCase().replace("0x", "");
+  return clean.slice(0, 4) + clean.slice(-4);
 }
 
 function calculateTier(referralCount) {
-  if (referralCount >= 50) return 'platinum'
-  if (referralCount >= 15) return 'gold'
-  if (referralCount >= 5) return 'silver'
-  return 'bronze'
+  if (referralCount >= 50) return "platinum";
+  if (referralCount >= 15) return "gold";
+  if (referralCount >= 5) return "silver";
+  return "bronze";
 }
 
 function getTierRewardPct(tier) {
-  const pcts = { bronze: 5, silver: 7.5, gold: 10, platinum: 15 }
-  return pcts[tier] || 5
+  const pcts = { bronze: 5, silver: 7.5, gold: 10, platinum: 15 };
+  return pcts[tier] || 5;
 }
 
 async function buildReferralStats(address) {
-  const code = generateReferralCode(address)
+  const code = generateReferralCode(address);
   if (!code) {
     return {
       totalReferrals: 0,
       activeReferrals: 0,
       totalEarnings: 0,
       pendingRewards: 0,
-      tier: 'bronze',
+      tier: "bronze",
       referredAddresses: [],
-    }
+    };
   }
 
-  const records = await readReferralsMerged()
-  
+  const records = await readReferralsMerged();
+
   // Find all referrals for this code
-  const referrals = records.filter((r) => r.type === 'referral' && r.referrerCode === code)
-  const referredAddresses = []
-  
+  const referrals = records.filter(
+    (r) => r.type === "referral" && r.referrerCode === code,
+  );
+  const referredAddresses = [];
+
   for (const ref of referrals) {
     // Count swaps for this referred user
-    const swaps = records.filter((r) => 
-      r.type === 'swap' && 
-      r.referredAddress?.toLowerCase() === ref.referredAddress?.toLowerCase()
-    )
-    const volumeUsd = swaps.reduce((sum, s) => sum + (Number(s.volumeUsd) || 0), 0)
-    const tier = calculateTier(referrals.length)
-    const rewardPct = getTierRewardPct(tier) / 100
-    const rewardEarned = volumeUsd * 0.003 * rewardPct // 0.3% fee * reward %
-    
+    const swaps = records.filter(
+      (r) =>
+        r.type === "swap" &&
+        r.referredAddress?.toLowerCase() === ref.referredAddress?.toLowerCase(),
+    );
+    const volumeUsd = swaps.reduce(
+      (sum, s) => sum + (Number(s.volumeUsd) || 0),
+      0,
+    );
+    const tier = calculateTier(referrals.length);
+    const rewardPct = getTierRewardPct(tier) / 100;
+    const rewardEarned = volumeUsd * 0.003 * rewardPct; // 0.3% fee * reward %
+
     referredAddresses.push({
       address: ref.referredAddress,
       joinedAt: ref.createdAt,
       swapCount: swaps.length,
       volumeUsd,
       rewardEarned,
-    })
+    });
   }
 
-  const totalEarnings = referredAddresses.reduce((sum, r) => sum + r.rewardEarned, 0)
-  const tier = calculateTier(referrals.length)
+  const totalEarnings = referredAddresses.reduce(
+    (sum, r) => sum + r.rewardEarned,
+    0,
+  );
+  const tier = calculateTier(referrals.length);
 
   return {
     totalReferrals: referrals.length,
@@ -378,211 +446,220 @@ async function buildReferralStats(address) {
     pendingRewards: totalEarnings * 0.1, // 10% pending simulation
     tier,
     referredAddresses,
-  }
+  };
 }
 
 async function readJsonBody(req, maxBytes = EVENT_MAX_BODY_BYTES) {
-  let body = ''
-  let size = 0
+  let body = "";
+  let size = 0;
   await new Promise((resolve, reject) => {
-    req.on('data', (chunk) => {
-      const text = String(chunk)
-      size += Buffer.byteLength(text, 'utf8')
+    req.on("data", (chunk) => {
+      const text = String(chunk);
+      size += Buffer.byteLength(text, "utf8");
       if (size > maxBytes) {
-        reject(new Error('Payload too large'))
-        req.destroy()
-        return
+        reject(new Error("Payload too large"));
+        req.destroy();
+        return;
       }
-      body += text
-    })
-    req.on('end', resolve)
-    req.on('error', reject)
-  })
-  return JSON.parse(body || '{}')
+      body += text;
+    });
+    req.on("end", resolve);
+    req.on("error", reject);
+  });
+  return JSON.parse(body || "{}");
 }
 
 function validateActivityPayload(payload) {
-  const id = String(payload?.id || '')
-  if (id.length < 4 || id.length > 128) return { error: 'Invalid id' }
-  const kind = 'swap'
-  const status = payload?.status
-  if (!['pending', 'success', 'failed'].includes(status)) return { error: 'Invalid status' }
-  const createdAt = Number(payload?.createdAt)
-  if (!Number.isFinite(createdAt) || createdAt < 0) return { error: 'Invalid createdAt' }
-  const summary = String(payload?.summary ?? '')
-  if (summary.length > 4000) return { error: 'Summary too long' }
-  const chainId = Number(payload?.chainId)
+  const id = String(payload?.id || "");
+  if (id.length < 4 || id.length > 128) return { error: "Invalid id" };
+  const kind = "swap";
+  const status = payload?.status;
+  if (!["pending", "success", "failed"].includes(status))
+    return { error: "Invalid status" };
+  const createdAt = Number(payload?.createdAt);
+  if (!Number.isFinite(createdAt) || createdAt < 0)
+    return { error: "Invalid createdAt" };
+  const summary = String(payload?.summary ?? "");
+  if (summary.length > 4000) return { error: "Summary too long" };
+  const chainId = Number(payload?.chainId);
   if (!Number.isInteger(chainId) || chainId < 1 || chainId > 99_999_999) {
-    return { error: 'Invalid chainId' }
+    return { error: "Invalid chainId" };
   }
-  const out = { id, kind, status, createdAt, summary, chainId }
+  const out = { id, kind, status, createdAt, summary, chainId };
   if (payload?.txHash) {
-    const h = String(payload.txHash)
-    if (!/^0x[a-fA-F0-9]{64}$/.test(h)) return { error: 'Invalid txHash' }
-    out.txHash = h
+    const h = String(payload.txHash);
+    if (!/^0x[a-fA-F0-9]{64}$/.test(h)) return { error: "Invalid txHash" };
+    out.txHash = h;
   }
   if (payload?.from) {
-    const f = String(payload.from)
-    if (!/^0x[a-fA-F0-9]{40}$/.test(f)) return { error: 'Invalid from' }
-    out.from = f
+    const f = String(payload.from);
+    if (!/^0x[a-fA-F0-9]{40}$/.test(f)) return { error: "Invalid from" };
+    out.from = f;
   }
-  if (payload?.blockNumber != null && payload.blockNumber !== '') {
-    const b = Number(payload.blockNumber)
-    if (!Number.isFinite(b)) return { error: 'Invalid blockNumber' }
-    out.blockNumber = Math.floor(b)
+  if (payload?.blockNumber != null && payload.blockNumber !== "") {
+    const b = Number(payload.blockNumber);
+    if (!Number.isFinite(b)) return { error: "Invalid blockNumber" };
+    out.blockNumber = Math.floor(b);
   }
-  return { record: out }
+  return { record: out };
 }
 
 function normalizeActivityFromLine(obj) {
-  if (!obj || typeof obj.id !== 'string') return null
-  if (!['pending', 'success', 'failed'].includes(obj.status)) return null
-  const createdAt = Number(obj.createdAt)
-  if (!Number.isFinite(createdAt)) return null
-  const kind = 'swap'
+  if (!obj || typeof obj.id !== "string") return null;
+  if (!["pending", "success", "failed"].includes(obj.status)) return null;
+  const createdAt = Number(obj.createdAt);
+  if (!Number.isFinite(createdAt)) return null;
+  const kind = "swap";
   const row = {
     id: obj.id,
     kind,
     status: obj.status,
     createdAt,
-    summary: String(obj.summary ?? ''),
+    summary: String(obj.summary ?? ""),
     chainId: Number(obj.chainId) || 0,
+  };
+  if (obj.txHash) row.txHash = String(obj.txHash);
+  if (obj.from) row.from = String(obj.from);
+  if (obj.blockNumber != null) row.blockNumber = Number(obj.blockNumber);
+  if (obj.serverAt != null && obj.serverAt !== "") {
+    const s = Number(obj.serverAt);
+    if (Number.isFinite(s)) row.serverAt = Math.floor(s);
   }
-  if (obj.txHash) row.txHash = String(obj.txHash)
-  if (obj.from) row.from = String(obj.from)
-  if (obj.blockNumber != null) row.blockNumber = Number(obj.blockNumber)
-  if (obj.serverAt != null && obj.serverAt !== '') {
-    const s = Number(obj.serverAt)
-    if (Number.isFinite(s)) row.serverAt = Math.floor(s)
-  }
-  return row
+  return row;
 }
 
 async function fetchEtherscanTxListForRelay({ chainId, address, offset = 35 }) {
-  const apiKey = etherscanApiKeyForRelay()
+  const apiKey = etherscanApiKeyForRelay();
   if (!apiKey) {
     throw new Error(
-      'Missing API key: set ETHERSCAN_API_KEY or RELAY_ETHERSCAN_API_KEY on the relay',
-    )
+      "Missing API key: set ETHERSCAN_API_KEY or RELAY_ETHERSCAN_API_KEY on the relay",
+    );
   }
   const q = new URLSearchParams({
     chainid: String(chainId),
-    module: 'account',
-    action: 'txlist',
+    module: "account",
+    action: "txlist",
     address,
-    startblock: '0',
-    endblock: '99999999',
-    page: '1',
+    startblock: "0",
+    endblock: "99999999",
+    page: "1",
     offset: String(offset),
-    sort: 'desc',
+    sort: "desc",
     apikey: apiKey,
-  })
-  const { res, json } = await fetchJson(`https://api.etherscan.io/v2/api?${q}`)
-  if (!res.ok) throw new Error(`Explorer HTTP ${res.status}`)
-  if (Array.isArray(json?.result)) return json.result
-  const msg = String(json?.result || json?.message || '')
-  if (/no transactions found|no records found/i.test(msg)) return []
-  throw new Error(msg || 'Explorer API error')
+  });
+  const { res, json } = await fetchJson(`https://api.etherscan.io/v2/api?${q}`);
+  if (!res.ok) throw new Error(`Explorer HTTP ${res.status}`);
+  if (Array.isArray(json?.result)) return json.result;
+  const msg = String(json?.result || json?.message || "");
+  if (/no transactions found|no records found/i.test(msg)) return [];
+  throw new Error(msg || "Explorer API error");
 }
 
 async function appendActivityRecord(record) {
-  const dir = dirname(ACTIVITY_LOG_PATH)
-  await mkdir(dir, { recursive: true, mode: 0o700 })
+  const dir = dirname(ACTIVITY_LOG_PATH);
+  await mkdir(dir, { recursive: true, mode: 0o700 });
   // rotate if the log file is too large
   try {
-    const s = await stat(ACTIVITY_LOG_PATH)
+    const s = await stat(ACTIVITY_LOG_PATH);
     if (s.size >= MAX_LOG_BYTES) {
-      await rename(ACTIVITY_LOG_PATH, `${ACTIVITY_LOG_PATH}.${Date.now()}.rotated`)
+      await rename(
+        ACTIVITY_LOG_PATH,
+        `${ACTIVITY_LOG_PATH}.${Date.now()}.rotated`,
+      );
     }
   } catch (e) {
     // ignore ENOENT and other transient errors
   }
-  await appendFile(ACTIVITY_LOG_PATH, `${JSON.stringify(record)}\n`, 'utf8')
+  await appendFile(ACTIVITY_LOG_PATH, `${JSON.stringify(record)}\n`, "utf8");
 }
 
 async function appendTxEventRecord(record) {
-  const dir = dirname(TX_EVENT_LOG_PATH)
-  await mkdir(dir, { recursive: true, mode: 0o700 })
+  const dir = dirname(TX_EVENT_LOG_PATH);
+  await mkdir(dir, { recursive: true, mode: 0o700 });
   try {
-    const s = await stat(TX_EVENT_LOG_PATH)
+    const s = await stat(TX_EVENT_LOG_PATH);
     if (s.size >= MAX_LOG_BYTES) {
-      await rename(TX_EVENT_LOG_PATH, `${TX_EVENT_LOG_PATH}.${Date.now()}.rotated`)
+      await rename(
+        TX_EVENT_LOG_PATH,
+        `${TX_EVENT_LOG_PATH}.${Date.now()}.rotated`,
+      );
     }
   } catch (e) {
     // ignore ENOENT and other transient errors
   }
-  await appendFile(TX_EVENT_LOG_PATH, `${JSON.stringify(record)}\n`, 'utf8')
+  await appendFile(TX_EVENT_LOG_PATH, `${JSON.stringify(record)}\n`, "utf8");
 }
 
 async function readActivitiesMerged(maxLines = 20_000) {
-  let raw = ''
+  let raw = "";
   try {
-    raw = await readFile(ACTIVITY_LOG_PATH, 'utf8')
+    raw = await readFile(ACTIVITY_LOG_PATH, "utf8");
   } catch {
-    return []
+    return [];
   }
-  const lines = raw.split('\n').filter((l) => l.trim())
-  const slice = lines.length > maxLines ? lines.slice(-maxLines) : lines
-  const byId = new Map()
+  const lines = raw.split("\n").filter((l) => l.trim());
+  const slice = lines.length > maxLines ? lines.slice(-maxLines) : lines;
+  const byId = new Map();
   for (const line of slice) {
     try {
-      const obj = JSON.parse(line)
-      const row = normalizeActivityFromLine(obj)
-      if (row) byId.set(row.id, row)
+      const obj = JSON.parse(line);
+      const row = normalizeActivityFromLine(obj);
+      if (row) byId.set(row.id, row);
     } catch {
       // skip corrupt line
     }
   }
-  return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt)
+  return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
 }
 
 /** Count successful swap rows per wallet (`from`), from merged activity log. */
 function buildAddressLeaderboard(activities, limit) {
-  const byAddr = new Map()
+  const byAddr = new Map();
   for (const row of activities) {
-    if (row.status !== 'success') continue
-    const addr = row.from
-    if (!addr || !/^0x[a-fA-F0-9]{40}$/i.test(addr)) continue
-    const key = addr.toLowerCase()
-    const cur = byAddr.get(key) || { successCount: 0, lastSuccessAt: 0 }
-    cur.successCount += 1
-    const t = Number(row.serverAt) || Number(row.createdAt) || 0
-    if (t > cur.lastSuccessAt) cur.lastSuccessAt = t
-    byAddr.set(key, cur)
+    if (row.status !== "success") continue;
+    const addr = row.from;
+    if (!addr || !/^0x[a-fA-F0-9]{40}$/i.test(addr)) continue;
+    const key = addr.toLowerCase();
+    const cur = byAddr.get(key) || { successCount: 0, lastSuccessAt: 0 };
+    cur.successCount += 1;
+    const t = Number(row.serverAt) || Number(row.createdAt) || 0;
+    if (t > cur.lastSuccessAt) cur.lastSuccessAt = t;
+    byAddr.set(key, cur);
   }
   const sorted = [...byAddr.entries()].sort((a, b) => {
-    const [, ca] = a
-    const [, cb] = b
-    if (cb.successCount !== ca.successCount) return cb.successCount - ca.successCount
-    return cb.lastSuccessAt - ca.lastSuccessAt
-  })
+    const [, ca] = a;
+    const [, cb] = b;
+    if (cb.successCount !== ca.successCount)
+      return cb.successCount - ca.successCount;
+    return cb.lastSuccessAt - ca.lastSuccessAt;
+  });
   return sorted.slice(0, limit).map(([address, stats], i) => ({
     rank: i + 1,
     address,
     successCount: stats.successCount,
     lastSuccessAt: stats.lastSuccessAt,
-  }))
+  }));
 }
 
 async function readTxEventsMerged(maxLines = 50_000) {
-  let raw = ''
+  let raw = "";
   try {
-    raw = await readFile(TX_EVENT_LOG_PATH, 'utf8')
+    raw = await readFile(TX_EVENT_LOG_PATH, "utf8");
   } catch {
-    return []
+    return [];
   }
-  const lines = raw.split('\n').filter((l) => l.trim())
-  const slice = lines.length > maxLines ? lines.slice(-maxLines) : lines
-  const byHash = new Map()
+  const lines = raw.split("\n").filter((l) => l.trim());
+  const slice = lines.length > maxLines ? lines.slice(-maxLines) : lines;
+  const byHash = new Map();
   for (const line of slice) {
     try {
-      const obj = JSON.parse(line)
-      const txHash = String(obj?.txHash || '')
-      if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) continue
+      const obj = JSON.parse(line);
+      const txHash = String(obj?.txHash || "");
+      if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) continue;
       byHash.set(txHash, {
         txHash,
         chainId: Number(obj?.chainId) || 0,
-        kind: 'swap',
+        kind: "swap",
         at: Number(obj?.at) || Date.now(),
         feeQuoteUsd: Number.isFinite(Number(obj?.feeQuoteUsd))
           ? Number(obj.feeQuoteUsd)
@@ -590,39 +667,49 @@ async function readTxEventsMerged(maxLines = 50_000) {
         feeRealizedUsd: Number.isFinite(Number(obj?.feeRealizedUsd))
           ? Number(obj.feeRealizedUsd)
           : null,
-      })
+      });
     } catch {
       // skip corrupt line
     }
   }
-  return [...byHash.values()].sort((a, b) => b.at - a.at)
+  return [...byHash.values()].sort((a, b) => b.at - a.at);
 }
 
 async function buildFeeDashboard() {
-  const rows = await readTxEventsMerged()
-  const byChain = new Map()
-  const byDay = new Map()
-  let quoteTotal = 0
-  let realizedTotal = 0
-  let coverageCount = 0
+  const rows = await readTxEventsMerged();
+  const byChain = new Map();
+  const byDay = new Map();
+  let quoteTotal = 0;
+  let realizedTotal = 0;
+  let coverageCount = 0;
   for (const row of rows) {
-    const q = Number(row.feeQuoteUsd || 0)
-    const r = Number(row.feeRealizedUsd || 0)
-    const day = new Date(row.at).toISOString().slice(0, 10)
-    const chainKey = String(row.chainId)
-    const c = byChain.get(chainKey) || { chainId: row.chainId, txCount: 0, quoteFeeUsd: 0, realizedFeeUsd: 0 }
-    c.txCount += 1
-    c.quoteFeeUsd += q
-    c.realizedFeeUsd += r
-    byChain.set(chainKey, c)
-    const d = byDay.get(day) || { day, txCount: 0, quoteFeeUsd: 0, realizedFeeUsd: 0 }
-    d.txCount += 1
-    d.quoteFeeUsd += q
-    d.realizedFeeUsd += r
-    byDay.set(day, d)
-    quoteTotal += q
-    realizedTotal += r
-    if (row.feeRealizedUsd != null) coverageCount += 1
+    const q = Number(row.feeQuoteUsd || 0);
+    const r = Number(row.feeRealizedUsd || 0);
+    const day = new Date(row.at).toISOString().slice(0, 10);
+    const chainKey = String(row.chainId);
+    const c = byChain.get(chainKey) || {
+      chainId: row.chainId,
+      txCount: 0,
+      quoteFeeUsd: 0,
+      realizedFeeUsd: 0,
+    };
+    c.txCount += 1;
+    c.quoteFeeUsd += q;
+    c.realizedFeeUsd += r;
+    byChain.set(chainKey, c);
+    const d = byDay.get(day) || {
+      day,
+      txCount: 0,
+      quoteFeeUsd: 0,
+      realizedFeeUsd: 0,
+    };
+    d.txCount += 1;
+    d.quoteFeeUsd += q;
+    d.realizedFeeUsd += r;
+    byDay.set(day, d);
+    quoteTotal += q;
+    realizedTotal += r;
+    if (row.feeRealizedUsd != null) coverageCount += 1;
   }
   return {
     checkedAt: Date.now(),
@@ -631,90 +718,105 @@ async function buildFeeDashboard() {
       quoteFeeUsd: quoteTotal,
       realizedFeeUsd: realizedTotal,
       deltaUsd: realizedTotal - quoteTotal,
-      realizedCoveragePct: rows.length ? Math.round((coverageCount / rows.length) * 100) : 0,
+      realizedCoveragePct: rows.length
+        ? Math.round((coverageCount / rows.length) * 100)
+        : 0,
     },
-    perChain: [...byChain.values()].sort((a, b) => b.quoteFeeUsd - a.quoteFeeUsd),
-    perDay: [...byDay.values()].sort((a, b) => String(b.day).localeCompare(String(a.day))),
+    perChain: [...byChain.values()].sort(
+      (a, b) => b.quoteFeeUsd - a.quoteFeeUsd,
+    ),
+    perDay: [...byDay.values()].sort((a, b) =>
+      String(b.day).localeCompare(String(a.day)),
+    ),
     recent: rows.slice(0, 120),
-  }
+  };
 }
 
 function alreadyProcessedTx(hash) {
-  if (!hash) return false
-  const now = Date.now()
+  if (!hash) return false;
+  const now = Date.now();
   for (const [h, t] of recentTxEvents.entries()) {
-    if (now - t > 15 * 60_000) recentTxEvents.delete(h)
+    if (now - t > 15 * 60_000) recentTxEvents.delete(h);
   }
-  if (recentTxEvents.has(hash)) return true
-  recentTxEvents.set(hash, now)
-  return false
+  if (recentTxEvents.has(hash)) return true;
+  recentTxEvents.set(hash, now);
+  return false;
 }
 
 async function sendAlert(message) {
-  if (!ALERT_WEBHOOK_URL) return
-  const now = Date.now()
-  if (now - lastAlertAt < ALERT_COOLDOWN_MS) return
-  lastAlertAt = now
+  if (!ALERT_WEBHOOK_URL) return;
+  const now = Date.now();
+  if (now - lastAlertAt < ALERT_COOLDOWN_MS) return;
+  lastAlertAt = now;
   try {
     await fetch(ALERT_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         text: `[EonSwap Relay] ${message}`,
         at: new Date(now).toISOString(),
       }),
-    })
+    });
   } catch {
     // swallow webhook errors to keep relay non-blocking
   }
 }
 
 async function sendTelegramMessage(message) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
   try {
     if (TELEGRAM_BANNER_URL) {
-      const photoRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_CHAT_ID,
-          photo: TELEGRAM_BANNER_URL,
-          caption: message.slice(0, 1024),
-          parse_mode: 'HTML',
-          disable_notification: false,
-        }),
-      })
-      if (photoRes.ok) return
+      const photoRes = await fetch(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            chat_id: TELEGRAM_CHAT_ID,
+            photo: TELEGRAM_BANNER_URL,
+            caption: message.slice(0, 1024),
+            parse_mode: "HTML",
+            disable_notification: false,
+          }),
+        },
+      );
+      if (photoRes.ok) return;
     }
     try {
-      const bytes = await readFile(TELEGRAM_BANNER_LOCAL_PATH)
-      const form = new FormData()
-      form.set('chat_id', TELEGRAM_CHAT_ID)
-      form.set('parse_mode', 'HTML')
-      form.set('caption', message.slice(0, 1024))
+      const bytes = await readFile(TELEGRAM_BANNER_LOCAL_PATH);
+      const form = new FormData();
+      form.set("chat_id", TELEGRAM_CHAT_ID);
+      form.set("parse_mode", "HTML");
+      form.set("caption", message.slice(0, 1024));
       form.set(
-        'photo',
-        new Blob([bytes], { type: 'image/png' }),
-        TELEGRAM_BANNER_LOCAL_PATH.split('/').pop() || 'hero-banner.png',
-      )
-      const localPhotoRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
-        method: 'POST',
-        body: form,
-      })
-      if (localPhotoRes.ok) return
+        "photo",
+        new Blob([bytes], { type: "image/png" }),
+        TELEGRAM_BANNER_LOCAL_PATH.split("/").pop() || "hero-banner.png",
+      );
+      const localPhotoRes = await fetch(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+        {
+          method: "POST",
+          body: form,
+        },
+      );
+      if (localPhotoRes.ok) return;
     } catch {
       // local banner fallback is best-effort
     }
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-      }),
-    })
+    await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          chat_id: TELEGRAM_CHAT_ID,
+          text: message,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+        }),
+      },
+    );
   } catch {
     // non-blocking
   }
@@ -724,54 +826,70 @@ function etherscanApiKeyForRelay() {
   const k =
     process.env.RELAY_ETHERSCAN_API_KEY?.trim() ||
     process.env.ETHERSCAN_API_KEY?.trim() ||
-    process.env.VITE_ETHERSCAN_API_KEY?.trim()
-  return k || ''
+    process.env.VITE_ETHERSCAN_API_KEY?.trim();
+  return k || "";
 }
 
 async function runChecks() {
-  const etherscanKey = etherscanApiKeyForRelay()
+  const etherscanKey = etherscanApiKeyForRelay();
   const checks = await Promise.allSettled([
     (async () => {
       const q = new URLSearchParams({
-        chainId: '8453',
-        tokenIn: '0x4200000000000000000000000000000000000006',
-        tokenOut: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-        amountIn: '1000000000000000',
-      })
-      const base = String(process.env.VITE_EON_AMM_API_BASE_URL || '').trim()
+        chainId: "8453",
+        tokenIn: "0x4200000000000000000000000000000000000006",
+        tokenOut: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        amountIn: "1000000000000000",
+      });
+      const base = String(process.env.VITE_EON_AMM_API_BASE_URL || "").trim();
       if (!base) {
         status.providers.eonswap = {
           ...status.providers.eonswap,
           ok: false,
           latencyMs: null,
-          detail: 'Missing VITE_EON_AMM_API_BASE_URL',
-        }
-        updateSla('eonswap', false)
-        return
+          detail: "Missing VITE_EON_AMM_API_BASE_URL",
+        };
+        updateSla("eonswap", false);
+        return;
       }
-      const { res, json, latencyMs } = await fetchJson(`${base}/v1/quote?${q}`)
-      const ok = res.ok && (json?.amountOut || json?.data?.amountOut)
+      const { res, json, latencyMs } = await fetchJson(`${base}/v1/quote?${q}`);
+      const ok = res.ok && (json?.amountOut || json?.data?.amountOut);
       status.providers.eonswap = {
         ...status.providers.eonswap,
         ok,
         latencyMs,
-        detail: ok ? 'healthy' : `HTTP ${res.status}`,
-      }
-      updateSla('eonswap', ok)
+        detail: ok ? "healthy" : `HTTP ${res.status}`,
+      };
+      updateSla("eonswap", ok);
     })(),
     (async () => {
-      const q = new URLSearchParams({ vs_currency: 'usd', days: '1', interval: 'daily' })
+      const q = new URLSearchParams({
+        vs_currency: "usd",
+        days: "1",
+        interval: "daily",
+      });
       const { res, json, latencyMs } = await fetchJson(
         `https://api.coingecko.com/api/v3/coins/ethereum/market_chart?${q}`,
-      )
-      const ok = res.ok && Array.isArray(json?.prices)
+      );
+      const ok = res.ok && Array.isArray(json?.prices);
       status.providers.coingecko = {
         ...status.providers.coingecko,
         ok,
         latencyMs,
-        detail: ok ? 'healthy' : `HTTP ${res.status}`,
+        detail: ok ? "healthy" : `HTTP ${res.status}`,
+      };
+      updateSla("coingecko", ok);
+
+      // Update ETH price for referral tracker
+      if (ok && json?.prices?.length > 0) {
+        const latestPrice = json.prices[json.prices.length - 1][1];
+        if (
+          referralTracker &&
+          typeof latestPrice === "number" &&
+          latestPrice > 0
+        ) {
+          referralTracker.updateEthPrice(latestPrice);
+        }
       }
-      updateSla('coingecko', ok)
     })(),
     (async () => {
       if (!etherscanKey) {
@@ -780,115 +898,125 @@ async function runChecks() {
           ok: false,
           latencyMs: null,
           detail:
-            'Missing API key: set ETHERSCAN_API_KEY or RELAY_ETHERSCAN_API_KEY on the relay (Railway)',
-        }
-        updateSla('etherscan', false)
-        return
+            "Missing API key: set ETHERSCAN_API_KEY or RELAY_ETHERSCAN_API_KEY on the relay (Railway)",
+        };
+        updateSla("etherscan", false);
+        return;
       }
       const q = new URLSearchParams({
-        chainid: '1',
-        module: 'account',
-        action: 'txlist',
-        address: '0x0000000000000000000000000000000000000000',
-        startblock: '0',
-        endblock: 'latest',
-        page: '1',
-        offset: '1',
-        sort: 'desc',
+        chainid: "1",
+        module: "account",
+        action: "txlist",
+        address: "0x0000000000000000000000000000000000000000",
+        startblock: "0",
+        endblock: "latest",
+        page: "1",
+        offset: "1",
+        sort: "desc",
         apikey: etherscanKey,
-      })
-      const { res, json, latencyMs } = await fetchJson(`https://api.etherscan.io/v2/api?${q}`)
-      const ok = res.ok && typeof json?.status !== 'undefined'
+      });
+      const { res, json, latencyMs } = await fetchJson(
+        `https://api.etherscan.io/v2/api?${q}`,
+      );
+      const ok = res.ok && typeof json?.status !== "undefined";
       status.providers.etherscan = {
         ...status.providers.etherscan,
         ok,
         latencyMs,
-        detail: ok ? 'healthy' : `HTTP ${res.status}`,
-      }
-      updateSla('etherscan', ok)
+        detail: ok ? "healthy" : `HTTP ${res.status}`,
+      };
+      updateSla("etherscan", ok);
     })(),
-  ])
+  ]);
 
   checks.forEach((result, idx) => {
-    if (result.status === 'fulfilled') return
-    const key = ['eonswap', 'coingecko', 'etherscan'][idx]
+    if (result.status === "fulfilled") return;
+    const key = ["eonswap", "coingecko", "etherscan"][idx];
     status.providers[key] = {
       ...status.providers[key],
       ok: false,
       detail: classifyError(result.reason),
       latencyMs: null,
-    }
-    updateSla(key, false)
-  })
+    };
+    updateSla(key, false);
+  });
 
-  status.checkedAt = Date.now()
+  status.checkedAt = Date.now();
 
-  const degradedCore = ['eonswap'].filter((id) => !status.providers[id].ok)
+  const degradedCore = ["eonswap"].filter((id) => !status.providers[id].ok);
   const slowProviders = Object.entries(status.providers)
-    .filter(([id, p]) => p.ok && typeof p.latencyMs === 'number' && p.latencyMs > WARN_LATENCY_MS[id])
-    .map(([id, p]) => `${id}:${p.latencyMs}ms`)
+    .filter(
+      ([id, p]) =>
+        p.ok &&
+        typeof p.latencyMs === "number" &&
+        p.latencyMs > WARN_LATENCY_MS[id],
+    )
+    .map(([id, p]) => `${id}:${p.latencyMs}ms`);
 
   if (degradedCore.length) {
-    await sendAlert(`Critical provider degraded: ${degradedCore.join(', ')}`)
+    await sendAlert(`Critical provider degraded: ${degradedCore.join(", ")}`);
   } else if (slowProviders.length) {
-    await sendAlert(`High latency detected: ${slowProviders.join(', ')}`)
+    await sendAlert(`High latency detected: ${slowProviders.join(", ")}`);
   }
 }
 
 function json(req, res, code, payload, opts = {}) {
-  const acao = corsOriginHeader(req)
+  const acao = corsOriginHeader(req);
   const cacheControl =
-    typeof opts.cacheControl === 'string' ? opts.cacheControl : 'no-store'
+    typeof opts.cacheControl === "string" ? opts.cacheControl : "no-store";
   const headers = {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': cacheControl,
-    'x-content-type-options': 'nosniff',
-    'x-frame-options': 'DENY',
-    'referrer-policy': 'no-referrer',
-    'permissions-policy': 'camera=(), microphone=(), geolocation=()',
-  }
-  if (acao) headers['access-control-allow-origin'] = acao
-  res.writeHead(code, headers)
-  res.end(JSON.stringify(payload))
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": cacheControl,
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "no-referrer",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+  };
+  if (acao) headers["access-control-allow-origin"] = acao;
+  res.writeHead(code, headers);
+  res.end(JSON.stringify(payload));
 }
 
 createServer(async (req, res) => {
-  const u = new URL(req.url || '/', `http://${req.headers.host}`)
-  if (req.method === 'OPTIONS') {
-    const acao = corsOriginHeader(req)
+  const u = new URL(req.url || "/", `http://${req.headers.host}`);
+  if (req.method === "OPTIONS") {
+    const acao = corsOriginHeader(req);
     const h = {
-      'access-control-allow-methods': 'GET,POST,OPTIONS',
-      'access-control-allow-headers': 'content-type,accept,authorization',
-    }
-    if (acao) h['access-control-allow-origin'] = acao
-    res.writeHead(204, h)
-    res.end()
-    return
+      "access-control-allow-methods": "GET,POST,OPTIONS",
+      "access-control-allow-headers": "content-type,accept,authorization",
+    };
+    if (acao) h["access-control-allow-origin"] = acao;
+    res.writeHead(204, h);
+    res.end();
+    return;
   }
-  if (req.method === 'GET' && u.pathname === '/admin/activities') {
+  if (req.method === "GET" && u.pathname === "/admin/activities") {
     if (!RELAY_ADMIN_SECRET) {
-      return json(req, res, 503, { ok: false, error: 'Admin export not configured' })
+      return json(req, res, 503, {
+        ok: false,
+        error: "Admin export not configured",
+      });
     }
-    const auth = String(req.headers.authorization || '')
+    const auth = String(req.headers.authorization || "");
     if (auth !== `Bearer ${RELAY_ADMIN_SECRET}`) {
-      return json(req, res, 401, { ok: false, error: 'Unauthorized' })
+      return json(req, res, 401, { ok: false, error: "Unauthorized" });
     }
-    const activities = await readActivitiesMerged()
-    return json(req, res, 200, { ok: true, activities })
+    const activities = await readActivitiesMerged();
+    return json(req, res, 200, { ok: true, activities });
   }
-  if (req.method === 'GET' && u.pathname === '/public/leaderboard') {
+  if (req.method === "GET" && u.pathname === "/public/leaderboard") {
     if (isLeaderboardRateLimited(req)) {
-      return json(req, res, 429, { ok: false, error: 'Rate limited' })
+      return json(req, res, 429, { ok: false, error: "Rate limited" });
     }
     if (!CORS_ALLOW_ALL && !corsOriginHeader(req)) {
-      return json(req, res, 403, { ok: false, error: 'Forbidden origin' })
+      return json(req, res, 403, { ok: false, error: "Forbidden origin" });
     }
-    const limitRaw = Number(u.searchParams.get('limit') || '50')
+    const limitRaw = Number(u.searchParams.get("limit") || "50");
     const limit = Number.isFinite(limitRaw)
       ? Math.min(100, Math.max(1, Math.floor(limitRaw)))
-      : 50
-    const activities = await readActivitiesMerged()
-    const entries = buildAddressLeaderboard(activities, limit)
+      : 50;
+    const activities = await readActivitiesMerged();
+    const entries = buildAddressLeaderboard(activities, limit);
     return json(
       req,
       res,
@@ -896,221 +1024,252 @@ createServer(async (req, res) => {
       {
         ok: true,
         generatedAt: Date.now(),
-        metric: 'successful_swaps_and_bridges',
+        metric: "successful_swaps_and_bridges",
         entries,
       },
-      { cacheControl: 'public, max-age=30' },
-    )
+      { cacheControl: "public, max-age=30" },
+    );
   }
-  if (req.method === 'GET' && u.pathname === '/explorer/txlist') {
-    if (isExplorerRateLimited(req)) return json(req, res, 429, { ok: false, error: 'Rate limited' })
+  if (req.method === "GET" && u.pathname === "/explorer/txlist") {
+    if (isExplorerRateLimited(req))
+      return json(req, res, 429, { ok: false, error: "Rate limited" });
     // Require browser Origin to match allowlist when allowlist is configured.
     if (!CORS_ALLOW_ALL && !corsOriginHeader(req)) {
-      return json(req, res, 403, { ok: false, error: 'Forbidden origin' })
+      return json(req, res, 403, { ok: false, error: "Forbidden origin" });
     }
     if (EXPLORER_ACCESS_TOKEN) {
-      const token = String(req.headers['x-relay-explorer-token'] || '').trim()
+      const token = String(req.headers["x-relay-explorer-token"] || "").trim();
       if (!token || token !== EXPLORER_ACCESS_TOKEN) {
-        return json(req, res, 401, { ok: false, error: 'Unauthorized explorer token' })
+        return json(req, res, 401, {
+          ok: false,
+          error: "Unauthorized explorer token",
+        });
       }
     }
-    const chainId = Number(u.searchParams.get('chainId') || '0')
-    const address = String(u.searchParams.get('address') || '').trim()
-    const offsetRaw = Number(u.searchParams.get('offset') || '35')
+    const chainId = Number(u.searchParams.get("chainId") || "0");
+    const address = String(u.searchParams.get("address") || "").trim();
+    const offsetRaw = Number(u.searchParams.get("offset") || "35");
     const offset = Number.isFinite(offsetRaw)
       ? Math.min(100, Math.max(1, Math.floor(offsetRaw)))
-      : 35
+      : 35;
     if (!Number.isInteger(chainId) || chainId < 1) {
-      return json(req, res, 400, { ok: false, error: 'Invalid chainId' })
+      return json(req, res, 400, { ok: false, error: "Invalid chainId" });
     }
     if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
-      return json(req, res, 400, { ok: false, error: 'Invalid address' })
+      return json(req, res, 400, { ok: false, error: "Invalid address" });
     }
     try {
-      const txs = await fetchEtherscanTxListForRelay({ chainId, address, offset })
-      return json(req, res, 200, { ok: true, result: txs })
+      const txs = await fetchEtherscanTxListForRelay({
+        chainId,
+        address,
+        offset,
+      });
+      return json(req, res, 200, { ok: true, result: txs });
     } catch (e) {
-      const msg = String(e instanceof Error ? e.message : e || 'Explorer proxy error')
-      return json(req, res, 502, { ok: false, error: msg.slice(0, 200) })
+      const msg = String(
+        e instanceof Error ? e.message : e || "Explorer proxy error",
+      );
+      return json(req, res, 502, { ok: false, error: msg.slice(0, 200) });
     }
   }
-  if (req.method === 'POST' && u.pathname === '/events/activity') {
-    if (isRateLimited(req)) return json(req, res, 429, { ok: false, error: 'Rate limited' })
+  if (req.method === "POST" && u.pathname === "/events/activity") {
+    if (isRateLimited(req))
+      return json(req, res, 429, { ok: false, error: "Rate limited" });
     try {
-      const payload = await readJsonBody(req)
-      const checked = validateActivityPayload(payload)
-      if (checked.error) return json(req, res, 400, { ok: false, error: checked.error })
-      await appendActivityRecord({ ...checked.record, serverAt: Date.now() })
-      return json(req, res, 200, { ok: true })
+      const payload = await readJsonBody(req);
+      const checked = validateActivityPayload(payload);
+      if (checked.error)
+        return json(req, res, 400, { ok: false, error: checked.error });
+      await appendActivityRecord({ ...checked.record, serverAt: Date.now() });
+      return json(req, res, 200, { ok: true });
     } catch (e) {
-      if (String(e instanceof Error ? e.message : e).includes('Payload too large')) {
-        return json(req, res, 413, { ok: false, error: 'Payload too large' })
+      if (
+        String(e instanceof Error ? e.message : e).includes("Payload too large")
+      ) {
+        return json(req, res, 413, { ok: false, error: "Payload too large" });
       }
-      return json(req, res, 400, { ok: false, error: 'Invalid payload' })
+      return json(req, res, 400, { ok: false, error: "Invalid payload" });
     }
   }
-  if (req.method === 'POST' && u.pathname === '/events/tx') {
-    if (isRateLimited(req)) return json(req, res, 429, { ok: false, error: 'Rate limited' })
+  if (req.method === "POST" && u.pathname === "/events/tx") {
+    if (isRateLimited(req))
+      return json(req, res, 429, { ok: false, error: "Rate limited" });
     try {
-      const payload = await readJsonBody(req)
-      const txHash = String(payload?.txHash || '')
+      const payload = await readJsonBody(req);
+      const txHash = String(payload?.txHash || "");
       if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
-        return json(req, res, 400, { ok: false, error: 'Invalid tx hash' })
+        return json(req, res, 400, { ok: false, error: "Invalid tx hash" });
       }
-      if (alreadyProcessedTx(txHash)) return json(req, res, 200, { ok: true, dedup: true })
-      
-      const kind = String(payload?.kind || 'swap')
-      const shortHash = shortHex(txHash, 10, 6) || 'unknown'
-      const chainId = Number(payload?.chainId || 0)
-      const wallet = String(payload?.wallet || '')
-      const summary = String(payload?.summary || '')
-      const poolName = String(payload?.poolName || '')
-      const amount = String(payload?.amount || '')
-      const rewards = String(payload?.rewards || '')
-      const timestampUtc = new Date().toISOString()
-      const feeQuoteUsd = Number(payload?.feeQuoteUsd)
-      const feeRealizedUsd = Number(payload?.feeRealizedUsd)
-      const txUrl = explorerTxUrl(chainId, txHash)
-      const walletUrl = /^0x[a-fA-F0-9]{40}$/.test(wallet) ? explorerAddressUrl(chainId, wallet) : null
-      const shortWallet = wallet ? shortHex(wallet, 8, 6) : ''
-      const timeFormatted = timestampUtc.replace('T', ' ').replace('Z', ' UTC')
-      
+      if (alreadyProcessedTx(txHash))
+        return json(req, res, 200, { ok: true, dedup: true });
+
+      const kind = String(payload?.kind || "swap");
+      const shortHash = shortHex(txHash, 10, 6) || "unknown";
+      const chainId = Number(payload?.chainId || 0);
+      const wallet = String(payload?.wallet || "");
+      const summary = String(payload?.summary || "");
+      const poolName = String(payload?.poolName || "");
+      const amount = String(payload?.amount || "");
+      const rewards = String(payload?.rewards || "");
+      const timestampUtc = new Date().toISOString();
+      const feeQuoteUsd = Number(payload?.feeQuoteUsd);
+      const feeRealizedUsd = Number(payload?.feeRealizedUsd);
+      const txUrl = explorerTxUrl(chainId, txHash);
+      const walletUrl = /^0x[a-fA-F0-9]{40}$/.test(wallet)
+        ? explorerAddressUrl(chainId, wallet)
+        : null;
+      const shortWallet = wallet ? shortHex(wallet, 8, 6) : "";
+      const timeFormatted = timestampUtc.replace("T", " ").replace("Z", " UTC");
+
       const walletLine = shortWallet
         ? walletUrl
           ? `• Wallet       : <a href="${escapeHtml(walletUrl)}"><code>${escapeHtml(shortWallet)}</code></a>`
           : `• Wallet       : <code>${escapeHtml(shortWallet)}</code>`
-        : ''
-      
-      let msg = ''
-      
-      if (kind === 'farm_deposit') {
+        : "";
+
+      let msg = "";
+
+      if (kind === "farm_deposit") {
         msg = [
-          '🌾 <b>EonSwap · Farm Deposit</b>',
-          '━━━━━━━━━━━━━━━━━━━━━━━━',
-          '',
-          '📊 <b>Transaction Details</b>',
+          "🌾 <b>EonSwap · Farm Deposit</b>",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
+          "",
+          "📊 <b>Transaction Details</b>",
           `• Network      : ${escapeHtml(chainLabel(chainId))}`,
           `• Status       : ✓ Success`,
           `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
           walletLine,
           `• Time         : ${escapeHtml(timeFormatted)}`,
-          '',
-          '🌱 <b>Farm Details</b>',
-          poolName ? `• Pool         : ${escapeHtml(poolName)}` : '',
-          amount ? `• Deposited    : ${escapeHtml(amount)}` : '',
-          '',
-          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          "",
+          "🌱 <b>Farm Details</b>",
+          poolName ? `• Pool         : ${escapeHtml(poolName)}` : "",
+          amount ? `• Deposited    : ${escapeHtml(amount)}` : "",
+          "",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
           `🔗 <a href="${escapeHtml(txUrl)}">View on Explorer</a>`,
-        ].filter(Boolean).join('\n')
-      } else if (kind === 'farm_withdraw') {
+        ]
+          .filter(Boolean)
+          .join("\n");
+      } else if (kind === "farm_withdraw") {
         msg = [
-          '🌾 <b>EonSwap · Farm Withdraw</b>',
-          '━━━━━━━━━━━━━━━━━━━━━━━━',
-          '',
-          '📊 <b>Transaction Details</b>',
+          "🌾 <b>EonSwap · Farm Withdraw</b>",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
+          "",
+          "📊 <b>Transaction Details</b>",
           `• Network      : ${escapeHtml(chainLabel(chainId))}`,
           `• Status       : ✓ Success`,
           `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
           walletLine,
           `• Time         : ${escapeHtml(timeFormatted)}`,
-          '',
-          '📤 <b>Withdrawal Details</b>',
-          poolName ? `• Pool         : ${escapeHtml(poolName)}` : '',
-          amount ? `• Withdrawn    : ${escapeHtml(amount)}` : '',
-          rewards ? `• Harvested    : ${escapeHtml(rewards)}` : '',
-          '',
-          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          "",
+          "📤 <b>Withdrawal Details</b>",
+          poolName ? `• Pool         : ${escapeHtml(poolName)}` : "",
+          amount ? `• Withdrawn    : ${escapeHtml(amount)}` : "",
+          rewards ? `• Harvested    : ${escapeHtml(rewards)}` : "",
+          "",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
           `🔗 <a href="${escapeHtml(txUrl)}">View on Explorer</a>`,
-        ].filter(Boolean).join('\n')
-      } else if (kind === 'farm_harvest') {
+        ]
+          .filter(Boolean)
+          .join("\n");
+      } else if (kind === "farm_harvest") {
         msg = [
-          '🎉 <b>EonSwap · Rewards Harvested</b>',
-          '━━━━━━━━━━━━━━━━━━━━━━━━',
-          '',
-          '📊 <b>Transaction Details</b>',
+          "🎉 <b>EonSwap · Rewards Harvested</b>",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
+          "",
+          "📊 <b>Transaction Details</b>",
           `• Network      : ${escapeHtml(chainLabel(chainId))}`,
           `• Status       : ✓ Success`,
           `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
           walletLine,
           `• Time         : ${escapeHtml(timeFormatted)}`,
-          '',
-          '💰 <b>Harvest Details</b>',
-          poolName ? `• Pool         : ${escapeHtml(poolName)}` : '',
-          rewards ? `• Rewards      : ${escapeHtml(rewards)}` : '',
-          '',
-          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          "",
+          "💰 <b>Harvest Details</b>",
+          poolName ? `• Pool         : ${escapeHtml(poolName)}` : "",
+          rewards ? `• Rewards      : ${escapeHtml(rewards)}` : "",
+          "",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
           `🔗 <a href="${escapeHtml(txUrl)}">View on Explorer</a>`,
-        ].filter(Boolean).join('\n')
-      } else if (kind === 'lp_add') {
+        ]
+          .filter(Boolean)
+          .join("\n");
+      } else if (kind === "lp_add") {
         msg = [
-          '💧 <b>EonSwap · Liquidity Added</b>',
-          '━━━━━━━━━━━━━━━━━━━━━━━━',
-          '',
-          '📊 <b>Transaction Details</b>',
+          "💧 <b>EonSwap · Liquidity Added</b>",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
+          "",
+          "📊 <b>Transaction Details</b>",
           `• Network      : ${escapeHtml(chainLabel(chainId))}`,
           `• Status       : ✓ Success`,
           `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
           walletLine,
           `• Time         : ${escapeHtml(timeFormatted)}`,
-          '',
-          '🏊 <b>Liquidity Details</b>',
-          poolName ? `• Pool         : ${escapeHtml(poolName)}` : '',
-          summary ? `• Added        : ${escapeHtml(summary)}` : '',
-          '',
-          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          "",
+          "🏊 <b>Liquidity Details</b>",
+          poolName ? `• Pool         : ${escapeHtml(poolName)}` : "",
+          summary ? `• Added        : ${escapeHtml(summary)}` : "",
+          "",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
           `🔗 <a href="${escapeHtml(txUrl)}">View on Explorer</a>`,
-        ].filter(Boolean).join('\n')
-      } else if (kind === 'lp_remove') {
+        ]
+          .filter(Boolean)
+          .join("\n");
+      } else if (kind === "lp_remove") {
         msg = [
-          '💧 <b>EonSwap · Liquidity Removed</b>',
-          '━━━━━━━━━━━━━━━━━━━━━━━━',
-          '',
-          '📊 <b>Transaction Details</b>',
+          "💧 <b>EonSwap · Liquidity Removed</b>",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
+          "",
+          "📊 <b>Transaction Details</b>",
           `• Network      : ${escapeHtml(chainLabel(chainId))}`,
           `• Status       : ✓ Success`,
           `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
           walletLine,
           `• Time         : ${escapeHtml(timeFormatted)}`,
-          '',
-          '📤 <b>Removal Details</b>',
-          poolName ? `• Pool         : ${escapeHtml(poolName)}` : '',
-          summary ? `• Removed      : ${escapeHtml(summary)}` : '',
-          '',
-          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          "",
+          "📤 <b>Removal Details</b>",
+          poolName ? `• Pool         : ${escapeHtml(poolName)}` : "",
+          summary ? `• Removed      : ${escapeHtml(summary)}` : "",
+          "",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
           `🔗 <a href="${escapeHtml(txUrl)}">View on Explorer</a>`,
-        ].filter(Boolean).join('\n')
+        ]
+          .filter(Boolean)
+          .join("\n");
       } else {
         // Default: swap
-        const price = parsePriceSnapshot(summary)
-        const feeDisplay = Number.isFinite(feeRealizedUsd) && feeRealizedUsd > 0
-          ? `$${feeRealizedUsd.toFixed(2)}`
-          : Number.isFinite(feeQuoteUsd) && feeQuoteUsd > 0
-            ? `~$${feeQuoteUsd.toFixed(2)}`
-            : null
+        const price = parsePriceSnapshot(summary);
+        const feeDisplay =
+          Number.isFinite(feeRealizedUsd) && feeRealizedUsd > 0
+            ? `$${feeRealizedUsd.toFixed(2)}`
+            : Number.isFinite(feeQuoteUsd) && feeQuoteUsd > 0
+              ? `~$${feeQuoteUsd.toFixed(2)}`
+              : null;
         msg = [
-          '✅ <b>EonSwap · Swap Confirmed</b>',
-          '━━━━━━━━━━━━━━━━━━━━━━━━',
-          '',
-          '📊 <b>Transaction Details</b>',
+          "✅ <b>EonSwap · Swap Confirmed</b>",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
+          "",
+          "📊 <b>Transaction Details</b>",
           `• Network      : ${escapeHtml(chainLabel(chainId))}`,
           `• Status       : ✓ Success`,
           `• Tx Hash      : <code>${escapeHtml(shortHash)}</code>`,
           walletLine,
           `• Time         : ${escapeHtml(timeFormatted)}`,
-          '',
-          '💱 <b>Swap Details</b>',
-          price?.from ? `• Sold         : ${escapeHtml(price.from)}` : '',
-          price?.to ? `• Received     : ${escapeHtml(price.to)}` : '',
-          feeDisplay ? `• Fee          : ${feeDisplay}` : '',
-          '',
-          '━━━━━━━━━━━━━━━━━━━━━━━━',
+          "",
+          "💱 <b>Swap Details</b>",
+          price?.from ? `• Sold         : ${escapeHtml(price.from)}` : "",
+          price?.to ? `• Received     : ${escapeHtml(price.to)}` : "",
+          feeDisplay ? `• Fee          : ${feeDisplay}` : "",
+          "",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
           `🔗 <a href="${escapeHtml(txUrl)}">View on Explorer</a>`,
-        ].filter(Boolean).join('\n')
+        ]
+          .filter(Boolean)
+          .join("\n");
       }
-      
+
       await appendTxEventRecord({
         kind,
-        status: 'success',
+        status: "success",
         txHash,
         chainId,
         wallet: /^0x[a-fA-F0-9]{40}$/.test(wallet) ? wallet : undefined,
@@ -1120,172 +1279,320 @@ createServer(async (req, res) => {
         rewards: rewards || undefined,
         at: Number(payload?.at) || Date.now(),
         feeQuoteUsd: Number.isFinite(feeQuoteUsd) ? feeQuoteUsd : undefined,
-        feeRealizedUsd: Number.isFinite(feeRealizedUsd) ? feeRealizedUsd : undefined,
-      })
-      await sendTelegramMessage(msg)
-      return json(req, res, 200, { ok: true })
+        feeRealizedUsd: Number.isFinite(feeRealizedUsd)
+          ? feeRealizedUsd
+          : undefined,
+      });
+      await sendTelegramMessage(msg);
+      return json(req, res, 200, { ok: true });
     } catch (e) {
-      if (String(e instanceof Error ? e.message : e).includes('Payload too large')) {
-        return json(req, res, 413, { ok: false, error: 'Payload too large' })
+      if (
+        String(e instanceof Error ? e.message : e).includes("Payload too large")
+      ) {
+        return json(req, res, 413, { ok: false, error: "Payload too large" });
       }
-      return json(req, res, 400, { ok: false, error: 'Invalid payload' })
+      return json(req, res, 400, { ok: false, error: "Invalid payload" });
     }
   }
-  if (u.pathname === '/healthz') {
-    return json(req, res, 200, { ok: true, service: 'eonswap-monitor-relay' })
+  if (u.pathname === "/healthz") {
+    return json(req, res, 200, { ok: true, service: "eonswap-monitor-relay" });
   }
-  if (u.pathname === '/monitor/status') {
-    return json(req, res, 200, status)
+  if (u.pathname === "/monitor/status") {
+    return json(req, res, 200, status);
   }
-  if (u.pathname === '/monitor/fees') {
-    const out = await buildFeeDashboard()
-    return json(req, res, 200, out)
+  if (u.pathname === "/monitor/fees") {
+    const out = await buildFeeDashboard();
+    return json(req, res, 200, out);
   }
-  if (u.pathname === '/monitor/check-now') {
+  if (u.pathname === "/monitor/check-now") {
     if (RELAY_ADMIN_SECRET) {
-      const auth = String(req.headers.authorization || '')
+      const auth = String(req.headers.authorization || "");
       if (auth !== `Bearer ${RELAY_ADMIN_SECRET}`) {
-        return json(req, res, 401, { ok: false, error: 'Unauthorized' })
+        return json(req, res, 401, { ok: false, error: "Unauthorized" });
       }
     }
-    await runChecks()
-    return json(req, res, 200, status)
+    await runChecks();
+    return json(req, res, 200, status);
   }
 
-    // ==================== REFERRAL ENDPOINTS ====================
+  // ==================== REFERRAL ENDPOINTS ====================
 
-    // GET /referral/stats?address=0x... - Get referral stats for an address
-    if (req.method === 'GET' && u.pathname === '/referral/stats') {
-      if (isReferralRateLimited(req)) {
-        return json(req, res, 429, { ok: false, error: 'Rate limited' })
-      }
-      if (!CORS_ALLOW_ALL && !corsOriginHeader(req)) {
-        return json(req, res, 403, { ok: false, error: 'Forbidden origin' })
-      }
-      const address = String(u.searchParams.get('address') || '').trim()
+  // POST /referral/register-referrer - Store referrer address mapping
+  if (req.method === "POST" && u.pathname === "/referral/register-referrer") {
+    if (isReferralRateLimited(req)) {
+      return json(req, res, 429, { ok: false, error: "Rate limited" });
+    }
+    try {
+      const payload = await readJsonBody(req);
+      const address = String(payload?.address || "").trim();
+
       if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) {
-        return json(req, res, 400, { ok: false, error: 'Invalid address' })
+        return json(req, res, 400, { ok: false, error: "Invalid address" });
       }
-      const stats = await buildReferralStats(address)
-      return json(req, res, 200, { ok: true, ...stats }, { cacheControl: 'public, max-age=10' })
+
+      const code = generateReferralCode(address);
+
+      // Check if already registered
+      const records = await readReferralsMerged();
+      const existing = records.find(
+        (r) => r.type === "referrer" && r.code === code,
+      );
+
+      if (existing) {
+        return json(req, res, 200, {
+          ok: true,
+          code,
+          message: "Already registered",
+        });
+      }
+
+      await appendReferralRecord({
+        type: "referrer",
+        code,
+        address: address.toLowerCase(),
+        createdAt: Date.now(),
+      });
+
+      return json(req, res, 200, {
+        ok: true,
+        code,
+        message: "Referrer registered",
+      });
+    } catch (e) {
+      return json(req, res, 400, { ok: false, error: "Invalid payload" });
     }
+  }
 
-    // POST /referral/register - Register a new referral
-    if (req.method === 'POST' && u.pathname === '/referral/register') {
-      if (isReferralRateLimited(req)) {
-        return json(req, res, 429, { ok: false, error: 'Rate limited' })
-      }
-      try {
-        const payload = await readJsonBody(req)
-        const referrerCode = String(payload?.referrerCode || '').trim().toLowerCase()
-        const referredAddress = String(payload?.referredAddress || '').trim()
-      
-        if (!referrerCode || referrerCode.length !== 8) {
-          return json(req, res, 400, { ok: false, error: 'Invalid referrer code' })
-        }
-        if (!/^0x[a-fA-F0-9]{40}$/i.test(referredAddress)) {
-          return json(req, res, 400, { ok: false, error: 'Invalid referred address' })
-        }
-
-        // Check if this referral already exists
-        const records = await readReferralsMerged()
-        const existing = records.find((r) => 
-          r.type === 'referral' && 
-          r.referredAddress?.toLowerCase() === referredAddress.toLowerCase()
-        )
-        if (existing) {
-          return json(req, res, 200, { ok: true, message: 'Already referred', duplicate: true })
-        }
-
-        // Check self-referral
-        const selfCode = generateReferralCode(referredAddress)
-        if (selfCode === referrerCode) {
-          return json(req, res, 400, { ok: false, error: 'Cannot self-refer' })
-        }
-
-        await appendReferralRecord({
-          type: 'referral',
-          referrerCode,
-          referredAddress: referredAddress.toLowerCase(),
-          createdAt: Date.now(),
-          serverAt: Date.now(),
-        })
-
-        return json(req, res, 200, { ok: true, message: 'Referral registered' })
-      } catch (e) {
-        if (String(e instanceof Error ? e.message : e).includes('Payload too large')) {
-          return json(req, res, 413, { ok: false, error: 'Payload too large' })
-        }
-        return json(req, res, 400, { ok: false, error: 'Invalid payload' })
-      }
+  // GET /referral/stats?address=0x... - Get referral stats for an address
+  if (req.method === "GET" && u.pathname === "/referral/stats") {
+    if (isReferralRateLimited(req)) {
+      return json(req, res, 429, { ok: false, error: "Rate limited" });
     }
-
-    // POST /referral/track-swap - Track a swap from referred user (for rewards calculation)
-    if (req.method === 'POST' && u.pathname === '/referral/track-swap') {
-      if (isReferralRateLimited(req)) {
-        return json(req, res, 429, { ok: false, error: 'Rate limited' })
-      }
-      try {
-        const payload = await readJsonBody(req)
-        const address = String(payload?.address || '').trim()
-        const volumeUsd = Number(payload?.volumeUsd || 0)
-        const txHash = String(payload?.txHash || '')
-      
-        if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) {
-          return json(req, res, 400, { ok: false, error: 'Invalid address' })
-        }
-
-        await appendReferralRecord({
-          type: 'swap',
-          referredAddress: address.toLowerCase(),
-          volumeUsd: Number.isFinite(volumeUsd) ? volumeUsd : 0,
-          txHash: /^0x[a-fA-F0-9]{64}$/.test(txHash) ? txHash : undefined,
-          createdAt: Date.now(),
-          serverAt: Date.now(),
-        })
-
-        return json(req, res, 200, { ok: true })
-      } catch (e) {
-        if (String(e instanceof Error ? e.message : e).includes('Payload too large')) {
-          return json(req, res, 413, { ok: false, error: 'Payload too large' })
-        }
-        return json(req, res, 400, { ok: false, error: 'Invalid payload' })
-      }
+    if (!CORS_ALLOW_ALL && !corsOriginHeader(req)) {
+      return json(req, res, 403, { ok: false, error: "Forbidden origin" });
     }
+    const address = String(u.searchParams.get("address") || "").trim();
+    if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) {
+      return json(req, res, 400, { ok: false, error: "Invalid address" });
+    }
+    const stats = await buildReferralStats(address);
+    return json(
+      req,
+      res,
+      200,
+      { ok: true, ...stats },
+      { cacheControl: "public, max-age=10" },
+    );
+  }
 
-    // GET /referral/code?address=0x... - Get referral code for an address
-    if (req.method === 'GET' && u.pathname === '/referral/code') {
-      if (isReferralRateLimited(req)) {
-        return json(req, res, 429, { ok: false, error: 'Rate limited' })
+  // POST /referral/register - Register a new referral
+  if (req.method === "POST" && u.pathname === "/referral/register") {
+    if (isReferralRateLimited(req)) {
+      return json(req, res, 429, { ok: false, error: "Rate limited" });
+    }
+    try {
+      const payload = await readJsonBody(req);
+      const referrerCode = String(payload?.referrerCode || "")
+        .trim()
+        .toLowerCase();
+      const referredAddress = String(payload?.referredAddress || "").trim();
+
+      if (!referrerCode || referrerCode.length !== 8) {
+        return json(req, res, 400, {
+          ok: false,
+          error: "Invalid referrer code",
+        });
       }
-      const address = String(u.searchParams.get('address') || '').trim()
+      if (!/^0x[a-fA-F0-9]{40}$/i.test(referredAddress)) {
+        return json(req, res, 400, {
+          ok: false,
+          error: "Invalid referred address",
+        });
+      }
+
+      // Check if this referral already exists
+      const records = await readReferralsMerged();
+      const existing = records.find(
+        (r) =>
+          r.type === "referral" &&
+          r.referredAddress?.toLowerCase() === referredAddress.toLowerCase(),
+      );
+      if (existing) {
+        return json(req, res, 200, {
+          ok: true,
+          message: "Already referred",
+          duplicate: true,
+        });
+      }
+
+      // Check self-referral
+      const selfCode = generateReferralCode(referredAddress);
+      if (selfCode === referrerCode) {
+        return json(req, res, 400, { ok: false, error: "Cannot self-refer" });
+      }
+
+      await appendReferralRecord({
+        type: "referral",
+        referrerCode,
+        referredAddress: referredAddress.toLowerCase(),
+        createdAt: Date.now(),
+        serverAt: Date.now(),
+      });
+
+      return json(req, res, 200, { ok: true, message: "Referral registered" });
+    } catch (e) {
+      if (
+        String(e instanceof Error ? e.message : e).includes("Payload too large")
+      ) {
+        return json(req, res, 413, { ok: false, error: "Payload too large" });
+      }
+      return json(req, res, 400, { ok: false, error: "Invalid payload" });
+    }
+  }
+
+  // POST /referral/track-swap - Track a swap from referred user (for rewards calculation)
+  if (req.method === "POST" && u.pathname === "/referral/track-swap") {
+    if (isReferralRateLimited(req)) {
+      return json(req, res, 429, { ok: false, error: "Rate limited" });
+    }
+    try {
+      const payload = await readJsonBody(req);
+      const address = String(payload?.address || "").trim();
+      const volumeUsd = Number(payload?.volumeUsd || 0);
+      const feeUsd = Number(payload?.feeUsd || volumeUsd * 0.003); // Default 0.3% fee
+      const txHash = String(payload?.txHash || "");
+
       if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) {
-        return json(req, res, 400, { ok: false, error: 'Invalid address' })
+        return json(req, res, 400, { ok: false, error: "Invalid address" });
       }
-      const code = generateReferralCode(address)
-      return json(req, res, 200, { ok: true, code })
+
+      // Save to off-chain log
+      await appendReferralRecord({
+        type: "swap",
+        referredAddress: address.toLowerCase(),
+        volumeUsd: Number.isFinite(volumeUsd) ? volumeUsd : 0,
+        feeUsd: Number.isFinite(feeUsd) ? feeUsd : 0,
+        txHash: /^0x[a-fA-F0-9]{64}$/.test(txHash) ? txHash : undefined,
+        createdAt: Date.now(),
+        serverAt: Date.now(),
+      });
+
+      // Call on-chain trackSwap if tracker is configured
+      let onChainResult = null;
+      if (referralTracker && referralTracker.walletClient) {
+        try {
+          // Convert USD to wei (scaled 1e18)
+          const volumeUsdWei = BigInt(Math.floor(volumeUsd * 1e18));
+
+          // IMPORTANT: feeAmount must be in WETH, not USD!
+          // Contract calculates: reward = (feeAmount * tierBps) / 10000
+          // And transfers reward amount of WETH to referrer
+          // So we need to convert feeUsd to WETH amount using ETH price
+          const ethPriceUsd = referralTracker.ethPriceUsd || 3000; // Default fallback
+          const feeWethAmount = feeUsd / ethPriceUsd;
+          const feeAmountWei = BigInt(Math.floor(feeWethAmount * 1e18));
+
+          const receipt = await referralTracker.callTrackSwap(
+            address,
+            volumeUsdWei,
+            feeAmountWei,
+          );
+          onChainResult = {
+            success: true,
+            txHash: receipt.transactionHash,
+            status: receipt.status,
+          };
+          console.log(`[relay] On-chain trackSwap: ${receipt.transactionHash}`);
+        } catch (err) {
+          console.error(`[relay] On-chain trackSwap failed: ${err.message}`);
+          onChainResult = { success: false, error: err.message };
+        }
+      }
+
+      return json(req, res, 200, { ok: true, onChain: onChainResult });
+    } catch (e) {
+      if (
+        String(e instanceof Error ? e.message : e).includes("Payload too large")
+      ) {
+        return json(req, res, 413, { ok: false, error: "Payload too large" });
+      }
+      return json(req, res, 400, { ok: false, error: "Invalid payload" });
+    }
+  }
+
+  // GET /referral/code?address=0x... - Get referral code for an address
+  if (req.method === "GET" && u.pathname === "/referral/code") {
+    if (isReferralRateLimited(req)) {
+      return json(req, res, 429, { ok: false, error: "Rate limited" });
+    }
+    const address = String(u.searchParams.get("address") || "").trim();
+    if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) {
+      return json(req, res, 400, { ok: false, error: "Invalid address" });
+    }
+    const code = generateReferralCode(address);
+    return json(req, res, 200, { ok: true, code });
+  }
+
+  // GET /referral/lookup?code=xxx - Lookup referrer address by code
+  if (req.method === "GET" && u.pathname === "/referral/lookup") {
+    if (isReferralRateLimited(req)) {
+      return json(req, res, 429, { ok: false, error: "Rate limited" });
+    }
+    const code = String(u.searchParams.get("code") || "")
+      .trim()
+      .toLowerCase();
+    if (!code || code.length !== 8) {
+      return json(req, res, 400, { ok: false, error: "Invalid code" });
     }
 
-    // GET /referral/lookup?code=xxx - Lookup referrer by code
-    if (req.method === 'GET' && u.pathname === '/referral/lookup') {
-      if (isReferralRateLimited(req)) {
-        return json(req, res, 429, { ok: false, error: 'Rate limited' })
-      }
-      const code = String(u.searchParams.get('code') || '').trim().toLowerCase()
-      if (!code || code.length !== 8) {
-        return json(req, res, 400, { ok: false, error: 'Invalid code' })
-      }
-      // We can't reverse the code to an address, but we can check if it exists
-      const records = await readReferralsMerged()
-      const hasReferrals = records.some((r) => r.type === 'referral' && r.referrerCode === code)
-      return json(req, res, 200, { ok: true, code, active: hasReferrals })
+    const records = await readReferralsMerged();
+
+    // Find referrer address from stored mapping
+    const referrer = records.find(
+      (r) => r.type === "referrer" && r.code === code,
+    );
+
+    if (referrer && referrer.address) {
+      return json(req, res, 200, {
+        ok: true,
+        code,
+        address: referrer.address,
+        active: true,
+      });
     }
 
-    return json(req, res, 404, { error: 'Not found' })
+    // Fallback: check if code has any referrals (legacy)
+    const hasReferrals = records.some(
+      (r) => r.type === "referral" && r.referrerCode === code,
+    );
+
+    return json(req, res, 200, {
+      ok: true,
+      code,
+      address: null,
+      active: hasReferrals,
+    });
+  }
+
+  return json(req, res, 404, { error: "Not found" });
 }).listen(PORT, LISTEN_HOST, () => {
   console.log(
-    `[relay] listening http://${LISTEN_HOST}:${PORT} (env PORT=${process.env.PORT ?? 'unset'} RELAY_PORT=${process.env.RELAY_PORT ?? 'unset'})`,
-  )
-  void runChecks()
-  setInterval(() => void runChecks(), POLL_MS)
-})
+    `[relay] listening http://${LISTEN_HOST}:${PORT} (env PORT=${process.env.PORT ?? "unset"} RELAY_PORT=${process.env.RELAY_PORT ?? "unset"})`,
+  );
+  void runChecks();
+  setInterval(() => void runChecks(), POLL_MS);
+
+  // Start referral tracker if configured
+  if (process.env.EON_REFERRAL_ADDRESS && process.env.TRACKER_RPC_URL) {
+    createTrackerFromEnv()
+      .then((tracker) => {
+        if (tracker) {
+          referralTracker = tracker;
+          console.log("[relay] Referral tracker started");
+        }
+      })
+      .catch((err) =>
+        console.error("[relay] Failed to start referral tracker:", err.message),
+      );
+  }
+});

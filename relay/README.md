@@ -49,6 +49,7 @@ Optional env:
 - `GET /explorer/txlist?chainId=<id>&address=<0x...>&offset=<n>` – proxy Etherscan V2 txlist using relay API key (keeps key out of frontend). Optional token auth via `x-relay-explorer-token` (recommended when called via your own trusted proxy/server path).
 
 `/events/tx` includes basic hardening:
+
 - request rate limiting per IP
 - tx hash validation
 - duplicate tx alert suppression (15-minute window)
@@ -70,3 +71,46 @@ Activity rows are written when users trigger `addActivity` / `patchActivity` in 
 - Health probes for EonSwap, CoinGecko, and Etherscan.
 - Webhook alerts with cooldown for critical degraded providers and high latency.
 - Response security headers enabled on relay endpoints.
+
+## Referral Tracker (On-chain)
+
+The relay includes an on-chain referral tracker that monitors swap events and calls `EonReferral.trackSwap()` automatically. This allows referral tracking **without modifying the router contract**.
+
+### How it works
+
+```
+User Swap → EonAmmRouter → EonPair (emit Swap event)
+                                    ↓
+                          Relay Server (tracker)
+                                    ↓
+                          EonReferral.trackSwap()
+```
+
+### Configuration
+
+Set these environment variables to enable the tracker:
+
+```bash
+# Required - Base Mainnet
+TRACKER_RPC_URL=https://mainnet.base.org
+EON_REFERRAL_ADDRESS=0xD878c03e94Dc9a42AB79C78Af7b06fAf341CAd55
+EON_FACTORY_ADDRESS=0xd7b56729dcaa67aa2fa4a72795e3ed94ac03071b
+
+# Required for on-chain tracking
+TRACKER_PRIVATE_KEY=0x...                        # Tracker wallet private key
+TRACKER_CHAIN_ID=8453                            # Chain ID (default: 8453 = Base)
+
+# Optional
+SWAP_FEE_BPS=30                                  # Swap fee basis points (default: 30 = 0.3%)
+```
+
+### Setup Steps
+
+1. **Deploy EonReferral** with `tracker` role support (modified contract)
+2. **Fund tracker wallet** with ETH for gas
+3. **Call `setTracker(trackerAddress)`** on EonReferral as owner
+4. **Set env vars** and restart relay
+
+### Read-only Mode
+
+If `TRACKER_PRIVATE_KEY` is not set, the tracker runs in read-only mode (logs swaps but doesn't call contract).

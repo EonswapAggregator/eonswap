@@ -1,5 +1,5 @@
-import { motion, useReducedMotion } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { motion, useReducedMotion } from "framer-motion";
+import { Link } from "react-router-dom";
 import {
   ArrowRight,
   Check,
@@ -10,10 +10,16 @@ import {
   TrendingUp,
   Users,
   Wallet,
-} from 'lucide-react'
-import { useEffect, useState, useCallback } from 'react'
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { formatUnits } from 'viem'
+} from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import {
+  useAccount,
+  useReadContract,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+} from "wagmi";
+import { formatUnits } from "viem";
+import { toast } from "sonner";
 import {
   buildReferralLink,
   generateReferralCode,
@@ -24,15 +30,18 @@ import {
   formatRelativeTime,
   parseReferralFromUrl,
   storeReferredBy,
+  getReferredBy,
   registerReferral,
+  registerReferrerAddress,
+  lookupReferrerAddress,
   type ReferralStats,
-} from '../lib/referral'
+} from "../lib/referral";
 import {
   EON_REFERRAL_ABI,
   getEonReferralAddress,
   getTierName,
   Tier,
-} from '../lib/referralContract'
+} from "../lib/referralContract";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -45,63 +54,91 @@ const fadeUp = {
       ease: [0.22, 1, 0.36, 1] as const,
     },
   }),
-}
+};
 
 const features = [
   {
     icon: Share2,
-    title: 'Share Your Link',
-    description: 'Get a unique referral link to share with friends and your community.',
+    title: "Share Your Link",
+    description:
+      "Get a unique referral link to share with friends and your community.",
   },
   {
     icon: Wallet,
-    title: 'Earn Rewards',
-    description: 'Receive a portion of trading fees from every swap your referrals make.',
+    title: "Earn Rewards",
+    description:
+      "Receive a portion of trading fees from every swap your referrals make.",
   },
   {
     icon: Gift,
-    title: 'Bonus Tiers',
-    description: 'Unlock higher reward rates as you bring in more active traders.',
+    title: "Bonus Tiers",
+    description:
+      "Unlock higher reward rates as you bring in more active traders.",
   },
-] as const
+] as const;
 
 export function ReferralPage() {
-  const prefersReducedMotion = useReducedMotion()
-  const { address, isConnected, chain } = useAccount()
-  const [copied, setCopied] = useState(false)
-  const [stats, setStats] = useState<ReferralStats | null>(null)
+  const prefersReducedMotion = useReducedMotion();
+  const { address, isConnected, chain } = useAccount();
+  const [copied, setCopied] = useState(false);
+  const [stats, setStats] = useState<ReferralStats | null>(null);
+  const [pendingReferrer, setPendingReferrer] = useState<string | null>(null);
 
   // Get contract address for current chain
-  const contractAddress = chain?.id ? getEonReferralAddress(chain.id) : undefined
+  const contractAddress = chain?.id
+    ? getEonReferralAddress(chain.id)
+    : undefined;
 
   // Read contract data
   const { data: contractStats, refetch: refetchStats } = useReadContract({
     address: contractAddress,
     abi: EON_REFERRAL_ABI,
-    functionName: 'getReferrerStats',
+    functionName: "getReferrerStats",
     args: address ? [address] : undefined,
     query: {
       enabled: Boolean(address && contractAddress),
     },
-  })
+  });
+
+  // Read user's referral data (to check if already registered)
+  const { data: referralData } = useReadContract({
+    address: contractAddress,
+    abi: EON_REFERRAL_ABI,
+    functionName: "getReferralData",
+    args: address ? [address] : undefined,
+    query: {
+      enabled: Boolean(address && contractAddress),
+    },
+  });
 
   // Claim rewards contract interaction
-  const { writeContract, data: claimHash, isPending: isClaiming } = useWriteContract()
-  const { isLoading: isWaitingClaim, isSuccess: isClaimSuccess } = useWaitForTransactionReceipt({
-    hash: claimHash,
-  })
+  const {
+    writeContract,
+    data: claimHash,
+    isPending: isClaiming,
+  } = useWriteContract();
+  const { isLoading: isWaitingClaim, isSuccess: isClaimSuccess } =
+    useWaitForTransactionReceipt({
+      hash: claimHash,
+    });
 
   // Load referral stats (try contract first, fallback to API)
   useEffect(() => {
     async function loadStats() {
       if (!address) {
-        setStats(null)
-        return
+        setStats(null);
+        return;
       }
 
       // Try contract first
       if (contractStats) {
-        const [totalReferrals, totalEarnings, pendingRewards, _claimedRewards, tier] = contractStats
+        const [
+          totalReferrals,
+          totalEarnings,
+          pendingRewards,
+          _claimedRewards,
+          tier,
+        ] = contractStats;
         setStats({
           totalReferrals: Number(totalReferrals),
           activeReferrals: Number(totalReferrals), // Simplified
@@ -109,90 +146,166 @@ export function ReferralPage() {
           pendingRewards: Number(formatUnits(pendingRewards, 18)),
           tier: getTierName(tier as Tier),
           referredAddresses: [],
-        })
+        });
       } else {
         // Fallback to API
-        const apiStats = await loadReferralStats(address)
-        setStats(apiStats)
+        const apiStats = await loadReferralStats(address);
+        setStats(apiStats);
       }
     }
 
-    void loadStats()
-  }, [address, contractStats])
+    void loadStats();
+  }, [address, contractStats]);
 
   // Refetch stats after successful claim
   useEffect(() => {
     if (isClaimSuccess) {
-      void refetchStats()
+      void refetchStats();
+      toast.success("Rewards Claimed!", {
+        description: "Your referral rewards have been sent to your wallet",
+      });
     }
-  }, [isClaimSuccess, refetchStats])
+  }, [isClaimSuccess, refetchStats]);
 
-  // Handle incoming referral code from URL
+  // Check if user is already registered on-chain
+  const isRegisteredOnChain =
+    referralData &&
+    referralData[0] !== "0x0000000000000000000000000000000000000000";
+
+  // Register on-chain transaction
+  const {
+    writeContract: registerOnChain,
+    data: registerHash,
+    isPending: isRegistering,
+    error: _registerError,
+  } = useWriteContract();
+  const { isLoading: isWaitingRegister, isSuccess: isRegisterSuccess } =
+    useWaitForTransactionReceipt({
+      hash: registerHash,
+    });
+
+  // Toast for registration success
   useEffect(() => {
-    const refCode = parseReferralFromUrl()
-    if (refCode) {
-      storeReferredBy(refCode)
-      // If connected, register this referral
-      if (address) {
-        const myCode = generateReferralCode(address)
-        // Don't self-refer
-        if (refCode !== myCode) {
-          void registerReferral(refCode, address)
+    if (isRegisterSuccess) {
+      toast.success("Referral Registered!", {
+        description: "You are now linked to your referrer on-chain",
+      });
+      setPendingReferrer(null);
+    }
+  }, [isRegisterSuccess]);
+
+  // Handle incoming referral code from URL - lookup and prompt on-chain registration
+  useEffect(() => {
+    const refCode = parseReferralFromUrl() || getReferredBy();
+    if (refCode && address) {
+      storeReferredBy(refCode);
+      // Lookup referrer address from code
+      void lookupReferrerAddress(refCode).then((referrerAddr) => {
+        if (
+          referrerAddr &&
+          referrerAddr.toLowerCase() !== address.toLowerCase()
+        ) {
+          setPendingReferrer(referrerAddr);
         }
+      });
+      // Also register off-chain (backup)
+      const myCode = generateReferralCode(address);
+      if (refCode !== myCode) {
+        void registerReferral(refCode, address);
       }
     }
-  }, [address])
+  }, [address]);
 
-  const referralLink = address ? buildReferralLink(address) : ''
-  const referralCode = address ? generateReferralCode(address) : ''
-  const tierInfo = stats ? getTierInfo(stats.tier) : null
-  const rewardPct = stats ? getTierRewardPct(stats.tier) : 5
+  // Auto-trigger on-chain registration when ready
+  useEffect(() => {
+    if (
+      pendingReferrer &&
+      address &&
+      contractAddress &&
+      !isRegisteredOnChain &&
+      !isRegistering &&
+      !isWaitingRegister &&
+      !registerHash
+    ) {
+      // User has pending referrer, not registered, prompt registration
+      registerOnChain({
+        address: contractAddress,
+        abi: EON_REFERRAL_ABI,
+        functionName: "register",
+        args: [pendingReferrer as `0x${string}`],
+      });
+    }
+  }, [
+    pendingReferrer,
+    address,
+    contractAddress,
+    isRegisteredOnChain,
+    isRegistering,
+    isWaitingRegister,
+    registerHash,
+    registerOnChain,
+  ]);
+
+  // Register self as referrer in relay (for code → address mapping)
+  useEffect(() => {
+    if (address) {
+      void registerReferrerAddress(address);
+    }
+  }, [address]);
+
+  const referralLink = address ? buildReferralLink(address) : "";
+  const referralCode = address ? generateReferralCode(address) : "";
+  const tierInfo = stats ? getTierInfo(stats.tier) : null;
+  const rewardPct = stats ? getTierRewardPct(stats.tier) : 5;
 
   const copyLink = useCallback(() => {
-    if (!referralLink) return
-    void navigator.clipboard.writeText(referralLink)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }, [referralLink])
+    if (!referralLink) return;
+    void navigator.clipboard.writeText(referralLink);
+    setCopied(true);
+    toast.success("Link Copied!", {
+      description: "Share it with your friends to earn rewards",
+    });
+    setTimeout(() => setCopied(false), 2000);
+  }, [referralLink]);
 
   const handleClaimRewards = useCallback(() => {
-    if (!contractAddress || !stats || stats.pendingRewards <= 0) return
+    if (!contractAddress || !stats || stats.pendingRewards <= 0) return;
     writeContract({
       address: contractAddress,
       abi: EON_REFERRAL_ABI,
-      functionName: 'claimRewards',
-    })
-  }, [contractAddress, stats, writeContract])
+      functionName: "claimRewards",
+    });
+  }, [contractAddress, stats, writeContract]);
 
-  const canClaim = stats && stats.pendingRewards > 0
-  const isProcessingClaim = isClaiming || isWaitingClaim
+  const canClaim = stats && stats.pendingRewards > 0;
+  const isProcessingClaim = isClaiming || isWaitingClaim;
 
   const statCards = [
     {
       icon: Users,
-      label: 'Total Referrals',
+      label: "Total Referrals",
       value: stats?.totalReferrals ?? 0,
       sub: `${stats?.activeReferrals ?? 0} active`,
-      color: 'text-uni-pink',
+      color: "text-uni-pink",
       showClaim: false,
     },
     {
       icon: TrendingUp,
-      label: 'Total Earned',
+      label: "Total Earned",
       value: `$${(stats?.totalEarnings ?? 0).toFixed(2)}`,
       sub: `$${(stats?.pendingRewards ?? 0).toFixed(2)} pending`,
-      color: 'text-emerald-400',
+      color: "text-emerald-400",
       showClaim: true,
     },
     {
       icon: Trophy,
-      label: 'Your Tier',
-      value: tierInfo?.name ?? 'Bronze',
+      label: "Your Tier",
+      value: tierInfo?.name ?? "Bronze",
       sub: `${rewardPct}% rewards`,
-      color: tierInfo?.color ?? 'text-amber-600',
+      color: tierInfo?.color ?? "text-amber-600",
       showClaim: false,
     },
-  ] as const
+  ] as const;
 
   return (
     <div className="relative min-w-0 max-w-full overflow-hidden">
@@ -203,13 +316,17 @@ export function ReferralPage() {
         <div
           className="absolute -left-32 top-[-10%] h-[min(420px,45vw)] w-[min(420px,45vw)] rounded-full bg-uni-pink/10 blur-[100px]"
           style={{
-            animation: prefersReducedMotion ? 'none' : 'eon-gradient-drift 22s ease-in-out infinite',
+            animation: prefersReducedMotion
+              ? "none"
+              : "eon-gradient-drift 22s ease-in-out infinite",
           }}
         />
         <div
           className="absolute -right-24 top-[30%] h-[min(360px,40vw)] w-[min(360px,40vw)] rounded-full bg-uni-purple/[0.08] blur-[90px]"
           style={{
-            animation: prefersReducedMotion ? 'none' : 'eon-gradient-drift 28s ease-in-out infinite reverse',
+            animation: prefersReducedMotion
+              ? "none"
+              : "eon-gradient-drift 28s ease-in-out infinite reverse",
           }}
         />
       </div>
@@ -242,6 +359,18 @@ export function ReferralPage() {
                 Connected
               </span>
             )}
+            {(isRegistering || isWaitingRegister) && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-400">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-yellow-400 border-t-transparent" />
+                Registering referral...
+              </span>
+            )}
+            {isRegisterSuccess && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-400">
+                <Check className="h-3 w-3" />
+                Referral registered!
+              </span>
+            )}
           </motion.div>
 
           <motion.h1
@@ -258,8 +387,8 @@ export function ReferralPage() {
             variants={fadeUp}
             className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-neutral-400 md:text-lg"
           >
-            Share your unique referral link and earn a percentage of trading fees 
-            from every swap your friends make on EonSwap.
+            Share your unique referral link and earn a percentage of trading
+            fees from every swap your friends make on EonSwap.
           </motion.p>
 
           {/* Referral Link Box */}
@@ -298,7 +427,10 @@ export function ReferralPage() {
                     </button>
                   </div>
                   <p className="mt-2 text-xs text-neutral-500">
-                    Code: <span className="font-mono text-neutral-300">{referralCode}</span>
+                    Code:{" "}
+                    <span className="font-mono text-neutral-300">
+                      {referralCode}
+                    </span>
                   </p>
                 </div>
               </div>
@@ -345,7 +477,10 @@ export function ReferralPage() {
                   >
                     <div className="mb-3 flex items-center justify-center">
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-uni-pink/[0.1] ring-1 ring-uni-pink/20">
-                        <stat.icon className={`h-5 w-5 ${stat.color}`} aria-hidden />
+                        <stat.icon
+                          className={`h-5 w-5 ${stat.color}`}
+                          aria-hidden
+                        />
                       </div>
                     </div>
                     <p className="text-xs font-medium uppercase tracking-widest text-neutral-500">
@@ -354,8 +489,10 @@ export function ReferralPage() {
                     <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
                       {stat.value}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-neutral-600">{stat.sub}</p>
-                    
+                    <p className="mt-0.5 text-[11px] text-neutral-600">
+                      {stat.sub}
+                    </p>
+
                     {/* Claim Button - only show for Total Earned card */}
                     {stat.showClaim && canClaim && (
                       <button
@@ -392,7 +529,9 @@ export function ReferralPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35, duration: 0.5 }}
           >
-            <h2 className="mb-4 text-lg font-semibold text-white">Your Referrals</h2>
+            <h2 className="mb-4 text-lg font-semibold text-white">
+              Your Referrals
+            </h2>
             <div className="overflow-hidden rounded-2xl border border-uni-border bg-uni-surface">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[480px]">
@@ -478,9 +617,14 @@ export function ReferralPage() {
                     className="group px-6 py-8 text-center transition duration-200 hover:bg-uni-surface-2"
                   >
                     <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-uni-pink/[0.1] ring-1 ring-uni-pink/20">
-                      <feature.icon className="h-6 w-6 text-uni-pink" aria-hidden />
+                      <feature.icon
+                        className="h-6 w-6 text-uni-pink"
+                        aria-hidden
+                      />
                     </div>
-                    <h3 className="text-base font-semibold text-white">{feature.title}</h3>
+                    <h3 className="text-base font-semibold text-white">
+                      {feature.title}
+                    </h3>
                     <p className="mt-2 text-sm leading-relaxed text-neutral-500">
                       {feature.description}
                     </p>
@@ -534,5 +678,5 @@ export function ReferralPage() {
         </motion.div>
       </section>
     </div>
-  )
+  );
 }
