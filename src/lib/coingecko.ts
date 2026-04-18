@@ -35,11 +35,14 @@ function getCoingeckoBaseUrl(): string {
 // Cache & Rate Limiting
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Cache TTL: 2 minutes for price data */
-const PRICE_CACHE_TTL_MS = 2 * 60 * 1000;
+/** Cache TTL: 5 minutes for price data */
+const PRICE_CACHE_TTL_MS = 5 * 60 * 1000;
 
-/** Minimum interval between API calls: 1.5 seconds */
-const MIN_REQUEST_INTERVAL_MS = 1500;
+/** Minimum interval between API calls: 3 seconds (CoinGecko free tier: ~20/min) */
+const MIN_REQUEST_INTERVAL_MS = 3000;
+
+/** Backoff period after rate limit hit */
+let rateLimitBackoffUntil = 0;
 
 type CacheEntry<T> = { data: T; expiresAt: number };
 const priceCache = new Map<string, CacheEntry<number>>();
@@ -61,7 +64,11 @@ async function processQueue() {
 
   while (requestQueue.length > 0) {
     const now = Date.now();
-    const elapsed = now - lastRequestTime;
+    // Check rate limit backoff
+    if (now < rateLimitBackoffUntil) {
+      await new Promise((r) => setTimeout(r, rateLimitBackoffUntil - now));
+    }
+    const elapsed = Date.now() - lastRequestTime;
     if (elapsed < MIN_REQUEST_INTERVAL_MS) {
       await new Promise((r) =>
         setTimeout(r, MIN_REQUEST_INTERVAL_MS - elapsed),
@@ -157,8 +164,9 @@ export async function fetchSimplePricesUsd(
         const res = await fetch(url.toString());
 
         if (res.status === 429) {
-          // Rate limited - return empty and let cache handle it
-          console.warn("[CoinGecko] Rate limited (429), using cached data");
+          // Rate limited - backoff for 60 seconds
+          console.warn("[CoinGecko] Rate limited (429), backing off 60s");
+          rateLimitBackoffUntil = Date.now() + 60_000;
           resolve({});
           return;
         }
@@ -167,10 +175,39 @@ export async function fetchSimplePricesUsd(
           throw new Error(`CoinGecko ${res.status}`);
         }
 
-        const json = (await res.json()) as Record<string, { usd?: number }>;
+        // Check if response is JSON error structure
+        const text = await res.text();
+        let json: Record<string, unknown>;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          console.warn("[CoinGecko] Invalid JSON response");
+          resolve({});
+          return;
+        }
+
+        // Check for rate limit in JSON body
+        if (
+          typeof json === "object" &&
+          json !== null &&
+          "status" in json &&
+          typeof json.status === "object" &&
+          json.status !== null &&
+          "error_code" in (json.status as Record<string, unknown>)
+        ) {
+          const errorCode = (json.status as Record<string, unknown>).error_code;
+          if (errorCode === 429) {
+            console.warn("[CoinGecko] Rate limited (JSON 429), backing off 60s");
+            rateLimitBackoffUntil = Date.now() + 60_000;
+            resolve({});
+            return;
+          }
+        }
+
+        const priceData = json as Record<string, { usd?: number }>;
         const out: Record<string, number> = {};
         for (const id of missing) {
-          const v = Number(json[id]?.usd ?? 0);
+          const v = Number(priceData[id]?.usd ?? 0);
           if (Number.isFinite(v) && v > 0) out[id] = v;
         }
 

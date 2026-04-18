@@ -35,6 +35,10 @@ export default defineConfig(({ mode }) => {
           target: 'https://api.coingecko.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/coingecko/, ''),
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'EonSwap/1.0',
+          },
         },
       },
     },

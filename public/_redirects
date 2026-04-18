@@ -6,5 +6,8 @@
 /api/pairs     /.netlify/functions/pairs     200
 /api/status    /.netlify/functions/status    200
 
+# Proxy CoinGecko API to avoid CORS
+/api/coingecko/*  https://api.coingecko.com/:splat  200
+
 # SPA fallback - must be last
 /*  /index.html  200
