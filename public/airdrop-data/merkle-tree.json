@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-04-16T23:09:32.261Z",
+  "description": "EonSwap ESTF Airdrop Recipients - Campaign 1",
+  "token": {
+    "symbol": "ESTF",
+    "address": "0x7bd09674b3c721e35973993d5b6a79cda7da9c7f",
+    "decimals": 18
+  },
+  "merkleRoot": "0x7d875333008abaf6f4e58b486f608110d51842f4859d517281e867295a1e7a40",
+  "totalRecipients": 2,
+  "totalAllocation": "4000000000000000000",
+  "totalAllocationReadable": "4.0 tokens",
+  "claims": [
+    {
+      "index": 0,
+      "address": "0x947fe6757851E398D8085e218fB98cC98F334FdD",
+      "amount": "2000000000000000000",
+      "amountReadable": "2 ESTF",
+      "leaf": "0x2c27f94135c7ecc118096a9a03a7197acefa961bb620b37c9b468abc1e200c9f",
+      "proof": [
+        "0x028899cee58e3e9a81b8979a6bb4cce7c8a5730fdb19af86b4e0472a571b73b7"
+      ]
+    },
+    {
+      "index": 1,
+      "address": "0x136B3E638D4FEe25b82dF4A3c16032F6372E7A70",
+      "amount": "2000000000000000000",
+      "amountReadable": "2 ESTF",
+      "leaf": "0x028899cee58e3e9a81b8979a6bb4cce7c8a5730fdb19af86b4e0472a571b73b7",
+      "proof": [
+        "0x2c27f94135c7ecc118096a9a03a7197acefa961bb620b37c9b468abc1e200c9f"
+      ]
+    }
+  ]
+}

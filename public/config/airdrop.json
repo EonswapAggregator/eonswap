@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "updatedAt": "2026-04-18T00:00:00Z",
+  "chains": {
+    "8453": {
+      "name": "Base Mainnet",
+      "status": "coming-soon",
+      "contractAddress": null,
+      "merkleTreeUrl": null,
+      "claimDeadline": null,
+      "totalAllocation": "10000000",
+      "snapshotBlock": null
+    },
+    "84532": {
+      "name": "Base Sepolia",
+      "status": "coming-soon",
+      "contractAddress": null,
+      "merkleTreeUrl": null,
+      "claimDeadline": null,
+      "totalAllocation": "10000000",
+      "snapshotBlock": null
+    }
+  }
+}

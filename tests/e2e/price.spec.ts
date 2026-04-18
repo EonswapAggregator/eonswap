@@ -47,12 +47,22 @@ test.describe("Price Chart", () => {
     await page.waitForLoadState("domcontentloaded");
 
     // Should display some price-related text or chart element
-    // Either current price, loading state, chart, or swap widget
-    const priceArea = page
-      .locator('[class*="chart"]')
-      .or(page.locator("text=/\\$[0-9.,]+/"))
-      .or(page.getByRole("main"));
-    await expect(priceArea.first()).toBeVisible({ timeout: 10000 });
+    // Either current price, swap form, or main content area
+    const mainContent = page.getByRole("main");
+    await expect(mainContent).toBeVisible({ timeout: 10000 });
+
+    // Check for price display or swap form
+    const hasPrice = await page
+      .locator("text=/\\$[0-9.,]+/")
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const hasSwapForm = await page
+      .getByText(/swap/i)
+      .first()
+      .isVisible()
+      .catch(() => false);
+    expect(hasPrice || hasSwapForm).toBe(true);
   });
 });
 

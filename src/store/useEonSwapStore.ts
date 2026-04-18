@@ -19,7 +19,8 @@ export type ActivityKind =
   | "farm_harvest"
   | "lp_add"
   | "lp_remove"
-  | "referral_claim";
+  | "referral_claim"
+  | "airdrop_claim";
 
 export type ActivityItem = {
   id: string;

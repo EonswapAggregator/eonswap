@@ -27,3 +27,11 @@
   for = "/tokens/*"
   [headers.values]
     Cache-Control = "public, max-age=86400"
+
+# Proxy CoinGecko API to avoid CORS
+[[redirects]]
+  from = "/api/coingecko/*"
+  to = "https://api.coingecko.com/:splat"
+  status = 200
+  force = true
+  headers = {X-Forwarded-Host = "eonswap.us"}

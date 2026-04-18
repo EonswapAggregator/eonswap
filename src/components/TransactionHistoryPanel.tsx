@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { motion } from "framer-motion";
 import {
   ArrowLeftRight,
   Check,
@@ -7,8 +7,8 @@ import {
   ExternalLink,
   Loader2,
   XCircle,
-} from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+} from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import {
   activityCardShellClass,
   activityTableClass,
@@ -24,109 +24,135 @@ import {
   methodPillClass,
   networkPillClass,
   shortTxHash,
-} from '../lib/activityTxTable'
-import { explorerTxUrl, getEonChain } from '../lib/chains'
-import { truncateAddress } from '../lib/format'
-import { useLiveClock } from '../hooks/useLiveClock'
-import { nativeChainDisplayLogoUrl, tokenDisplayLogoUrl } from '../lib/tokenLogos'
-import { tokensForChain } from '../lib/tokens'
+} from "../lib/activityTxTable";
+import { explorerTxUrl, getEonChain } from "../lib/chains";
+import { truncateAddress } from "../lib/format";
+import { useLiveClock } from "../hooks/useLiveClock";
+import {
+  nativeChainDisplayLogoUrl,
+  tokenDisplayLogoUrl,
+} from "../lib/tokenLogos";
+import { tokensForChain } from "../lib/tokens";
 import {
   useEonSwapStore,
   type ActivityItem,
   type TxStatus,
-} from '../store/useEonSwapStore'
+} from "../store/useEonSwapStore";
 
 function badgeClass(status: TxStatus) {
   switch (status) {
-    case 'success':
-      return 'bg-emerald-500/12 text-emerald-200 ring-emerald-500/20'
-    case 'pending':
-      return 'bg-uni-pink/12 text-uni-pink ring-uni-pink/25'
-    case 'failed':
-      return 'bg-red-500/12 text-red-200 ring-red-500/20'
+    case "success":
+      return "bg-emerald-500/12 text-emerald-200 ring-emerald-500/20";
+    case "pending":
+      return "bg-uni-pink/12 text-uni-pink ring-uni-pink/25";
+    case "failed":
+      return "bg-red-500/12 text-red-200 ring-red-500/20";
     default:
-      return 'bg-neutral-500/15 text-neutral-300'
+      return "bg-neutral-500/15 text-neutral-300";
   }
 }
 
 function StatusIcon({ status }: { status: TxStatus }) {
   switch (status) {
-    case 'success':
-      return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" aria-hidden />
-    case 'pending':
+    case "success":
       return (
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-uni-pink" aria-hidden />
-      )
-    case 'failed':
-      return <XCircle className="h-3.5 w-3.5 text-red-400" aria-hidden />
+        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" aria-hidden />
+      );
+    case "pending":
+      return (
+        <Loader2
+          className="h-3.5 w-3.5 animate-spin text-uni-pink"
+          aria-hidden
+        />
+      );
+    case "failed":
+      return <XCircle className="h-3.5 w-3.5 text-red-400" aria-hidden />;
     default:
-      return null
+      return null;
   }
 }
 
 function txExplorerHref(item: ActivityItem) {
-  if (!item.txHash) return null
-  return explorerTxUrl(item.chainId, item.txHash)
+  if (!item.txHash) return null;
+  return explorerTxUrl(item.chainId, item.txHash);
 }
 
-function sessionMethodLabel(item: ActivityItem): 'Swap' {
-  void item
-  return 'Swap'
+function sessionMethodLabel(item: ActivityItem): string {
+  switch (item.kind) {
+    case "swap":
+      return "Swap";
+    case "farm_deposit":
+      return "Deposit";
+    case "farm_withdraw":
+      return "Withdraw";
+    case "farm_harvest":
+      return "Harvest";
+    case "lp_add":
+      return "Add Liquidity";
+    case "lp_remove":
+      return "Remove Liquidity";
+    case "referral_claim":
+      return "Referral Claim";
+    case "airdrop_claim":
+      return "Airdrop Claim";
+    default:
+      return "Swap";
+  }
 }
 
 function summaryTokenSymbols(summary: string): string[] {
-  const parts = String(summary).match(/\b[A-Z0-9]{2,10}\b/g) ?? []
-  const unique: string[] = []
+  const parts = String(summary).match(/\b[A-Z0-9]{2,10}\b/g) ?? [];
+  const unique: string[] = [];
   for (const p of parts) {
-    if (['SWAP', 'DONE', 'FAILED'].includes(p)) continue
-    if (!unique.includes(p)) unique.push(p)
-    if (unique.length >= 2) break
+    if (["SWAP", "DONE", "FAILED"].includes(p)) continue;
+    if (!unique.includes(p)) unique.push(p);
+    if (unique.length >= 2) break;
   }
-  return unique
+  return unique;
 }
 
-type PanelVariant = 'sidebar' | 'page'
+type PanelVariant = "sidebar" | "page";
 
 type Props = {
-  variant?: PanelVariant
-  statusFilter?: 'all' | TxStatus
-}
+  variant?: PanelVariant;
+  statusFilter?: "all" | TxStatus;
+};
 
 export function TransactionHistoryPanel({
-  variant = 'sidebar',
-  statusFilter = 'all',
+  variant = "sidebar",
+  statusFilter = "all",
 }: Props) {
-  const history = useEonSwapStore((s) => s.history)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  const nowMs = useLiveClock(4000)
+  const history = useEonSwapStore((s) => s.history);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const nowMs = useLiveClock(4000);
 
   const filtered = useMemo(() => {
-    if (statusFilter === 'all') return history
-    return history.filter((h) => h.status === statusFilter)
-  }, [history, statusFilter])
+    if (statusFilter === "all") return history;
+    return history.filter((h) => h.status === statusFilter);
+  }, [history, statusFilter]);
 
   const copyHash = useCallback(async (id: string, hash: string) => {
     try {
-      await navigator.clipboard.writeText(hash)
-      setCopiedId(id)
-      window.setTimeout(() => setCopiedId(null), 2000)
+      await navigator.clipboard.writeText(hash);
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId(null), 2000);
     } catch {
       /* ignore */
     }
-  }, [])
+  }, []);
 
   const shell =
-    variant === 'page'
+    variant === "page"
       ? activityCardShellClass
-      : 'h-fit max-h-none rounded-3xl border border-uni-border bg-uni-surface shadow-xl backdrop-blur-2xl lg:sticky lg:top-24'
+      : "h-fit max-h-none rounded-3xl border border-uni-border bg-uni-surface shadow-xl backdrop-blur-2xl lg:sticky lg:top-24";
 
-  const showPanelHeader = variant === 'sidebar'
+  const showPanelHeader = variant === "sidebar";
 
   return (
     <motion.aside
       layout
       id="activity"
-      className={`${shell} ${variant === 'page' ? 'p-0' : 'p-4'}`}
+      className={`${shell} ${variant === "page" ? "p-0" : "p-4"}`}
     >
       {showPanelHeader && (
         <>
@@ -137,7 +163,7 @@ export function TransactionHistoryPanel({
         </>
       )}
 
-      {variant === 'page' && filtered.length > 0 && (
+      {variant === "page" && filtered.length > 0 && (
         <div className={activityTableToolbarClass}>
           <span className={activityToolbarTitleClass}>Session activity</span>
           <span
@@ -152,7 +178,7 @@ export function TransactionHistoryPanel({
         </div>
       )}
 
-      {variant === 'page' ? (
+      {variant === "page" ? (
         <div className={`${activityTableScrollClass} min-w-0`}>
           {history.length === 0 && (
             <div className="px-5 py-16 text-center md:px-6">
@@ -183,10 +209,7 @@ export function TransactionHistoryPanel({
               </caption>
               <thead>
                 <tr className={activityTheadRowClass}>
-                  <th
-                    scope="col"
-                    className={`${activityThClass} pl-4 md:pl-5`}
-                  >
+                  <th scope="col" className={`${activityThClass} pl-4 md:pl-5`}>
                     Status
                   </th>
                   <th scope="col" className={activityThClass}>
@@ -198,10 +221,7 @@ export function TransactionHistoryPanel({
                   >
                     Method
                   </th>
-                  <th
-                    scope="col"
-                    className={`${activityThClass} text-right`}
-                  >
+                  <th scope="col" className={`${activityThClass} text-right`}>
                     Block
                   </th>
                   <th scope="col" className={activityThClass}>
@@ -226,40 +246,40 @@ export function TransactionHistoryPanel({
               </thead>
               <tbody>
                 {filtered.map((item) => {
-                  const url = txExplorerHref(item)
-                  const chain = getEonChain(item.chainId)
-                  const chainLabel = chain?.name ?? `Chain ${item.chainId}`
+                  const url = txExplorerHref(item);
+                  const chain = getEonChain(item.chainId);
+                  const chainLabel = chain?.name ?? `Chain ${item.chainId}`;
                   const fullDate = new Date(item.createdAt).toLocaleString(
-                    'en-US',
+                    "en-US",
                     {
-                      weekday: 'short',
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit',
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
                     },
-                  )
+                  );
 
                   const blockCell = (() => {
                     if (item.blockNumber != null) {
                       return (
                         <span className="font-mono tabular-nums text-neutral-300">
-                          {item.blockNumber.toLocaleString('en-US')}
+                          {item.blockNumber.toLocaleString("en-US")}
                         </span>
-                      )
+                      );
                     }
-                    if (item.status === 'pending' && item.txHash) {
+                    if (item.status === "pending" && item.txHash) {
                       return (
                         <span className="inline-flex items-center gap-1.5 text-uni-pink">
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           <span className="hidden sm:inline">pending</span>
                         </span>
-                      )
+                      );
                     }
-                    return <span className="text-neutral-600">—</span>
-                  })()
+                    return <span className="text-neutral-600">—</span>;
+                  })();
 
                   return (
                     <tr key={item.id} className={activityTrClass}>
@@ -322,7 +342,9 @@ export function TransactionHistoryPanel({
                           {sessionMethodLabel(item)}
                         </span>
                       </td>
-                      <td className={`${activityTdClass} text-right tabular-nums`}>
+                      <td
+                        className={`${activityTdClass} text-right tabular-nums`}
+                      >
                         {blockCell}
                       </td>
                       <td className={`${activityTdClass} text-neutral-400`}>
@@ -339,15 +361,18 @@ export function TransactionHistoryPanel({
                           className="font-mono text-[11px] text-neutral-500"
                           title={item.from ?? undefined}
                         >
-                          {item.from
-                            ? truncateAddress(item.from, 6, 4)
-                            : '—'}
+                          {item.from ? truncateAddress(item.from, 6, 4) : "—"}
                         </span>
                       </td>
                       <td className={activityTdClass}>
-                        <span className={`${networkPillClass()} inline-flex items-center gap-1.5`}>
+                        <span
+                          className={`${networkPillClass()} inline-flex items-center gap-1.5`}
+                        >
                           <img
-                            src={nativeChainDisplayLogoUrl(item.chainId) ?? undefined}
+                            src={
+                              nativeChainDisplayLogoUrl(item.chainId) ??
+                              undefined
+                            }
                             alt={chainLabel}
                             className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-white/15"
                             loading="lazy"
@@ -355,35 +380,40 @@ export function TransactionHistoryPanel({
                           {chainLabel}
                         </span>
                       </td>
-                      <td className={`max-w-[280px] ${activityTdClass} pr-4 md:max-w-[340px] md:pr-5`}>
+                      <td
+                        className={`max-w-[280px] ${activityTdClass} pr-4 md:max-w-[340px] md:pr-5`}
+                      >
                         {(() => {
-                          const symbols = summaryTokenSymbols(item.summary)
-                          if (!symbols.length) return null
+                          const symbols = summaryTokenSymbols(item.summary);
+                          if (!symbols.length) return null;
                           const symbolBadges = symbols.map((sym) => {
                             const token = tokensForChain(item.chainId).find(
                               (t) => t.symbol.toUpperCase() === sym,
-                            )
-                            if (!token) return null
+                            );
+                            if (!token) return null;
                             return (
                               <span
                                 key={`${item.id}-${sym}`}
                                 className="inline-flex items-center gap-1 rounded-md border border-uni-border bg-white/[0.02] px-1.5 py-0.5 text-[10px] text-neutral-300"
                               >
                                 <img
-                                  src={tokenDisplayLogoUrl(item.chainId, token) ?? undefined}
+                                  src={
+                                    tokenDisplayLogoUrl(item.chainId, token) ??
+                                    undefined
+                                  }
                                   alt={sym}
                                   className="h-3 w-3 rounded-full object-cover ring-1 ring-white/15"
                                   loading="lazy"
                                 />
                                 {sym}
                               </span>
-                            )
-                          })
+                            );
+                          });
                           return (
                             <div className="mb-1 flex flex-wrap gap-1">
                               {symbolBadges}
                             </div>
-                          )
+                          );
                         })()}
                         <p
                           className="truncate text-[12px] leading-snug text-neutral-300"
@@ -393,7 +423,7 @@ export function TransactionHistoryPanel({
                         </p>
                       </td>
                     </tr>
-                  )
+                  );
                 })}
               </tbody>
             </table>
@@ -412,16 +442,16 @@ export function TransactionHistoryPanel({
             </li>
           )}
           {filtered.map((item) => {
-            const url = txExplorerHref(item)
-            const fullDate = new Date(item.createdAt).toLocaleString('en-US', {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-            })
+            const url = txExplorerHref(item);
+            const fullDate = new Date(item.createdAt).toLocaleString("en-US", {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            });
             return (
               <li
                 key={item.id}
@@ -457,10 +487,10 @@ export function TransactionHistoryPanel({
                   </a>
                 )}
               </li>
-            )
+            );
           })}
         </ul>
       )}
     </motion.aside>
-  )
+  );
 }
