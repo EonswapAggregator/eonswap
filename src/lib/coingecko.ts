@@ -197,7 +197,9 @@ export async function fetchSimplePricesUsd(
         ) {
           const errorCode = (json.status as Record<string, unknown>).error_code;
           if (errorCode === 429) {
-            console.warn("[CoinGecko] Rate limited (JSON 429), backing off 60s");
+            console.warn(
+              "[CoinGecko] Rate limited (JSON 429), backing off 60s",
+            );
             rateLimitBackoffUntil = Date.now() + 60_000;
             resolve({});
             return;
