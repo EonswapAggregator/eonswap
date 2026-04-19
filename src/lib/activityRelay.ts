@@ -11,6 +11,56 @@ export type LeaderboardEntry = {
   lastSuccessAt: number;
 };
 
+export type GlobalActivityEntry = {
+  id: string;
+  kind: ActivityKind;
+  status: string;
+  createdAt: number;
+  serverAt?: number;
+  summary: string;
+  chainId: number;
+  txHash?: string;
+  from?: string;
+  blockNumber?: number;
+};
+
+/** Public global activity feed: recent successful swaps from all users. */
+export async function fetchRelayGlobalActivities(
+  limit = 50,
+): Promise<
+  | { ok: true; generatedAt: number; activities: GlobalActivityEntry[] }
+  | { ok: false; error: string }
+> {
+  const base = getMonitorRelayBaseUrl();
+  if (!base) return { ok: false, error: "Relay not configured" };
+  const capped = Math.min(200, Math.max(1, Math.floor(limit)));
+  const q = new URLSearchParams({ limit: String(capped) });
+  try {
+    const res = await fetch(`${base}/public/activities?${q}`, {
+      headers: { accept: "application/json" },
+    });
+    const json = (await res.json().catch(() => null)) as {
+      ok?: boolean;
+      error?: string;
+      activities?: GlobalActivityEntry[];
+      generatedAt?: number;
+    } | null;
+    if (!res.ok) {
+      return { ok: false, error: json?.error || `HTTP ${res.status}` };
+    }
+    if (!json?.ok || !Array.isArray(json.activities)) {
+      return { ok: false, error: "Invalid response" };
+    }
+    return {
+      ok: true,
+      generatedAt: Number(json.generatedAt) || Date.now(),
+      activities: json.activities,
+    };
+  } catch {
+    return { ok: false, error: "Network error" };
+  }
+}
+
 /** Public ranking by wallet: successful swaps recorded on the relay (requires `VITE_MONITOR_RELAY_URL`). */
 export async function fetchRelayLeaderboard(
   limit = 50,
