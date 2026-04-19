@@ -1024,10 +1024,43 @@ createServer(async (req, res) => {
       {
         ok: true,
         generatedAt: Date.now(),
-        metric: "successful_swaps_and_bridges",
+        metric: "successful_swaps",
         entries,
       },
       { cacheControl: "public, max-age=30" },
+    );
+  }
+  // Public global activity feed (recent swaps from all users)
+  if (req.method === "GET" && u.pathname === "/public/activities") {
+    if (isLeaderboardRateLimited(req)) {
+      return json(req, res, 429, { ok: false, error: "Rate limited" });
+    }
+    if (!CORS_ALLOW_ALL && !corsOriginHeader(req)) {
+      return json(req, res, 403, { ok: false, error: "Forbidden origin" });
+    }
+    const limitRaw = Number(u.searchParams.get("limit") || "50");
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(200, Math.max(1, Math.floor(limitRaw)))
+      : 50;
+    const all = await readActivitiesMerged();
+    // Return most recent activities (sorted by serverAt desc)
+    const sorted = all
+      .filter((a) => a.status === "success" && a.kind === "swap")
+      .sort(
+        (a, b) =>
+          (b.serverAt || b.createdAt || 0) - (a.serverAt || a.createdAt || 0),
+      )
+      .slice(0, limit);
+    return json(
+      req,
+      res,
+      200,
+      {
+        ok: true,
+        generatedAt: Date.now(),
+        activities: sorted,
+      },
+      { cacheControl: "public, max-age=15" },
     );
   }
   if (req.method === "GET" && u.pathname === "/explorer/txlist") {

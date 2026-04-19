@@ -5,7 +5,6 @@ dist
 .env
 .env.*
 !.env.example
-!.env.production
 relay/data/*.jsonl
 test-results/
 .vscode/
@@ -13,3 +12,4 @@ test-results/
 # Local QA / manual check screenshots (not for version control)
 desktop-*-check.png
 .vercel
+tsc_output.txt

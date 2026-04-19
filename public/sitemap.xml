@@ -2,241 +2,241 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://eonswap.us/</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://eonswap.us/about</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://eonswap.us/activity</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://eonswap.us/airdrop</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://eonswap.us/aml-policy</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://eonswap.us/careers</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
     <loc>https://eonswap.us/contact-support</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/disclaimer</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs</loc>
-    <lastmod>2026-04-17T09:14:34.521Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.107Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/advantages</loc>
-    <lastmod>2026-04-17T08:58:01.381Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.075Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/api</loc>
-    <lastmod>2026-04-17T09:43:36.565Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.091Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/features</loc>
-    <lastmod>2026-04-17T08:58:01.377Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.092Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/fees-execution</loc>
-    <lastmod>2026-04-17T08:58:01.497Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.093Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/getting-started</loc>
-    <lastmod>2026-04-17T08:58:01.379Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.094Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/guides/faq</loc>
-    <lastmod>2026-04-17T08:58:01.381Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.095Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/guides/integration</loc>
-    <lastmod>2026-04-17T09:14:34.600Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.096Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/guides/security</loc>
-    <lastmod>2026-04-16T07:03:01.266Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.099Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/guides/status-codes</loc>
-    <lastmod>2026-04-16T07:03:01.268Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.101Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/guides/troubleshooting</loc>
-    <lastmod>2026-04-17T08:58:01.497Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.102Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/guides/user-flows</loc>
-    <lastmod>2026-04-16T07:03:01.272Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.103Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/guides/wallet-setup</loc>
-    <lastmod>2026-04-17T08:58:01.381Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.104Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/how-it-works</loc>
-    <lastmod>2026-04-17T08:58:01.378Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.105Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/privacy</loc>
-    <lastmod>2026-04-16T07:03:01.251Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.108Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/risk-disclosure</loc>
-    <lastmod>2026-04-16T07:03:01.254Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.109Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/roadmap</loc>
-    <lastmod>2026-04-17T08:58:01.379Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.110Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/supported-networks</loc>
-    <lastmod>2026-04-17T08:58:01.497Z</lastmod>
+    <lastmod>2026-04-18T20:29:17.483Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/terms</loc>
-    <lastmod>2026-04-16T07:03:01.260Z</lastmod>
+    <lastmod>2026-04-17T12:27:10.112Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/docs/tokenomics</loc>
-    <lastmod>2026-04-17T08:58:01.381Z</lastmod>
+    <lastmod>2026-04-18T20:29:17.648Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://eonswap.us/earn</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://eonswap.us/faq</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://eonswap.us/farm</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.65</priority>
   </url>
   <url>
     <loc>https://eonswap.us/leaderboard</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.55</priority>
   </url>
   <url>
     <loc>https://eonswap.us/press-kit</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://eonswap.us/privacy</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://eonswap.us/referral</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://eonswap.us/risk-disclosure</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://eonswap.us/stake</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.55</priority>
   </url>
   <url>
     <loc>https://eonswap.us/status</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://eonswap.us/swap</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://eonswap.us/terms</loc>
-    <lastmod>2026-04-17T09:50:41.048Z</lastmod>
+    <lastmod>2026-04-19T05:36:07.252Z</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
