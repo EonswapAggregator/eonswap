@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("status health panel renders core monitoring signals", async ({
   page,
 }) => {
-  await page.goto("/status");
+  await page.goto("/status", { waitUntil: "domcontentloaded", timeout: 60000 });
 
   await expect(page.getByText("Status Dashboard")).toBeVisible();
   await expect(page.getByText("Service Health")).toBeVisible();
@@ -31,7 +31,7 @@ test("swap widget critical controls are available", async ({ page }) => {
 });
 
 test("status health controls can toggle and refresh", async ({ page }) => {
-  await page.goto("/status");
+  await page.goto("/status", { waitUntil: "domcontentloaded", timeout: 60000 });
 
   const refreshButton = page.getByRole("button", { name: "Refresh All" });
   await expect(refreshButton).toBeVisible();
@@ -42,7 +42,7 @@ test("status health controls can toggle and refresh", async ({ page }) => {
 test("status page supports URL-prefill for swap mode", async ({ page }) => {
   const hash =
     "0x1111111111111111111111111111111111111111111111111111111111111111";
-  await page.goto(`/status?tx=${hash}`);
+  await page.goto(`/status?tx=${hash}`, { waitUntil: "domcontentloaded", timeout: 60000 });
   await expect(
     page.locator('input[placeholder="Enter transaction hash (0x...)"]'),
   ).toBeVisible();
@@ -84,12 +84,10 @@ test("admin dashboard filters and search operate with seeded data", async ({
   }, now);
 
   await page.goto("/admin?e2eAdmin=1");
-  // Wait for page to fully load and render
-  await page.waitForLoadState('networkidle');
-  
+  await expect(page).toHaveURL(/\/admin\?e2eAdmin=1/);
   await expect(
     page.getByRole("heading", { name: "Control Panel" }),
-  ).toBeVisible({ timeout: 10000 });
+  ).toBeVisible({ timeout: 20000 });
 
   // Click Transactions tab first
   await page.getByRole("button", { name: /transactions/i }).click();

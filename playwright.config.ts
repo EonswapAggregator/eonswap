@@ -11,11 +11,12 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: process.platform === 'win32'
-      ? 'cmd /c "set VITE_E2E_ADMIN_BYPASS=1 && npm run dev -- --host 127.0.0.1 --port 5173"'
-      : 'VITE_E2E_ADMIN_BYPASS=1 npm run dev -- --host 127.0.0.1 --port 5173',
+    command: 'npm run dev -- --host 127.0.0.1 --port 5173',
+    env: {
+      VITE_E2E_ADMIN_BYPASS: '1',
+    },
     url: 'http://127.0.0.1:5173',
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
   projects: [

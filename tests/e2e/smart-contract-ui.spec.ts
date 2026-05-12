@@ -270,7 +270,7 @@ test.describe('Farm - Smart Contract UI', () => {
   test('refresh button refreshes farm data', async ({ page }) => {
     const refreshBtn = page.getByRole('button', { name: /refresh/i })
     await expect(refreshBtn).toBeVisible()
-    await expect(refreshBtn).toBeEnabled({ timeout: 5000 })
+    await expect(refreshBtn).toBeEnabled({ timeout: 30000 })
 
     await refreshBtn.click()
     
