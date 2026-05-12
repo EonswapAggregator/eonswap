@@ -7,7 +7,7 @@ Using EonSwap involves blockchain and market risk. Please read this page before 
 - **Price movement:** token prices can change quickly between quote and execution.
 - **Slippage:** execution price may be worse than the quoted price in volatile markets.
 - **Network congestion:** gas spikes and chain congestion can delay or fail transactions.
-- **Swap delay:** cross-chain transfers may take longer during heavy network traffic.
+- **Base network risk:** network congestion on Base can delay transaction finality.
 - **Protocol risk:** smart contracts and third-party protocols can contain vulnerabilities.
 
 ## What This Means for You

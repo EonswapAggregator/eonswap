@@ -99,7 +99,7 @@ export function RiskDisclosurePage() {
             {
               icon: Network,
               title: 'Execution risk',
-              text: 'Cross-chain transfers can be delayed by relayer downtime, destination chain finality, and temporary route unavailability.',
+              text: 'Transaction confirmation on Base can be delayed by network congestion, RPC issues, and temporary liquidity unavailability.',
             },
           ].map((card, i) => (
             <motion.article

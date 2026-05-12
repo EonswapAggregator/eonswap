@@ -10,13 +10,13 @@
 
 EonSwap is a non-custodial swap experience designed for users who want speed, transparency, and control.
 
-You stay in control of your wallet while EonSwap helps you discover efficient routes across multiple chains.
+You stay in control of your wallet while EonSwap helps you discover efficient routes on Base.
 
 ## Why EonSwap
 
 - **Non-custodial by design**: Your assets stay in your wallet until you sign.
 - **Route-aware routing**: Quotes are sourced from integrated liquidity and routing providers.
-- **Cross-chain ready**: Move assets between supported networks from one interface.
+- **Base-optimized**: Fast and cost-efficient swaps on Base network.
 - **Clear execution visibility**: Track transaction lifecycle and status in real time.
 - **Operational transparency**: Check health and monitoring signals before execution.
 

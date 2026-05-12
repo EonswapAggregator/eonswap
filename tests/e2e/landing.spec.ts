@@ -277,7 +277,7 @@ test.describe('Footer', () => {
 
     // Check footer logo link (scoped to footer to avoid header match)
     await expect(footer.getByRole('link', { name: 'EonSwap Execution desk' })).toBeVisible()
-    await expect(page.getByText('EonSwap is a non-custodial multi-chain swap')).toBeVisible()
+    await expect(page.getByText('EonSwap is a non-custodial swap interface on Base')).toBeVisible()
   })
 
   test('footer quick links navigate correctly', async ({ page }) => {

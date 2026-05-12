@@ -88,7 +88,7 @@ export function Layout() {
                 </span>
               </Link>
               <p className="mt-4 max-w-sm text-sm leading-relaxed text-neutral-500">
-                EonSwap is a non-custodial multi-chain swap interface that helps
+                EonSwap is a non-custodial swap interface on Base that helps
                 you find efficient routes and execute trades directly from your
                 wallet.
               </p>

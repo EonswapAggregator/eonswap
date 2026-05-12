@@ -1,6 +1,6 @@
 /** Browser tab titles per route (`document.title`). */
 const TITLES: Record<string, string> = {
-  '/': 'EonSwap — Multi-chain execution desk.',
+  '/': 'EonSwap — Base execution desk.',
   '/swap': 'EonSwap — Swap',
   '/liquidity': 'EonSwap — Liquidity',
   '/pool': 'EonSwap — Liquidity',
@@ -28,7 +28,7 @@ const TITLES: Record<string, string> = {
 
 const NOT_FOUND_TITLE = 'EonSwap — Page not found'
 const DEFAULT_DESCRIPTION =
-  'EonSwap is a non-custodial multi-chain swap interface that helps you find efficient routes and execute trades directly from your wallet.'
+  'EonSwap is a non-custodial swap interface on Base that helps you find efficient routes and execute trades directly from your wallet.'
 const DESCRIPTIONS: Record<string, string> = {
   '/': DEFAULT_DESCRIPTION,
   '/swap': 'Swap crypto assets across supported chains with smart route discovery and wallet-first execution.',

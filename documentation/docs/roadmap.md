@@ -28,7 +28,7 @@ EonSwap's roadmap focuses on building a robust DeFi ecosystem on Base.
 - [ ] ESTF staking with revenue sharing
 - [ ] Launchpad for new projects
 - [ ] NFT integration
-- [ ] Cross-chain expansion consideration
+- [ ] Base ecosystem expansion
 - [ ] CEX listing preparations
 - [ ] DAO treasury activation
 
