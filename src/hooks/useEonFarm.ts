@@ -239,12 +239,9 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
         }
 
         // Calculate LP price in USD from pair reserves
-        const reserves =
-          reservesResult?.status === 'success'
-            ? (reservesResult.result as [bigint, bigint, bigint])
-            : [0n, 0n, 0n]
-        const reserve0 = reserves[0]
-        const reserve1 = reserves[1]
+        const [reserve0, reserve1] = reservesResult?.status === 'success'
+          ? (reservesResult.result as readonly [bigint, bigint, number])
+          : [0n, 0n]
 
         const token0Decimals = token0 ? findTokenInfo(chainId, token0)?.decimals ?? 18 : 18
         const token1Decimals = token1 ? findTokenInfo(chainId, token1)?.decimals ?? 18 : 18
