@@ -8,6 +8,7 @@ import { eonAmmPairAbi } from '../lib/amm/abis'
 import type { EonFarmPool, EonFarmUserPosition, MasterChefState } from '../lib/farm/types'
 import { tokensForChain, type Token } from '../lib/tokens'
 import { fetchSimplePricesUsd, coingeckoIdForToken } from '../lib/coingecko'
+import { fetchEstfUsdFromEstfWethPair } from '../lib/estfUsdFromPair'
 import { useEonFarmRealtimeRefresh } from './useEonRealtimeEvents'
 
 const POLL_INTERVAL_MS = 30_000
@@ -228,18 +229,23 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
 
         // Estimate APR based on emissions
         // APR = (eonPerSecond * poolShare * SECONDS_PER_YEAR * eonPrice) / (totalStaked * lpPrice)
-        const eonPrice = rewardToken ? (priceByAddress.get(rewardToken.toLowerCase()) ?? 0) : 0
+        let eonPrice = rewardToken ? (priceByAddress.get(rewardToken.toLowerCase()) ?? 0) : 0
+        // Try ESTF/WETH pair pricing if CoinGecko price is unavailable
+        if (eonPrice <= 0) {
+          const estfUsd = await fetchEstfUsdFromEstfWethPair().catch(() => null)
+          if (estfUsd && Number.isFinite(estfUsd) && estfUsd > 0) {
+            eonPrice = estfUsd
+          }
+        }
         // Total supply available for reference if needed for LP pricing
         const _totalSupply = totalSupplyResult?.status === 'success' ? (totalSupplyResult.result as bigint) : 0n
         void _totalSupply // suppress unused warning
 
         // Simplified APR calculation (assuming equal LP value distribution)
         let aprEstimate = 0
-        if (totalStaked > 0n) {
-          // Use actual price if available, otherwise use conservative fallback estimate
-          const estimatedEonPrice = eonPrice > 0 ? eonPrice : 0.5 // Default conservative estimate for missing prices
+        if (totalStaked > 0n && eonPrice > 0) {
           const yearlyEmissions = Number(formatUnits(eonPerSecond * BigInt(SECONDS_PER_YEAR), 18)) * poolShare
-          const yearlyValue = yearlyEmissions * estimatedEonPrice
+          const yearlyValue = yearlyEmissions * eonPrice
           const stakedValue = Number(formatUnits(totalStaked, lpDecimals)) * 2 // Simplified TVL estimate
           if (stakedValue > 0) {
             aprEstimate = yearlyValue / stakedValue
