@@ -22,6 +22,8 @@ export interface EonFarmPool {
   eonPerSecond: bigint
   poolShare: number // allocPoint / totalAllocPoint
   aprEstimate: number // Estimated APR as decimal (e.g., 0.15 = 15%)
+  lpPriceUsd: number
+  tvlUsd: number
 }
 
 /**

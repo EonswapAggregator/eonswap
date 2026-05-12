@@ -137,6 +137,7 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
         { address: lp, abi: eonAmmPairAbi, functionName: 'totalSupply' as const },
         { address: lp, abi: erc20Abi, functionName: 'balanceOf' as const, args: [masterChefAddress] as const },
         { address: lp, abi: erc20Abi, functionName: 'decimals' as const },
+        { address: lp, abi: eonAmmPairAbi, functionName: 'getReserves' as const },
       ])
 
       const lpInfoResults = await publicClient.multicall({ contracts: lpInfoCalls })
@@ -144,8 +145,8 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
       // Gather all token addresses for symbol lookup
       const tokenAddresses = new Set<Address>()
       for (let i = 0; i < lpAddresses.length; i++) {
-        const token0Result = lpInfoResults[i * 5]
-        const token1Result = lpInfoResults[i * 5 + 1]
+        const token0Result = lpInfoResults[i * 6]
+        const token1Result = lpInfoResults[i * 6 + 1]
         if (token0Result?.status === 'success') tokenAddresses.add(token0Result.result as Address)
         if (token1Result?.status === 'success') tokenAddresses.add(token1Result.result as Address)
       }
@@ -188,6 +189,8 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
         }
       }
 
+      const estfUsdFallback = await fetchEstfUsdFromEstfWethPair().catch(() => null)
+
       // 4. Build pool objects
       const poolsData: EonFarmPool[] = []
       for (let i = 0; i < poolLength; i++) {
@@ -209,12 +212,13 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
         const lpIndex = lpAddresses.indexOf(lpToken)
         if (lpIndex === -1) continue
 
-        const baseIdx = lpIndex * 5
+        const baseIdx = lpIndex * 6
         const token0Result = lpInfoResults[baseIdx]
         const token1Result = lpInfoResults[baseIdx + 1]
         const totalSupplyResult = lpInfoResults[baseIdx + 2]
         const stakedBalanceResult = lpInfoResults[baseIdx + 3]
         const decimalsResult = lpInfoResults[baseIdx + 4]
+        const reservesResult = lpInfoResults[baseIdx + 5]
 
         const token0 = token0Result?.status === 'success' ? (token0Result.result as Address) : null
         const token1 = token1Result?.status === 'success' ? (token1Result.result as Address) : null
@@ -228,28 +232,56 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
         const poolShare = totalAllocPoint > 0n ? Number(allocPoint) / Number(totalAllocPoint) : 0
 
         // Estimate APR based on emissions
-        // APR = (eonPerSecond * poolShare * SECONDS_PER_YEAR * eonPrice) / (totalStaked * lpPrice)
+        // APR = (eonPerSecond * poolShare * SECONDS_PER_YEAR * eonPrice) / TVLUsd
         let eonPrice = rewardToken ? (priceByAddress.get(rewardToken.toLowerCase()) ?? 0) : 0
-        // Try ESTF/WETH pair pricing if CoinGecko price is unavailable
-        if (eonPrice <= 0) {
-          const estfUsd = await fetchEstfUsdFromEstfWethPair().catch(() => null)
-          if (estfUsd && Number.isFinite(estfUsd) && estfUsd > 0) {
-            eonPrice = estfUsd
-          }
+        if (eonPrice <= 0 && estfUsdFallback && Number.isFinite(estfUsdFallback) && estfUsdFallback > 0) {
+          eonPrice = estfUsdFallback
         }
-        // Total supply available for reference if needed for LP pricing
-        const _totalSupply = totalSupplyResult?.status === 'success' ? (totalSupplyResult.result as bigint) : 0n
-        void _totalSupply // suppress unused warning
 
-        // Simplified APR calculation (assuming equal LP value distribution)
+        // Calculate LP price in USD from pair reserves
+        const reserves =
+          reservesResult?.status === 'success'
+            ? (reservesResult.result as [bigint, bigint, bigint])
+            : [0n, 0n, 0n]
+        const reserve0 = reserves[0]
+        const reserve1 = reserves[1]
+
+        const token0Decimals = token0 ? findTokenInfo(chainId, token0)?.decimals ?? 18 : 18
+        const token1Decimals = token1 ? findTokenInfo(chainId, token1)?.decimals ?? 18 : 18
+        const token0Price = token0 ? priceByAddress.get(token0.toLowerCase()) ?? 0 : 0
+        const token1Price = token1 ? priceByAddress.get(token1.toLowerCase()) ?? 0 : 0
+
+        const reserve0Usd =
+          token0Price > 0
+            ? Number(formatUnits(reserve0, token0Decimals)) * token0Price
+            : 0
+        const reserve1Usd =
+          token1Price > 0
+            ? Number(formatUnits(reserve1, token1Decimals)) * token1Price
+            : 0
+
+        const totalSupply =
+          totalSupplyResult?.status === 'success'
+            ? (totalSupplyResult.result as bigint)
+            : 0n
+
+        const lpPriceUsd =
+          totalSupply > 0n && reserve0Usd + reserve1Usd > 0
+            ? (reserve0Usd + reserve1Usd) /
+              Number(formatUnits(totalSupply, lpDecimals))
+            : 0
+
+        const stakedValueUsd =
+          lpPriceUsd > 0
+            ? Number(formatUnits(totalStaked, lpDecimals)) * lpPriceUsd
+            : 0
+
         let aprEstimate = 0
-        if (totalStaked > 0n && eonPrice > 0) {
-          const yearlyEmissions = Number(formatUnits(eonPerSecond * BigInt(SECONDS_PER_YEAR), 18)) * poolShare
+        if (stakedValueUsd > 0 && eonPrice > 0) {
+          const yearlyEmissions =
+            Number(formatUnits(eonPerSecond * BigInt(SECONDS_PER_YEAR), 18)) * poolShare
           const yearlyValue = yearlyEmissions * eonPrice
-          const stakedValue = Number(formatUnits(totalStaked, lpDecimals)) * 2 // Simplified TVL estimate
-          if (stakedValue > 0) {
-            aprEstimate = yearlyValue / stakedValue
-          }
+          aprEstimate = yearlyValue / stakedValueUsd
         }
 
         poolsData.push({
@@ -268,6 +300,8 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
           eonPerSecond,
           poolShare,
           aprEstimate,
+          lpPriceUsd,
+          tvlUsd: stakedValueUsd,
         })
       }
 
