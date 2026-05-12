@@ -152,7 +152,11 @@ export function useSwapSubmit() {
           gasToUse = maxAllowed;
         }
       } catch {
-        // If estimate failed, fall back to server gas if present, otherwise abort.
+        // API-built transactions must remain locally estimable; otherwise the
+        // frontend cannot safely verify the calldata against current state.
+        if (built.source === "api") {
+          throw new Error("Unable to estimate API-built swap gas; aborting.");
+        }
         if (built.gas && built.gas !== "0") {
           gasToUse = BigInt(built.gas);
         } else {

@@ -35,11 +35,15 @@ export function eonAmmClientHeaders(): HeadersInit {
 }
 
 export function pickRouter(chainId: number, fromQuote?: string): Address {
+  const fb = EON_AMM_ROUTER_FALLBACK[chainId]
   const q = fromQuote?.trim()
   if (q?.startsWith('0x') && q.length >= 42) {
-    return q as Address
+    const quoted = getAddress(q)
+    if (!fb || quoted.toLowerCase() !== fb.toLowerCase()) {
+      throw new Error('Eon AMM quote returned an unrecognized router address.')
+    }
+    return quoted
   }
-  const fb = EON_AMM_ROUTER_FALLBACK[chainId]
   if (fb) return fb
   throw new Error('Eon AMM quote did not include routerAddress and no fallback is configured.')
 }

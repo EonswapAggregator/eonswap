@@ -417,6 +417,7 @@ export async function buildEonAmmSwapFromRouter(params: EonAmmBuildParams): Prom
       data,
       transactionValue,
       gas: ((gasEstimate * 12n) / 10n).toString(),
+      source: 'local',
     }
   }
 
@@ -456,5 +457,6 @@ export async function buildEonAmmSwapFromRouter(params: EonAmmBuildParams): Prom
     data,
     transactionValue,
     gas: ((gasEstimate * 12n) / 10n).toString(),
+    source: 'local',
   }
 }

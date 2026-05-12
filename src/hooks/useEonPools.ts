@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { erc20Abi, formatUnits, type Address } from 'viem'
 import { useAccount, usePublicClient } from 'wagmi'
 
@@ -7,6 +7,7 @@ import { eonAmmFactoryAbi, eonAmmPairAbi } from '../lib/amm/abis'
 import type { EonAmmPool, EonAmmUserPosition } from '../lib/amm/poolTypes'
 import { tokensForChain, type Token } from '../lib/tokens'
 import { fetchSimplePricesUsd, coingeckoIdForToken } from '../lib/coingecko'
+import { useEonAmmRealtimeRefresh } from './useEonRealtimeEvents'
 
 const POLL_INTERVAL_MS = 30_000
 const MAX_PAIRS_TO_FETCH = 50
@@ -265,6 +266,17 @@ export function useEonPools(chainId: number): UseEonPoolsResult {
     }, POLL_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [fetchPools])
+
+  const pairAddresses = useMemo(
+    () => pools.map((pool) => pool.address),
+    [pools],
+  )
+
+  useEonAmmRealtimeRefresh({
+    chainId,
+    pairAddresses,
+    onRefresh: fetchPools,
+  })
 
   return {
     pools,

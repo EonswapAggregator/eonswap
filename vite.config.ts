@@ -5,6 +5,12 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const relayTarget =
     env.VITE_MONITOR_RELAY_URL?.trim().replace(/\/$/u, "") ?? "";
+  const alchemyKey = env.VITE_ALCHEMY_API_KEY?.trim() ?? "";
+  const baseRpcTarget =
+    env.VITE_BASE_RPC_URL?.trim().replace(/\/$/u, "") ||
+    (alchemyKey
+      ? `https://base-mainnet.g.alchemy.com/v2/${alchemyKey}`
+      : "https://mainnet.base.org");
   const relayDevProxy =
     mode === "development" && /^https?:\/\//i.test(relayTarget)
       ? relayTarget
@@ -26,6 +32,12 @@ export default defineConfig(({ mode }) => {
               },
             }
           : {}),
+        "/__base-rpc": {
+          target: baseRpcTarget,
+          changeOrigin: true,
+          secure: true,
+          rewrite: () => "/",
+        },
         // Browser → Etherscan V2 (avoids CORS during local dev)
         "/api/etherscan": {
           target: "https://api.etherscan.io",

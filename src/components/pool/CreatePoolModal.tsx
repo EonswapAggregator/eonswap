@@ -11,7 +11,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { formatUnits, parseUnits, type Address, maxUint256 } from 'viem'
+import { formatUnits, parseUnits, type Address } from 'viem'
 import { useAccount, useBalance, usePublicClient } from 'wagmi'
 
 import { useEonLiquidity } from '../../hooks/useEonLiquidity'
@@ -242,7 +242,7 @@ export function CreatePoolModal({ chainId, onClose, onSuccess }: CreatePoolModal
   const handleApproveA = async () => {
     if (!routerAddress || !tokenA) return
     setApproving0(true)
-    await approveToken(tokenA.address as Address, routerAddress, maxUint256)
+    await approveToken(tokenA.address as Address, routerAddress, parsedAmountA)
     setNeedsApproval0(false)
     setApproving0(false)
   }
@@ -250,7 +250,7 @@ export function CreatePoolModal({ chainId, onClose, onSuccess }: CreatePoolModal
   const handleApproveB = async () => {
     if (!routerAddress || !tokenB) return
     setApproving1(true)
-    await approveToken(tokenB.address as Address, routerAddress, maxUint256)
+    await approveToken(tokenB.address as Address, routerAddress, parsedAmountB)
     setNeedsApproval1(false)
     setApproving1(false)
   }

@@ -13,7 +13,7 @@ import {
   Check,
 } from 'lucide-react'
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { formatUnits, parseUnits, type Address, maxUint256 } from 'viem'
+import { formatUnits, parseUnits, type Address } from 'viem'
 import { useAccount, useBalance } from 'wagmi'
 import { base } from 'viem/chains'
 
@@ -348,7 +348,7 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
   const handleApprove0 = async () => {
     if (!routerAddress) return
     setApproving0(true)
-    await approveToken(pool.token0, routerAddress, maxUint256)
+    await approveToken(pool.token0, routerAddress, parsedAmount0)
     setNeedsApproval0(false)
     setApproving0(false)
   }
@@ -356,7 +356,7 @@ function AddLiquidityModal({ pool, chainId, onClose, onSuccess }: AddLiquidityMo
   const handleApprove1 = async () => {
     if (!routerAddress) return
     setApproving1(true)
-    await approveToken(pool.token1, routerAddress, maxUint256)
+    await approveToken(pool.token1, routerAddress, parsedAmount1)
     setNeedsApproval1(false)
     setApproving1(false)
   }
@@ -702,7 +702,7 @@ function RemoveLiquidityModal({
 
   const handleApproveLP = async () => {
     setApproving(true)
-    await approveLP(pool.address, maxUint256)
+    await approveLP(pool.address, liquidityToRemove)
     setNeedsApproval(false)
     setApproving(false)
   }

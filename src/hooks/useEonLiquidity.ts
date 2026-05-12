@@ -3,7 +3,6 @@ import {
   erc20Abi,
   type Address,
   type Hash,
-  maxUint256,
 } from 'viem'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 
@@ -90,7 +89,7 @@ export function useEonLiquidity(chainId: number): UseEonLiquidityResult {
           address: token,
           abi: erc20Abi,
           functionName: 'approve',
-          args: [spender, amount > 0 ? amount : maxUint256],
+          args: [spender, amount],
         })
 
         await publicClient.waitForTransactionReceipt({ hash })

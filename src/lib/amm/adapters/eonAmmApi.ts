@@ -1,11 +1,136 @@
+import { decodeFunctionData, getAddress, type Address } from 'viem'
+
 import { eonAmmApiBaseUrl, eonAmmClientHeaders, EON_AMM_TIMEOUT_MS, pickRouter } from '../config'
+import { routePath } from '../pathing'
 import type { EonAmmBuildParams, EonAmmBuildResult, EonAmmQuote, EonAmmQuoteParams } from '../types'
+import { isNativeToken } from '../../tokens'
+
+const API_SWAP_ABI = [
+  {
+    name: 'swapExactETHForTokensSupportingFeeOnTransferTokens',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'amountOutMin', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'swapExactTokensForETHSupportingFeeOnTransferTokens',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'amountIn', type: 'uint256' },
+      { name: 'amountOutMin', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'swapExactTokensForTokensSupportingFeeOnTransferTokens',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'amountIn', type: 'uint256' },
+      { name: 'amountOutMin', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+] as const
 
 function unwrapData<T>(json: unknown): T {
   if (json && typeof json === 'object' && 'data' in json) {
     return (json as { data: T }).data
   }
   return json as T
+}
+
+function sameAddress(a: string, b: string): boolean {
+  return getAddress(a).toLowerCase() === getAddress(b).toLowerCase()
+}
+
+function assertSamePath(actual: readonly Address[], expected: readonly Address[]) {
+  if (actual.length !== expected.length) {
+    throw new Error('Eon AMM API calldata path does not match the quoted route.')
+  }
+  for (let i = 0; i < expected.length; i += 1) {
+    if (!sameAddress(actual[i]!, expected[i]!)) {
+      throw new Error('Eon AMM API calldata path does not match the quoted route.')
+    }
+  }
+}
+
+function validateApiSwapCalldata(
+  params: EonAmmBuildParams,
+  data: `0x${string}`,
+  transactionValue: string,
+): void {
+  const decoded = decodeFunctionData({
+    abi: API_SWAP_ABI,
+    data,
+  })
+  const expectedPath = routePath(
+    params.quote.tokenIn,
+    params.quote.tokenOut,
+    params.chainId,
+  )
+  const expectedAmountIn = BigInt(params.quote.amountIn || '0')
+  const quotedOut = BigInt(params.quote.amountOut || '0')
+  const minAllowedOut =
+    (quotedOut * BigInt(10_000 - params.slippageToleranceBps)) / 10_000n
+
+  if (decoded.functionName === 'swapExactETHForTokensSupportingFeeOnTransferTokens') {
+    const [amountOutMin, path, to] = decoded.args
+    if (!isNativeToken(params.quote.tokenIn)) {
+      throw new Error('Eon AMM API calldata uses native swap for a non-native input.')
+    }
+    if (BigInt(transactionValue || '0') !== expectedAmountIn) {
+      throw new Error('Eon AMM API calldata value does not match the quote.')
+    }
+    assertSamePath(path, expectedPath)
+    if (!sameAddress(to, params.recipient)) {
+      throw new Error('Eon AMM API calldata recipient does not match the wallet.')
+    }
+    if (amountOutMin < minAllowedOut) {
+      throw new Error('Eon AMM API calldata amountOutMin is below slippage tolerance.')
+    }
+    return
+  }
+
+  const [amountIn, amountOutMin, path, to] = decoded.args
+  if (BigInt(transactionValue || '0') !== 0n) {
+    throw new Error('Eon AMM API calldata includes unexpected native value.')
+  }
+  if (
+    decoded.functionName === 'swapExactTokensForETHSupportingFeeOnTransferTokens' &&
+    !isNativeToken(params.quote.tokenOut)
+  ) {
+    throw new Error('Eon AMM API calldata uses native output for a non-native route.')
+  }
+  if (
+    decoded.functionName === 'swapExactTokensForTokensSupportingFeeOnTransferTokens' &&
+    (isNativeToken(params.quote.tokenIn) || isNativeToken(params.quote.tokenOut))
+  ) {
+    throw new Error('Eon AMM API calldata uses token swap for a native route.')
+  }
+  assertSamePath(path, expectedPath)
+  if (amountIn !== expectedAmountIn) {
+    throw new Error('Eon AMM API calldata amountIn does not match the quote.')
+  }
+  if (!sameAddress(to, params.recipient)) {
+    throw new Error('Eon AMM API calldata recipient does not match the wallet.')
+  }
+  if (amountOutMin < minAllowedOut) {
+    throw new Error('Eon AMM API calldata amountOutMin is below slippage tolerance.')
+  }
 }
 
 export async function fetchEonAmmQuoteFromApi(params: EonAmmQuoteParams): Promise<EonAmmQuote> {
@@ -126,11 +251,16 @@ export async function buildEonAmmSwapFromApi(params: EonAmmBuildParams): Promise
     const data = row.data?.trim()
     if (!data?.startsWith('0x')) throw new Error('Eon AMM build response missing calldata.')
 
+    const routerAddress = pickRouter(params.chainId, row.routerAddress ?? params.quote.routerAddress)
+    const transactionValue = (row.transactionValue ?? row.value ?? '0').trim() || '0'
+    validateApiSwapCalldata(params, data as `0x${string}`, transactionValue)
+
     return {
-      routerAddress: pickRouter(params.chainId, row.routerAddress ?? params.quote.routerAddress),
+      routerAddress,
       data: data as `0x${string}`,
-      transactionValue: (row.transactionValue ?? row.value ?? '0').trim() || '0',
+      transactionValue,
       gas: (row.gas ?? '0').trim() || '0',
+      source: 'api',
     }
   } finally {
     window.clearTimeout(timer)

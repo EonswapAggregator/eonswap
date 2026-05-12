@@ -2,10 +2,16 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowRight, Copy, Loader2, RefreshCw, Trophy, Users } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { usePublicClient } from 'wagmi'
 import {
   fetchRelayLeaderboard,
   type LeaderboardEntry,
 } from '../lib/activityRelay'
+import {
+  fetchBlockchainSwapLeaderboard,
+  fetchEonAmmPairAddresses,
+} from '../lib/blockchainActivity'
+import { EON_BASE_MAINNET } from '../lib/eonBaseMainnet'
 import {
   LEADERBOARD_SKELETON_ROWS,
   formatLeaderboardAddressShort,
@@ -22,6 +28,7 @@ import {
   leaderboardTrClass,
 } from '../lib/leaderboard'
 import { getMonitorRelayBaseUrl } from '../lib/monitorRelayUrl'
+import { useEonAmmSwapRealtime } from '../hooks/useEonRealtimeEvents'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -41,24 +48,58 @@ export function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [sourceLabel, setSourceLabel] = useState('On-chain smart contract events')
+  const [watchedPairAddresses, setWatchedPairAddresses] = useState<
+    `0x${string}`[]
+  >([])
+  const publicClient = usePublicClient({ chainId: EON_BASE_MAINNET.chainId })
   const relayConfigured = Boolean(getMonitorRelayBaseUrl())
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const res = await fetchRelayLeaderboard(50)
-    if (!res.ok) {
+
+    if (publicClient) {
+      const pairAddresses = await fetchEonAmmPairAddresses(publicClient)
+      setWatchedPairAddresses(pairAddresses)
+      const onChain = await fetchBlockchainSwapLeaderboard(publicClient, 50)
+      if (onChain.ok && onChain.entries.length > 0) {
+        setEntries(onChain.entries)
+        setSourceLabel('On-chain smart contract events')
+        setLoading(false)
+        return
+      }
+      if (!relayConfigured) {
+        setEntries([])
+        setError(onChain.ok ? null : onChain.error)
+        setSourceLabel('On-chain smart contract events')
+        setLoading(false)
+        return
+      }
+    }
+
+    const relay = await fetchRelayLeaderboard(50)
+    if (!relay.ok) {
       setEntries([])
-      setError(res.error)
+      setError(relay.error)
     } else {
-      setEntries(res.entries)
+      setEntries(relay.entries)
+      setSourceLabel('Monitoring relay fallback')
     }
     setLoading(false)
-  }, [])
+  }, [publicClient, relayConfigured])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  useEonAmmSwapRealtime({
+    chainId: EON_BASE_MAINNET.chainId,
+    pairAddresses: watchedPairAddresses,
+    onRefresh: () => {
+      void load()
+    },
+  })
 
   const copy = (addr: string) => {
     void navigator.clipboard.writeText(addr)
@@ -132,7 +173,7 @@ export function LeaderboardPage() {
             className="text-balance text-[clamp(1.75rem,8vw,2.75rem)] font-semibold leading-[1.15] tracking-tight text-white"
           >
             <span className="block">Top traders,</span>
-            <span className="mt-1 block text-uni-pink">ranked by volume.</span>
+            <span className="mt-1 block text-uni-pink">ranked by swaps.</span>
           </motion.h1>
 
           <motion.p
@@ -140,8 +181,8 @@ export function LeaderboardPage() {
             variants={fadeUp}
             className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-neutral-400 md:text-lg"
           >
-            Ranks reflect swaps and bridges that fully complete. 
-            Climb the leaderboard by trading more on EonSwap.
+            Ranks reflect wallets found in Eon AMM swap events. Climb the
+            leaderboard by completing more swaps on EonSwap.
           </motion.p>
 
           <motion.div
@@ -218,7 +259,7 @@ export function LeaderboardPage() {
           <div className="mb-6">
             <h2 className="text-xl font-semibold text-white">Live Rankings</h2>
             <p className="mt-1 text-pretty text-sm text-neutral-500">
-              Higher rank means more swaps and bridges that actually finished.
+              Higher rank means more completed swaps found on-chain.
             </p>
           </div>
 
@@ -227,11 +268,12 @@ export function LeaderboardPage() {
               <div className="min-w-0 flex-1">
                 <p className={leaderboardToolbarTitleClass}>Results</p>
                 <p className={`mt-0.5 ${leaderboardToolbarMetaClass}`}>
-                  {relayConfigured
+                  {loading ? 'Loading...' : sourceLabel}
+                  {/*
                     ? loading
                       ? 'Loading…'
                       : 'Settled trades only'
-                    : 'Service not configured'}
+                    */}
                 </p>
               </div>
               <button
@@ -359,8 +401,8 @@ export function LeaderboardPage() {
                           colSpan={4}
                           className="px-5 py-12 text-center text-sm text-neutral-500 md:px-6"
                         >
-                          No results yet. Confirmed swaps and bridges will
-                          appear here when the service is available.
+                          No results yet. Wallets will appear here after
+                          confirmed swaps are found on-chain.
                         </td>
                       </tr>
                     ) : null}

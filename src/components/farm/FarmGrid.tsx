@@ -10,7 +10,7 @@ import {
   AlertTriangle,
   Sparkles,
 } from 'lucide-react'
-import { formatUnits, parseUnits, type Address, maxUint256 } from 'viem'
+import { formatUnits, parseUnits, type Address } from 'viem'
 import { useAccount } from 'wagmi'
 
 import type { EonFarmPool, EonFarmUserPosition } from '../../lib/farm/types'
@@ -159,12 +159,12 @@ export function FarmCard({
   const handleApprove = useCallback(async () => {
     setActionType('approve')
     try {
-      await onApprove(pool.lpToken, maxUint256)
+      await onApprove(pool.lpToken, depositAmountParsed)
       await onRefreshAllowance()
     } finally {
       setActionType(null)
     }
-  }, [onApprove, pool.lpToken, onRefreshAllowance])
+  }, [depositAmountParsed, onApprove, pool.lpToken, onRefreshAllowance])
 
   const handleMaxDeposit = useCallback(() => {
     setDepositAmount(formatUnits(lpBalance, pool.lpDecimals))

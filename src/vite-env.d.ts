@@ -8,6 +8,7 @@
 interface ImportMetaEnv {
   readonly VITE_WALLETCONNECT_PROJECT_ID: string
   readonly VITE_ALCHEMY_API_KEY?: string
+  readonly VITE_BASE_RPC_URL?: string
   readonly VITE_SITE_DOMAIN?: string
   readonly VITE_MONITOR_RELAY_URL?: string
   /** Base URL for Eon AMM routing (GET /v1/quote, POST /v1/route/build). 

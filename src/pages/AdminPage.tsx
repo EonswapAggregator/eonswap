@@ -55,8 +55,6 @@ const ADMIN_WALLETS = [
   "0x114629C43Fa2528E5295b2982765733Acf3aCadA",
   "0xfa9bac9098c235b56d9ec0d9527d4ba0392e4b3e",
 ].map((a) => a.toLowerCase());
-const RELAY_SECRET_KEY = "eonswap_relay_admin_secret";
-
 // Admin-specific ABI for airdrop contract
 const AIRDROP_ADMIN_ABI = [
   {
@@ -1069,11 +1067,7 @@ function TransactionsTab() {
     "idle",
   );
   const [relayMessage, setRelayMessage] = useState("");
-  const [adminSecretDraft, setAdminSecretDraft] = useState(() =>
-    typeof sessionStorage !== "undefined"
-      ? (sessionStorage.getItem(RELAY_SECRET_KEY) ?? "")
-      : "",
-  );
+  const [adminSecretDraft, setAdminSecretDraft] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | TxStatus>("all");
   const [periodFilter, setPeriodFilter] = useState<"all" | "custom">("custom");
   const [periodMonth, setPeriodMonth] = useState<number>(
@@ -1088,9 +1082,8 @@ function TransactionsTab() {
   const reportHistory = dataSource === "relay" ? relayRows : history;
 
   const saveRelaySecret = () => {
-    sessionStorage.setItem(RELAY_SECRET_KEY, adminSecretDraft.trim());
-    setRelayMessage("Admin key saved!");
-    toast.success("Relay key saved");
+    setRelayMessage("Admin key is kept in memory for this tab.");
+    toast.success("Relay key ready");
   };
 
   const loadFromRelay = async () => {
@@ -1100,9 +1093,7 @@ function TransactionsTab() {
       setRelayMessage("Set VITE_MONITOR_RELAY_URL in the app environment.");
       return;
     }
-    const secret =
-      sessionStorage.getItem(RELAY_SECRET_KEY)?.trim() ||
-      adminSecretDraft.trim();
+    const secret = adminSecretDraft.trim();
     if (!secret) {
       setRelayStatus("error");
       setRelayMessage("Enter the relay admin secret.");
@@ -2007,7 +1998,7 @@ export function AdminPage() {
   >("airdrop");
 
   const e2eBypassEnabled =
-    import.meta.env.VITE_E2E_ADMIN_BYPASS === "1" || import.meta.env.DEV;
+    import.meta.env.DEV && import.meta.env.VITE_E2E_ADMIN_BYPASS === "1";
   const e2eBypass = e2eBypassEnabled && searchParams.get("e2eAdmin") === "1";
   const authorized =
     e2eBypass ||

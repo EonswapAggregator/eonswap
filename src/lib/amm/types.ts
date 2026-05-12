@@ -21,6 +21,7 @@ export type EonAmmBuildResult = {
   data: `0x${string}`
   transactionValue: string
   gas: string
+  source?: 'api' | 'local'
 }
 
 export type EonAmmQuoteParams = {

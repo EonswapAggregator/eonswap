@@ -8,6 +8,7 @@ import { eonAmmPairAbi } from '../lib/amm/abis'
 import type { EonFarmPool, EonFarmUserPosition, MasterChefState } from '../lib/farm/types'
 import { tokensForChain, type Token } from '../lib/tokens'
 import { fetchSimplePricesUsd, coingeckoIdForToken } from '../lib/coingecko'
+import { useEonFarmRealtimeRefresh } from './useEonRealtimeEvents'
 
 const POLL_INTERVAL_MS = 30_000
 const SECONDS_PER_YEAR = 31_536_000
@@ -338,6 +339,11 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
     }, POLL_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [fetchFarms])
+
+  useEonFarmRealtimeRefresh({
+    chainId,
+    onRefresh: fetchFarms,
+  })
 
   // Action: Deposit LP tokens
   const deposit = useCallback(

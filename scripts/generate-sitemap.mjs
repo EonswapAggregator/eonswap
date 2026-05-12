@@ -1,8 +1,9 @@
 import { readdir, stat, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const SITE_ORIGIN = 'https://eonswap.us'
-const ROOT_DIR = new URL('../', import.meta.url).pathname
+const ROOT_DIR = fileURLToPath(new URL('../', import.meta.url))
 const DOCS_DIR = join(ROOT_DIR, 'documentation', 'docs')
 const OUTPUT_FILE = join(ROOT_DIR, 'public', 'sitemap.xml')
 

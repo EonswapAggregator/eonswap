@@ -18,12 +18,15 @@ import { Link } from "react-router-dom";
 import { ActivityLiveBanner } from "../components/ActivityLiveBanner";
 import { useEonSwapStore } from "../store/useEonSwapStore";
 import { explorerTxUrl } from "../lib/chains";
-import { usePublicClient } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import {
   fetchBlockchainSwapActivities,
+  fetchEonAmmPairAddresses,
   formatSwapActivity,
   type BlockchainSwapActivity,
 } from "../lib/blockchainActivity";
+import { EON_BASE_MAINNET } from "../lib/eonBaseMainnet";
+import { useEonAmmSwapRealtime } from "../hooks/useEonRealtimeEvents";
 
 function formatTimeAgo(timestamp: number): string {
   const now = Date.now();
@@ -57,13 +60,22 @@ export function ActivityPage() {
   const prefersReducedMotion = useReducedMotion();
   const history = useEonSwapStore((s) => s.history);
   const clearHistory = useEonSwapStore((s) => s.clearHistory);
+  const { address } = useAccount();
   const [viewMode, setViewMode] = useState<"my" | "global">("global");
   const [globalActivities, setGlobalActivities] = useState<
     BlockchainSwapActivity[]
   >([]);
+  const [myOnChainActivities, setMyOnChainActivities] = useState<
+    BlockchainSwapActivity[]
+  >([]);
+  const [watchedPairAddresses, setWatchedPairAddresses] = useState<
+    `0x${string}`[]
+  >([]);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
-  const publicClient = usePublicClient();
+  const [myOnChainLoading, setMyOnChainLoading] = useState(false);
+  const [myOnChainError, setMyOnChainError] = useState<string | null>(null);
+  const publicClient = usePublicClient({ chainId: EON_BASE_MAINNET.chainId });
 
   const loadGlobalActivities = useCallback(async () => {
     if (!publicClient) {
@@ -72,6 +84,8 @@ export function ActivityPage() {
     }
     setGlobalLoading(true);
     setGlobalError(null);
+    const pairAddresses = await fetchEonAmmPairAddresses(publicClient);
+    setWatchedPairAddresses(pairAddresses);
     const result = await fetchBlockchainSwapActivities(publicClient, 100);
     if (result.ok) {
       setGlobalActivities(result.activities);
@@ -81,24 +95,57 @@ export function ActivityPage() {
     setGlobalLoading(false);
   }, [publicClient]);
 
+  const loadMyOnChainActivities = useCallback(async () => {
+    if (!address) {
+      setMyOnChainActivities([]);
+      setMyOnChainError(null);
+      return;
+    }
+    if (!publicClient) {
+      setMyOnChainError("Client not connected");
+      return;
+    }
+
+    setMyOnChainLoading(true);
+    setMyOnChainError(null);
+    const pairAddresses = await fetchEonAmmPairAddresses(publicClient);
+    setWatchedPairAddresses(pairAddresses);
+    const result = await fetchBlockchainSwapActivities(publicClient, 100, {
+      walletAddress: address,
+    });
+    if (result.ok) {
+      setMyOnChainActivities(result.activities);
+    } else {
+      setMyOnChainError(result.error);
+    }
+    setMyOnChainLoading(false);
+  }, [address, publicClient]);
+
   useEffect(() => {
     if (viewMode === "global") {
       loadGlobalActivities();
+    } else {
+      loadMyOnChainActivities();
     }
-  }, [viewMode, loadGlobalActivities]);
+  }, [viewMode, loadGlobalActivities, loadMyOnChainActivities]);
+
+  useEonAmmSwapRealtime({
+    chainId: EON_BASE_MAINNET.chainId,
+    pairAddresses: watchedPairAddresses,
+    onRefresh: () => {
+      if (viewMode === "global") {
+        void loadGlobalActivities();
+      } else {
+        void loadMyOnChainActivities();
+      }
+    },
+  });
 
   const stats = useMemo(() => {
     const success = history.filter((h) => h.status === "success").length;
     const pending = history.filter((h) => h.status === "pending").length;
     const failed = history.filter((h) => h.status === "failed").length;
     return { total: history.length, success, pending, failed };
-  }, [history]);
-
-  // Filter only swap activities from website for "My Activity" table
-  const mySwaps = useMemo(() => {
-    return history
-      .filter((h) => h.kind === "swap")
-      .sort((a, b) => b.createdAt - a.createdAt);
   }, [history]);
 
   const statCards = [
@@ -208,8 +255,8 @@ export function ActivityPage() {
             variants={fadeUp}
             className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-neutral-400 md:text-lg"
           >
-            Track all your EonSwap transactions from this session. View status,
-            details, and explore on-chain.
+            Track EonSwap activity from smart contract events. View historical
+            swaps, realtime updates, and verified block explorer links.
           </motion.p>
 
           <motion.div
@@ -339,7 +386,7 @@ export function ActivityPage() {
               <div>
                 <h2 className="text-xl font-bold text-white">Global Swaps</h2>
                 <p className="text-sm text-neutral-500">
-                  {globalActivities.length} swaps · realtime from blockchain
+                  {globalActivities.length} swaps - realtime from blockchain
                 </p>
               </div>
             </div>
@@ -351,7 +398,7 @@ export function ActivityPage() {
               <div>
                 <h2 className="text-xl font-bold text-white">My Swaps</h2>
                 <p className="text-sm text-neutral-500">
-                  {stats.total} swaps · activity from this website
+                  {myOnChainActivities.length} swaps - from your wallet on-chain
                 </p>
               </div>
             </div>
@@ -361,11 +408,20 @@ export function ActivityPage() {
             <ActivityLiveBanner
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              stats={stats}
+              stats={{
+                total:
+                  viewMode === "global"
+                    ? globalActivities.length
+                    : myOnChainActivities.length,
+              }}
               onRefresh={
-                viewMode === "global" ? loadGlobalActivities : undefined
+                viewMode === "global"
+                  ? loadGlobalActivities
+                  : loadMyOnChainActivities
               }
-              refreshLoading={globalLoading}
+              refreshLoading={
+                viewMode === "global" ? globalLoading : myOnChainLoading
+              }
             />
           </div>
 
@@ -404,8 +460,8 @@ export function ActivityPage() {
                       No recent swaps
                     </h3>
                     <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
-                      No swap transactions found in the last ~3 hours. Be the
-                      first to trade!
+                      No indexed swap transactions found yet. Try refreshing in
+                      a moment after a new trade confirms.
                     </p>
                   </div>
                 )}
@@ -437,7 +493,7 @@ export function ActivityPage() {
                             const timeAgo = formatTimeAgo(activity.timestamp);
                             const shortAddr = activity.from
                               ? `${activity.from.slice(0, 6)}...${activity.from.slice(-4)}`
-                              : "—";
+                              : "-";
                             const txUrl = explorerTxUrl(8453, activity.txHash);
                             const summary = formatSwapActivity(activity);
 
@@ -467,7 +523,7 @@ export function ActivityPage() {
                                       <ExternalLink className="h-3.5 w-3.5" />
                                     </a>
                                   ) : (
-                                    <span className="text-neutral-600">—</span>
+                                    <span className="text-neutral-600">-</span>
                                   )}
                                 </td>
                               </tr>
@@ -484,118 +540,129 @@ export function ActivityPage() {
           {/* My Activity View */}
           {viewMode === "my" && (
             <>
-              {/* Empty State */}
-              {mySwaps.length === 0 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.4 }}
-                  className="mb-8 overflow-hidden rounded-3xl border border-dashed border-uni-border bg-uni-surface/50 p-10 text-center"
-                >
-                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-uni-surface-2">
-                    <History className="h-8 w-8 text-neutral-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-white">
-                    No swaps yet
-                  </h3>
-                  <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
-                    Your swap history will appear here once you make your first
-                    trade on this website. Get started now!
-                  </p>
-                  <div className="mt-6">
-                    <Link
-                      to="/swap"
-                      className="inline-flex items-center gap-2 rounded-xl bg-uni-pink px-6 py-3 text-sm font-semibold text-white shadow-glow transition hover:bg-uni-pink-light"
-                    >
-                      <Zap className="h-4 w-4" />
-                      Start Swapping
-                    </Link>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* My Swaps Table */}
-              {mySwaps.length > 0 && (
-                <div className="overflow-hidden rounded-2xl border border-uni-border bg-uni-surface">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-uni-border bg-uni-surface-2">
-                          <th className="px-4 py-3 font-semibold text-neutral-400">
-                            Time
-                          </th>
-                          <th className="px-4 py-3 font-semibold text-neutral-400">
-                            Action
-                          </th>
-                          <th className="px-4 py-3 font-semibold text-neutral-400">
-                            Status
-                          </th>
-                          <th className="px-4 py-3 font-semibold text-neutral-400 text-right">
-                            Tx
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mySwaps.map((swap) => {
-                          const timeAgo = formatTimeAgo(swap.createdAt);
-                          const txUrl = swap.txHash
-                            ? explorerTxUrl(swap.chainId, swap.txHash)
-                            : null;
-
-                          return (
-                            <tr
-                              key={swap.id}
-                              className="border-b border-uni-border/50 transition hover:bg-uni-surface-2"
-                            >
-                              <td className="whitespace-nowrap px-4 py-3 text-neutral-500">
-                                {timeAgo}
-                              </td>
-                              <td className="px-4 py-3 text-white">
-                                {swap.summary}
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3">
-                                {swap.status === "success" && (
-                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/12 px-2.5 py-1 text-xs font-medium text-emerald-200 ring-1 ring-emerald-500/20">
-                                    <CheckCircle2 className="h-3.5 w-3.5" />
-                                    Success
-                                  </span>
-                                )}
-                                {swap.status === "pending" && (
-                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-uni-pink/12 px-2.5 py-1 text-xs font-medium text-uni-pink ring-1 ring-uni-pink/25">
-                                    <Clock className="h-3.5 w-3.5" />
-                                    Pending
-                                  </span>
-                                )}
-                                {swap.status === "failed" && (
-                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/12 px-2.5 py-1 text-xs font-medium text-red-200 ring-1 ring-red-500/20">
-                                    <XCircle className="h-3.5 w-3.5" />
-                                    Failed
-                                  </span>
-                                )}
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3 text-right">
-                                {txUrl ? (
-                                  <a
-                                    href={txUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-uni-pink transition hover:text-uni-pink-light"
-                                  >
-                                    View
-                                    <ExternalLink className="h-3.5 w-3.5" />
-                                  </a>
-                                ) : (
-                                  <span className="text-neutral-600">—</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+              {myOnChainLoading && (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-uni-pink" />
                 </div>
               )}
+
+              {myOnChainError && !myOnChainLoading && (
+                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-center">
+                  <XCircle className="mx-auto h-8 w-8 text-rose-400" />
+                  <p className="mt-2 text-sm text-rose-300">
+                    {myOnChainError}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={loadMyOnChainActivities}
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl bg-rose-500/20 px-4 py-2 text-sm font-medium text-rose-300 transition hover:bg-rose-500/30"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {!myOnChainLoading &&
+                !myOnChainError &&
+                myOnChainActivities.length === 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4 }}
+                    className="mb-8 overflow-hidden rounded-3xl border border-dashed border-uni-border bg-uni-surface/50 p-10 text-center"
+                  >
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-uni-surface-2">
+                      <History className="h-8 w-8 text-neutral-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white">
+                      No swaps yet
+                    </h3>
+                    <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
+                      {address
+                        ? "No on-chain swaps were found for this wallet in the scanned smart contract history."
+                        : "Connect your wallet to load swap history from smart contract events."}
+                    </p>
+                    <div className="mt-6">
+                      <Link
+                        to="/swap"
+                        className="inline-flex items-center gap-2 rounded-xl bg-uni-pink px-6 py-3 text-sm font-semibold text-white shadow-glow transition hover:bg-uni-pink-light"
+                      >
+                        <Zap className="h-4 w-4" />
+                        Start Swapping
+                      </Link>
+                    </div>
+                  </motion.div>
+                )}
+
+              {!myOnChainLoading &&
+                !myOnChainError &&
+                myOnChainActivities.length > 0 && (
+                  <div className="overflow-hidden rounded-2xl border border-uni-border bg-uni-surface">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-uni-border bg-uni-surface-2">
+                            <th className="px-4 py-3 font-semibold text-neutral-400">
+                              Time
+                            </th>
+                            <th className="px-4 py-3 font-semibold text-neutral-400">
+                              Action
+                            </th>
+                            <th className="px-4 py-3 font-semibold text-neutral-400">
+                              Status
+                            </th>
+                            <th className="px-4 py-3 font-semibold text-neutral-400 text-right">
+                              Tx
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {myOnChainActivities.map((activity) => {
+                            const timeAgo = formatTimeAgo(activity.timestamp);
+                            const txUrl = explorerTxUrl(8453, activity.txHash);
+                            const summary = formatSwapActivity(activity);
+
+                            return (
+                              <tr
+                                key={activity.id}
+                                className="border-b border-uni-border/50 transition hover:bg-uni-surface-2"
+                              >
+                                <td className="whitespace-nowrap px-4 py-3 text-neutral-500">
+                                  {timeAgo}
+                                </td>
+                                <td className="px-4 py-3 text-white">
+                                  {summary}
+                                </td>
+                                <td className="whitespace-nowrap px-4 py-3">
+                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/12 px-2.5 py-1 text-xs font-medium text-emerald-200 ring-1 ring-emerald-500/20">
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    On-chain
+                                  </span>
+                                </td>
+                                <td className="whitespace-nowrap px-4 py-3 text-right">
+                                  {txUrl ? (
+                                    <a
+                                      href={txUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-uni-pink transition hover:text-uni-pink-light"
+                                    >
+                                      View
+                                      <ExternalLink className="h-3.5 w-3.5" />
+                                    </a>
+                                  ) : (
+                                    <span className="text-neutral-600">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
             </>
           )}
         </motion.div>
@@ -603,3 +670,4 @@ export function ActivityPage() {
     </div>
   );
 }
+
