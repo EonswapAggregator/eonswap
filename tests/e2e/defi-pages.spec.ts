@@ -85,6 +85,7 @@ test.describe("Farm Page (/farm)", () => {
   test("refresh button works", async ({ page }) => {
     const refreshBtn = page.getByRole("button", { name: /refresh/i });
     await expect(refreshBtn).toBeVisible();
+    await expect(refreshBtn).toBeEnabled({ timeout: 5000 });
 
     // Click refresh should not crash
     await refreshBtn.click();

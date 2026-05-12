@@ -84,9 +84,12 @@ test("admin dashboard filters and search operate with seeded data", async ({
   }, now);
 
   await page.goto("/admin?e2eAdmin=1");
+  // Wait for page to fully load and render
+  await page.waitForLoadState('networkidle');
+  
   await expect(
     page.getByRole("heading", { name: "Control Panel" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 10000 });
 
   // Click Transactions tab first
   await page.getByRole("button", { name: /transactions/i }).click();

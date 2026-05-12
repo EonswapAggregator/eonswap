@@ -40,11 +40,13 @@ interface OverflowResult {
 async function gotoWithRetry(page: Page, path: string, maxRetries = 3): Promise<void> {
   for (let i = 0; i < maxRetries; i++) {
     try {
-      await page.goto(path, { waitUntil: 'networkidle', timeout: 15000 })
+      await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 20000 })
+      // Give page extra time to stabilize
+      await page.waitForTimeout(500)
       return
     } catch (e) {
       if (i === maxRetries - 1) throw e
-      await page.waitForTimeout(1000)
+      await page.waitForTimeout(1500)
     }
   }
 }
