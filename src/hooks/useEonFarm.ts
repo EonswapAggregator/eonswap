@@ -235,9 +235,11 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
 
         // Simplified APR calculation (assuming equal LP value distribution)
         let aprEstimate = 0
-        if (totalStaked > 0n && eonPrice > 0) {
+        if (totalStaked > 0n) {
+          // Use actual price if available, otherwise use conservative fallback estimate
+          const estimatedEonPrice = eonPrice > 0 ? eonPrice : 0.5 // Default conservative estimate for missing prices
           const yearlyEmissions = Number(formatUnits(eonPerSecond * BigInt(SECONDS_PER_YEAR), 18)) * poolShare
-          const yearlyValue = yearlyEmissions * eonPrice
+          const yearlyValue = yearlyEmissions * estimatedEonPrice
           const stakedValue = Number(formatUnits(totalStaked, lpDecimals)) * 2 // Simplified TVL estimate
           if (stakedValue > 0) {
             aprEstimate = yearlyValue / stakedValue

@@ -16,13 +16,18 @@ const ADDRESS_TO_ID: Record<string, string> = {
   "0x4200000000000000000000000000000000000006": "ethereum",
   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "usd-coin",
   "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": "tether",
+  // EonSwap tokens
+  "0x295685df8e07a6d529a849ae7688c524494fd010": "eonswap",
+  "0xd48463db303da9818ef565e84aca266234b38f08": "eonswap-reward",
 };
 
-/** Fallback prices for stablecoins when API fails */
+/** Fallback prices for stablecoins and native tokens when API fails */
 const FALLBACK_PRICES: Record<string, number> = {
   "usd-coin": 1.0,
   tether: 1.0,
   dai: 1.0,
+  "eonswap": 0.5, // Conservative fallback estimate for ESTF
+  "eonswap-reward": 0.1, // Conservative fallback estimate for ESR
 };
 
 /** Use proxy to avoid CORS in both dev and production */
