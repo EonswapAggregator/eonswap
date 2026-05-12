@@ -34,6 +34,7 @@ export const wagmiConfig = getDefaultConfig({
   projectId: projectId || "00000000000000000000000000000000",
   chains: [baseChain],
   ssr: false,
+  analytics: false,
   transports: {
     [base.id]: fallback(
       rpcUrls.map((url) => http(url)),
