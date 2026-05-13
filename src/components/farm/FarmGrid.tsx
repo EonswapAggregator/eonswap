@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import {
   Sprout,
   Loader2,
@@ -98,7 +99,11 @@ export function FarmCard({
 
   const stakedAmount = userPosition?.stakedAmount ?? 0n
   const pendingEon = userPosition?.pendingEon ?? 0n
-  const hasPosition = stakedAmount > 0n || pendingEon > 0n
+  const pendingExtraRewards = userPosition?.pendingExtraRewards ?? []
+  const hasPendingExtraRewards = pendingExtraRewards.some((reward) => reward.amount > 0n)
+  const hasPosition = stakedAmount > 0n || pendingEon > 0n || hasPendingExtraRewards
+  const extraRewardSymbols = pool.extraRewardTokens.map((reward) => reward.symbol).filter(Boolean)
+  const extraRewardLabel = extraRewardSymbols.length > 0 ? extraRewardSymbols.join(' + ') : 'extra'
 
   // Parse amounts
   const depositAmountParsed = depositAmount
@@ -168,19 +173,39 @@ export function FarmCard({
   }, [depositAmountParsed, onApprove, pool.lpToken, onRefreshAllowance])
 
   const handleMaxDeposit = useCallback(() => {
-    setDepositAmount(formatUnits(lpBalance, pool.lpDecimals))
+    flushSync(() => {
+      setDepositAmount(formatUnits(lpBalance, pool.lpDecimals))
+    })
   }, [lpBalance, pool.lpDecimals])
 
   const handleMaxWithdraw = useCallback(() => {
-    setWithdrawAmount(formatUnits(stakedAmount, pool.lpDecimals))
+    flushSync(() => {
+      setWithdrawAmount(formatUnits(stakedAmount, pool.lpDecimals))
+    })
   }, [stakedAmount, pool.lpDecimals])
+
+  const handleMaxDepositPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      handleMaxDeposit()
+    },
+    [handleMaxDeposit]
+  )
+
+  const handleMaxWithdrawPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      handleMaxWithdraw()
+    },
+    [handleMaxWithdraw]
+  )
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.45 }}
-      className="group relative overflow-visible rounded-3xl border border-uni-border bg-uni-surface shadow-uni-card transition-all duration-300 hover:border-uni-pink/30 hover:shadow-[0_0_30px_-10px_rgba(255,0,122,0.25)]"
+      className="group relative min-w-0 overflow-visible rounded-3xl border border-uni-border bg-uni-surface shadow-uni-card transition-all duration-300 hover:border-uni-pink/30 hover:shadow-[0_0_30px_-10px_rgba(255,0,122,0.25)]"
     >
       {/* Featured Badge - floating at top */}
       {isEonSwapPool(pool) && (
@@ -200,8 +225,8 @@ export function FarmCard({
 
       {/* Header */}
       <div className={`relative p-5 md:p-6 ${isEonSwapPool(pool) ? 'pt-7' : ''}`}>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
+        <div className="flex min-w-0 items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
             {/* Token pair icons */}
             <div className="relative">
               <div className="flex items-center -space-x-3">
@@ -226,8 +251,8 @@ export function FarmCard({
               </div>
             </div>
 
-            <div>
-              <h3 className="text-lg font-semibold text-white">
+            <div className="min-w-0">
+              <h3 className="truncate text-lg font-semibold text-white">
                 {pool.lpSymbol0}/{pool.lpSymbol1}
               </h3>
               <p className="text-xs text-neutral-500">Farm #{pool.pid} • Base</p>
@@ -235,7 +260,7 @@ export function FarmCard({
           </div>
 
           {/* APR Badge - inside card */}
-          <div className="text-right">
+          <div className="shrink-0 text-right">
             <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
               APR
             </p>
@@ -278,13 +303,29 @@ export function FarmCard({
               </span>
             </div>
             {pendingEon > 0n && (
-              <div className="mt-2 flex items-center justify-between text-xs">
-                <span className="text-neutral-400">Pending ESTF:</span>
+              <div className="mt-2 flex items-center justify-between gap-3 text-xs">
+                <span className="text-neutral-400">Pending {pool.rewardSymbol}:</span>
                 <span className="font-medium text-uni-pink">
-                  {formatTokenAmount(pendingEon, 18)} ESTF
+                  {formatTokenAmount(pendingEon, pool.rewardDecimals)} {pool.rewardSymbol}
                 </span>
               </div>
             )}
+            {pendingExtraRewards
+              .filter((reward) => reward.amount > 0n)
+              .map((reward) => (
+                <div key={reward.token} className="mt-2 flex items-center justify-between gap-3 text-xs">
+                  <span className="text-neutral-400">Pending {reward.symbol}:</span>
+                  <span className="min-w-0 truncate font-medium text-uni-purple">
+                    {formatTokenAmount(
+                      reward.amount,
+                      pool.extraRewardTokens.find(
+                        (extra) => extra.token.toLowerCase() === reward.token.toLowerCase(),
+                      )?.decimals ?? 18,
+                    )}{' '}
+                    {reward.symbol}
+                  </span>
+                </div>
+              ))}
           </div>
         )}
 
@@ -333,7 +374,7 @@ export function FarmCard({
                     Balance: {formatTokenAmount(lpBalance, pool.lpDecimals)}
                   </span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <div className="relative flex-1">
                     <input
                       type="text"
@@ -344,6 +385,7 @@ export function FarmCard({
                     />
                     <button
                       type="button"
+                      onPointerDown={handleMaxDepositPointerDown}
                       onClick={handleMaxDeposit}
                       className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-uni-pink/10 px-2 py-1 text-[10px] font-semibold uppercase text-uni-pink transition hover:bg-uni-pink/20"
                     >
@@ -355,7 +397,7 @@ export function FarmCard({
                       type="button"
                       onClick={handleApprove}
                       disabled={isActionPending}
-                      className="flex items-center justify-center gap-2 rounded-xl bg-uni-purple/20 px-6 py-3 text-sm font-semibold text-uni-purple transition hover:bg-uni-purple/30 disabled:opacity-50"
+                      className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-uni-purple/20 px-6 py-3 text-sm font-semibold text-uni-purple transition hover:bg-uni-purple/30 disabled:opacity-50"
                     >
                       {actionType === 'approve' ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -368,7 +410,7 @@ export function FarmCard({
                       type="button"
                       onClick={handleDeposit}
                       disabled={!canDeposit}
-                      className="flex items-center justify-center gap-2 rounded-xl bg-uni-pink/20 px-6 py-3 text-sm font-semibold text-uni-pink transition hover:bg-uni-pink/30 disabled:opacity-50"
+                      className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-uni-pink/20 px-6 py-3 text-sm font-semibold text-uni-pink transition hover:bg-uni-pink/30 disabled:opacity-50"
                     >
                       {actionType === 'deposit' ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -391,7 +433,7 @@ export function FarmCard({
                       Staked: {formatTokenAmount(stakedAmount, pool.lpDecimals)}
                     </span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <div className="relative flex-1">
                       <input
                         type="text"
@@ -402,6 +444,7 @@ export function FarmCard({
                       />
                       <button
                         type="button"
+                        onPointerDown={handleMaxWithdrawPointerDown}
                         onClick={handleMaxWithdraw}
                         className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-rose-400/10 px-2 py-1 text-[10px] font-semibold uppercase text-rose-400 transition hover:bg-rose-400/20"
                       >
@@ -412,7 +455,7 @@ export function FarmCard({
                       type="button"
                       onClick={handleWithdraw}
                       disabled={!canWithdraw}
-                      className="flex items-center justify-center gap-2 rounded-xl bg-rose-500/20 px-6 py-3 text-sm font-semibold text-rose-400 transition hover:bg-rose-500/30 disabled:opacity-50"
+                      className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-rose-500/20 px-6 py-3 text-sm font-semibold text-rose-400 transition hover:bg-rose-500/30 disabled:opacity-50"
                     >
                       {actionType === 'withdraw' ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -426,20 +469,20 @@ export function FarmCard({
 
               {/* Harvest section */}
               {pendingEon > 0n && (
-                <div className="flex items-center justify-between rounded-xl border border-uni-pink/20 bg-uni-pink/[0.05] p-4">
-                  <div>
+                <div className="flex flex-col gap-3 rounded-xl border border-uni-pink/20 bg-uni-pink/[0.05] p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
                       Pending Rewards
                     </p>
                     <p className="mt-1 text-lg font-semibold text-uni-pink">
-                      {formatTokenAmount(pendingEon, 18)} ESTF
+                      {formatTokenAmount(pendingEon, pool.rewardDecimals)} {pool.rewardSymbol}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={handleHarvest}
                     disabled={!canHarvest}
-                    className="flex items-center justify-center gap-2 rounded-xl bg-uni-pink px-6 py-3 text-sm font-semibold text-white transition hover:bg-uni-pink-light disabled:opacity-50"
+                    className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-uni-pink px-6 py-3 text-sm font-semibold text-white transition hover:bg-uni-pink-light disabled:opacity-50"
                   >
                     {actionType === 'harvest' ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -453,13 +496,12 @@ export function FarmCard({
                 </div>
               )}
 
-              {/* Rewarder badge */}
-              {pool.rewarder && (
-                <div className="flex items-center gap-2 rounded-lg bg-uni-purple/10 px-3 py-2 text-xs text-uni-purple">
-                  <Coins className="h-3.5 w-3.5" />
-                  <span>Extra ESR rewards active</span>
-                </div>
-              )}
+            </div>
+          )}
+          {pool.rewarder && (
+            <div className="mt-5 flex items-center gap-2 rounded-lg bg-uni-purple/10 px-3 py-2 text-xs text-uni-purple">
+              <Coins className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 truncate">Extra {extraRewardLabel} rewards active</span>
             </div>
           )}
         </motion.div>
@@ -638,7 +680,7 @@ export function FarmGrid({
 
   return (
     <>
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {currentPools.map((pool, index) => {
           const userPosition = userPositions.find((p) => p.pid === pool.pid)
           const lpKey = pool.lpToken.toLowerCase()

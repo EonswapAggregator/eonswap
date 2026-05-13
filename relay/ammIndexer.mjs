@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseAbi } from "viem";
@@ -18,8 +18,15 @@ const PAIR_ABI = parseAbi([
   "event Transfer(address indexed from, address indexed to, uint256 value)",
   "function token0() view returns (address)",
   "function token1() view returns (address)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
   "function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
   "function totalSupply() view returns (uint256)",
+]);
+
+const ERC20_ABI = parseAbi([
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
 ]);
 
 const ZERO_STATE = {
@@ -45,7 +52,13 @@ async function writeJsonAtomic(path, value) {
   await mkdir(dirname(path), { recursive: true });
   const tmp = `${path}.${process.pid}.tmp`;
   await writeFile(tmp, JSON.stringify(value, null, 2), "utf8");
-  await rename(tmp, path);
+  try {
+    await rename(tmp, path);
+  } catch (error) {
+    if (error?.code !== "EPERM" && error?.code !== "EEXIST") throw error;
+    await rm(path, { force: true });
+    await rename(tmp, path);
+  }
 }
 
 function logId(log) {
@@ -56,15 +69,17 @@ export class AmmIndexerService {
   constructor({
     chainId = 8453,
     factoryAddress,
-    dataDir = join(__dirname, "data", "indexer"),
+    dataDir = process.env.INDEXER_DATA_DIR || join(__dirname, "data", "indexer"),
     confirmations = Number(process.env.INDEXER_CONFIRMATIONS || 8),
     batchBlocks = Number(process.env.INDEXER_BATCH_BLOCKS || 500),
+    startBlock = process.env.INDEXER_START_BLOCK || "0",
   }) {
     if (!factoryAddress) throw new Error("INDEXER_FACTORY_ADDRESS is required.");
     this.chainId = chainId;
     this.factoryAddress = factoryAddress;
     this.confirmations = confirmations;
     this.batchBlocks = BigInt(Math.max(1, batchBlocks));
+    this.startBlock = BigInt(String(startBlock || "0"));
     this.statePath = join(dataDir, `amm-${chainId}.json`);
     this.eventsPath = join(dataDir, `amm-${chainId}.jsonl`);
     this.publicClient = createFallbackPublicClient({
@@ -73,11 +88,12 @@ export class AmmIndexerService {
       wsRpcUrls: wsRpcUrlsFromEnv("INDEXER"),
       preferWebSocket: false,
     });
+    this.hasWebSocketWatch = wsRpcUrlsFromEnv("INDEXER").length > 0;
     this.watchClient = createFallbackPublicClient({
       chainId,
       rpcUrls: rpcUrlsFromEnv("INDEXER"),
       wsRpcUrls: wsRpcUrlsFromEnv("INDEXER"),
-      preferWebSocket: wsRpcUrlsFromEnv("INDEXER").length > 0,
+      preferWebSocket: this.hasWebSocketWatch,
     });
     this.state = { ...ZERO_STATE, chainId, factoryAddress };
     this.unwatchers = [];
@@ -92,8 +108,10 @@ export class AmmIndexerService {
     });
     await this.loadPairs();
     await this.backfill();
-    this.watchFactory();
-    this.watchPairs();
+    if (this.hasWebSocketWatch) {
+      this.watchFactory();
+      this.watchPairs();
+    }
     this.interval = setInterval(() => void this.backfill(), 30_000);
     console.log(`[AmmIndexer] started for ${Object.keys(this.state.pairs).length} pairs`);
   }
@@ -150,10 +168,20 @@ export class AmmIndexerService {
       this.publicClient.readContract({ address: pairAddress, abi: PAIR_ABI, functionName: "getReserves" }).catch(() => [0n, 0n, 0]),
       this.publicClient.readContract({ address: pairAddress, abi: PAIR_ABI, functionName: "totalSupply" }).catch(() => 0n),
     ]);
+    const [symbol0, decimals0, symbol1, decimals1] = await Promise.all([
+      this.publicClient.readContract({ address: token0, abi: ERC20_ABI, functionName: "symbol" }).catch(() => "TKN"),
+      this.publicClient.readContract({ address: token0, abi: ERC20_ABI, functionName: "decimals" }).catch(() => 18),
+      this.publicClient.readContract({ address: token1, abi: ERC20_ABI, functionName: "symbol" }).catch(() => "TKN"),
+      this.publicClient.readContract({ address: token1, abi: ERC20_ABI, functionName: "decimals" }).catch(() => 18),
+    ]);
     this.state.pairs[pair] = {
       address: pair,
       token0: String(token0).toLowerCase(),
       token1: String(token1).toLowerCase(),
+      symbol0: String(symbol0),
+      symbol1: String(symbol1),
+      decimals0: Number(decimals0),
+      decimals1: Number(decimals1),
       reserve0: String(reserves[0] || 0n),
       reserve1: String(reserves[1] || 0n),
       totalSupply: String(totalSupply || 0n),
@@ -170,7 +198,7 @@ export class AmmIndexerService {
       const latest = await this.publicClient.getBlockNumber();
       const safe = latest > BigInt(this.confirmations) ? latest - BigInt(this.confirmations) : 0n;
       let from = BigInt(this.state.lastProcessedBlock || "0") + 1n;
-      if (from === 1n) from = safe > 5_000n ? safe - 5_000n : 0n;
+      if (from === 1n) from = this.startBlock;
       while (from <= safe) {
         const to = from + this.batchBlocks - 1n > safe ? safe : from + this.batchBlocks - 1n;
         await this.indexRange(from, to);
@@ -251,6 +279,30 @@ export class AmmIndexerService {
   }
 
   async handlePairLogs(logs) {
+    const uniqueBlocks = [...new Set(logs.map((log) => log.blockNumber).filter(Boolean))];
+    const uniqueTxHashes = [...new Set(logs.map((log) => log.transactionHash).filter(Boolean))];
+    const blockTimestamps = new Map();
+    const txSenders = new Map();
+
+    await Promise.all([
+      ...uniqueBlocks.map(async (blockNumber) => {
+        try {
+          const block = await this.publicClient.getBlock({ blockNumber });
+          blockTimestamps.set(String(blockNumber), Number(block.timestamp) * 1000);
+        } catch {
+          // Timestamp is best-effort. The event still remains usable.
+        }
+      }),
+      ...uniqueTxHashes.map(async (txHash) => {
+        try {
+          const tx = await this.publicClient.getTransaction({ hash: txHash });
+          txSenders.set(String(txHash).toLowerCase(), tx.from);
+        } catch {
+          // Sender is best-effort. Fall back to event sender below.
+        }
+      }),
+    ]);
+
     for (const log of logs) {
       const id = logId(log);
       if (this.state.processedLogs[id]) continue;
@@ -268,6 +320,8 @@ export class AmmIndexerService {
         txHash: log.transactionHash,
         logIndex: Number(log.logIndex),
         blockNumber: Number(log.blockNumber),
+        timestamp: blockTimestamps.get(String(log.blockNumber)) || Date.now(),
+        from: txSenders.get(String(log.transactionHash).toLowerCase()) || log.args?.sender,
         args: Object.fromEntries(
           Object.entries(log.args || {}).map(([key, value]) => [key, typeof value === "bigint" ? value.toString() : value]),
         ),
@@ -275,6 +329,54 @@ export class AmmIndexerService {
       });
     }
     await this.persist();
+  }
+
+  async getSwapActivities({ limit = 100, walletAddress } = {}) {
+    const raw = await readFile(this.eventsPath, "utf8").catch(() => "");
+    const wallet = walletAddress ? String(walletAddress).toLowerCase() : "";
+    const rows = raw
+      .split(/\r?\n/u)
+      .filter(Boolean)
+      .reverse();
+    const activities = [];
+
+    for (const row of rows) {
+      if (activities.length >= limit) break;
+      let event;
+      try {
+        event = JSON.parse(row);
+      } catch {
+        continue;
+      }
+      if (event.type !== "Swap") continue;
+      const pair = this.state.pairs?.[String(event.pair).toLowerCase()];
+      if (!pair) continue;
+      const args = event.args || {};
+      const from = String(event.from || args.sender || "0x0000000000000000000000000000000000000000");
+      const to = String(args.to || "0x0000000000000000000000000000000000000000");
+      if (wallet && from.toLowerCase() !== wallet && to.toLowerCase() !== wallet) continue;
+      activities.push({
+        id: `${event.txHash}-${event.logIndex}`,
+        pair: pair.address,
+        token0: pair.token0,
+        token1: pair.token1,
+        symbol0: pair.symbol0 || "TKN",
+        symbol1: pair.symbol1 || "TKN",
+        decimals0: Number(pair.decimals0 ?? 18),
+        decimals1: Number(pair.decimals1 ?? 18),
+        txHash: event.txHash,
+        blockNumber: Number(event.blockNumber || 0),
+        timestamp: Number(event.timestamp || event.indexedAt || Date.now()),
+        from,
+        amount0In: String(args.amount0In || "0"),
+        amount1In: String(args.amount1In || "0"),
+        amount0Out: String(args.amount0Out || "0"),
+        amount1Out: String(args.amount1Out || "0"),
+        to,
+      });
+    }
+
+    return activities;
   }
 }
 
@@ -284,6 +386,7 @@ export async function createAmmIndexerFromEnv() {
   const indexer = new AmmIndexerService({
     chainId: Number(process.env.INDEXER_CHAIN_ID || 8453),
     factoryAddress,
+    startBlock: process.env.INDEXER_START_BLOCK || "0",
   });
   await indexer.start();
   return indexer;

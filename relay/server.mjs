@@ -1099,6 +1099,53 @@ createServer(async (req, res) => {
       { cacheControl: "public, max-age=15" },
     );
   }
+  if (
+    req.method === "GET" &&
+    (u.pathname === "/api/activity" ||
+      u.pathname === "/public/onchain-activities")
+  ) {
+    if (isLeaderboardRateLimited(req)) {
+      return json(req, res, 429, { ok: false, error: "Rate limited" });
+    }
+    if (!CORS_ALLOW_ALL && !corsOriginHeader(req)) {
+      return json(req, res, 403, { ok: false, error: "Forbidden origin" });
+    }
+    if (!ammIndexer) {
+      return json(req, res, 503, {
+        ok: false,
+        error: "AMM indexer is not enabled",
+      });
+    }
+    const limitRaw = Number(u.searchParams.get("limit") || "100");
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(500, Math.max(1, Math.floor(limitRaw)))
+      : 100;
+    const wallet = String(u.searchParams.get("wallet") || "").trim();
+    if (wallet && !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+      return json(req, res, 400, { ok: false, error: "Invalid wallet" });
+    }
+    const activities = await ammIndexer.getSwapActivities({
+      limit,
+      walletAddress: wallet || undefined,
+    });
+    return json(
+      req,
+      res,
+      200,
+      {
+        ok: true,
+        data: activities,
+        meta: {
+          chainId: ammIndexer.chainId,
+          factory: ammIndexer.factoryAddress,
+          indexedPairs: Object.keys(ammIndexer.state?.pairs || {}).length,
+          lastProcessedBlock: ammIndexer.state?.lastProcessedBlock || "0",
+          lastSafeBlock: ammIndexer.state?.lastSafeBlock || "0",
+        },
+      },
+      { cacheControl: "public, max-age=10" },
+    );
+  }
   if (req.method === "GET" && u.pathname === "/explorer/txlist") {
     if (isExplorerRateLimited(req))
       return json(req, res, 429, { ok: false, error: "Rate limited" });

@@ -50,6 +50,7 @@ function formatUsd(value: number): string {
 
 function formatTokenAmount(value: bigint, decimals: number): string {
   const num = Number(formatUnits(value, decimals));
+  if (num === 0) return "0";
   if (num < 0.0001) return "< 0.0001";
   if (num < 1) return num.toFixed(6);
   if (num < 1000) return num.toFixed(4);
@@ -252,9 +253,9 @@ function PoolCard({
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-neutral-500">Last Updated</span>
+            <span className="text-neutral-500">Reserve Updated</span>
             <span className="text-neutral-300">
-              Block #{pool.blockTimestampLast}
+              {new Date(pool.blockTimestampLast * 1000).toLocaleString()}
             </span>
           </div>
         </div>

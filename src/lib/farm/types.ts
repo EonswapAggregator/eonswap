@@ -10,6 +10,14 @@ export interface EonFarmPool {
   lastRewardTime: bigint
   accEonPerShare: bigint
   rewarder: Address | null
+  rewardToken: Address
+  rewardSymbol: string
+  rewardDecimals: number
+  extraRewardTokens: {
+    token: Address
+    symbol: string
+    decimals: number
+  }[]
   // Derived info
   lpSymbol0: string
   lpSymbol1: string

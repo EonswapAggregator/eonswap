@@ -16,12 +16,12 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ActivityLiveBanner } from "../components/ActivityLiveBanner";
-import { useEonSwapStore } from "../store/useEonSwapStore";
 import { explorerTxUrl } from "../lib/chains";
 import { useAccount, usePublicClient } from "wagmi";
 import {
   fetchBlockchainSwapActivities,
   fetchEonAmmPairAddresses,
+  fetchIndexedSwapActivities,
   formatSwapActivity,
   type BlockchainSwapActivity,
 } from "../lib/blockchainActivity";
@@ -58,8 +58,6 @@ const fadeUp = {
 
 export function ActivityPage() {
   const prefersReducedMotion = useReducedMotion();
-  const history = useEonSwapStore((s) => s.history);
-  const clearHistory = useEonSwapStore((s) => s.clearHistory);
   const { address } = useAccount();
   const [viewMode, setViewMode] = useState<"my" | "global">("global");
   const [globalActivities, setGlobalActivities] = useState<
@@ -86,7 +84,10 @@ export function ActivityPage() {
     setGlobalError(null);
     const pairAddresses = await fetchEonAmmPairAddresses(publicClient);
     setWatchedPairAddresses(pairAddresses);
-    const result = await fetchBlockchainSwapActivities(publicClient, 100);
+    let result = await fetchIndexedSwapActivities(100);
+    if (!result.ok) {
+      result = await fetchBlockchainSwapActivities(publicClient, 100);
+    }
     if (result.ok) {
       setGlobalActivities(result.activities);
     } else {
@@ -110,9 +111,12 @@ export function ActivityPage() {
     setMyOnChainError(null);
     const pairAddresses = await fetchEonAmmPairAddresses(publicClient);
     setWatchedPairAddresses(pairAddresses);
-    const result = await fetchBlockchainSwapActivities(publicClient, 100, {
-      walletAddress: address,
-    });
+    let result = await fetchIndexedSwapActivities(100, 100_000, address);
+    if (!result.ok) {
+      result = await fetchBlockchainSwapActivities(publicClient, 100, {
+        walletAddress: address,
+      });
+    }
     if (result.ok) {
       setMyOnChainActivities(result.activities);
     } else {
@@ -142,17 +146,21 @@ export function ActivityPage() {
   });
 
   const stats = useMemo(() => {
-    const success = history.filter((h) => h.status === "success").length;
-    const pending = history.filter((h) => h.status === "pending").length;
-    const failed = history.filter((h) => h.status === "failed").length;
-    return { total: history.length, success, pending, failed };
-  }, [history]);
+    const activities =
+      viewMode === "global" ? globalActivities : myOnChainActivities;
+    return {
+      total: activities.length,
+      success: activities.length,
+      pending: 0,
+      failed: 0,
+    };
+  }, [globalActivities, myOnChainActivities, viewMode]);
 
   const statCards = [
     {
       label: "Total Swaps",
       value: stats.total,
-      sub: "This session",
+      sub: "Scanned on-chain",
       icon: TrendingUp,
       color: "text-uni-pink",
       bgGlow: "bg-uni-pink/20",
@@ -161,7 +169,7 @@ export function ActivityPage() {
     {
       label: "Confirmed",
       value: stats.success,
-      sub: "Completed",
+      sub: "Event logs",
       icon: CheckCircle2,
       color: "text-emerald-400",
       bgGlow: "bg-emerald-500/20",
@@ -170,7 +178,7 @@ export function ActivityPage() {
     {
       label: "Pending",
       value: stats.pending,
-      sub: "Awaiting",
+      sub: "Not indexed",
       icon: Clock,
       color: "text-amber-400",
       bgGlow: "bg-amber-500/20",
@@ -179,7 +187,7 @@ export function ActivityPage() {
     {
       label: "Failed",
       value: stats.failed,
-      sub: "Reverted",
+      sub: "Not indexed",
       icon: XCircle,
       color: "text-rose-400",
       bgGlow: "bg-rose-500/20",
@@ -273,15 +281,6 @@ export function ActivityPage() {
                 <ArrowRight className="h-4 w-4" />
               </span>
             </Link>
-            {stats.total > 0 && (
-              <button
-                type="button"
-                onClick={() => clearHistory()}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-uni-border bg-transparent px-6 py-3 text-sm font-medium text-white transition hover:bg-uni-surface"
-              >
-                Clear History
-              </button>
-            )}
           </motion.div>
         </motion.div>
       </section>

@@ -17,7 +17,10 @@ function splitUrls(value) {
 export function rpcUrlsFromEnv(prefix = "TRACKER") {
   const primary = splitUrls(process.env[`${prefix}_RPC_URL`]);
   const fallbacks = splitUrls(process.env[`${prefix}_FALLBACK_RPC_URLS`]);
-  const basePublic = prefix === "TRACKER" ? ["https://mainnet.base.org"] : [];
+  const basePublic =
+    prefix === "TRACKER" || prefix === "INDEXER"
+      ? ["https://mainnet.base.org", "https://base-rpc.publicnode.com"]
+      : [];
   return [...primary, ...fallbacks, ...basePublic];
 }
 

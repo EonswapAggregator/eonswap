@@ -196,8 +196,8 @@ export function SwapQuoteDetails({ wrongNetwork }: Props) {
             {' '}
           </>
         )}
-        Price impact uses route USD notionals. Network cost is an estimate and
-        can change with gas conditions.
+        Price impact uses route reserves when available, then USD notionals as
+        fallback. Network cost is an estimate and can change with gas conditions.
       </p>
     </div>
   )

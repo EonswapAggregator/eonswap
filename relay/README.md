@@ -115,6 +115,8 @@ Enable the indexer in the same relay process:
 INDEXER_ENABLED=1
 INDEXER_CHAIN_ID=8453
 INDEXER_FACTORY_ADDRESS=0x24FF44E8B0839660Dfc381466be1fF8d946cE5C8
+INDEXER_START_BLOCK=0
+INDEXER_DATA_DIR=./relay/data/indexer
 INDEXER_RPC_URL=https://base-mainnet.g.alchemy.com/v2/...
 INDEXER_FALLBACK_RPC_URLS=https://mainnet.base.org,https://your-secondary-rpc.example
 INDEXER_WS_RPC_URL=wss://base-mainnet.g.alchemy.com/v2/...
@@ -122,7 +124,9 @@ INDEXER_CONFIRMATIONS=8
 INDEXER_BATCH_BLOCKS=500
 ```
 
-Data is persisted under `relay/data/indexer/` by default. For high traffic, replace this JSONL store with Postgres while keeping the same cursor, confirmation, and dedupe semantics.
+Data is persisted under `relay/data/indexer/` by default. `INDEXER_START_BLOCK=0` indexes from genesis, which can take a while on public RPCs; set it to the AMM factory deployment block when known for faster first sync. The relay exposes indexed swaps at `GET /api/activity?limit=100` and `GET /api/activity?wallet=0x...&limit=100`. The frontend uses `VITE_MONITOR_RELAY_URL` to read that endpoint and falls back to short browser scanning when the relay indexer is unavailable.
+
+For high traffic, replace this JSONL store with Postgres while keeping the same cursor, confirmation, and dedupe semantics.
 
 ### Setup Steps
 

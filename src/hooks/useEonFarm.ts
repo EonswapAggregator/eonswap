@@ -37,6 +37,8 @@ function findTokenInfo(chainId: number, address: Address): Token | null {
   return tokens.find((t) => t.address.toLowerCase() === address.toLowerCase()) ?? null
 }
 
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address
+
 export function useEonFarm(chainId: number): UseEonFarmResult {
   const { address: userAddress } = useAccount()
   const publicClient = usePublicClient({ chainId })
@@ -121,9 +123,17 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
         args: [BigInt(i)] as const,
       }))
 
-      const [poolInfoResults, rewarderResults] = await Promise.all([
+      const pendingRewardProbeCalls = Array.from({ length: poolLength }, (_, i) => ({
+        address: masterChefAddress,
+        abi: eonMasterChefAbi,
+        functionName: 'pendingRewards' as const,
+        args: [BigInt(i), ZERO_ADDRESS] as const,
+      }))
+
+      const [poolInfoResults, rewarderResults, pendingRewardProbeResults] = await Promise.all([
         publicClient.multicall({ contracts: poolInfoCalls }),
         publicClient.multicall({ contracts: rewarderCalls }),
+        publicClient.multicall({ contracts: pendingRewardProbeCalls }),
       ])
 
       // 3. Gather LP token addresses and fetch LP info
@@ -156,8 +166,14 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
         if (token0Result?.status === 'success') tokenAddresses.add(token0Result.result as Address)
         if (token1Result?.status === 'success') tokenAddresses.add(token1Result.result as Address)
       }
+      tokenAddresses.add(eonToken)
       if (rewardToken) tokenAddresses.add(rewardToken)
       if (extraRewardToken) tokenAddresses.add(extraRewardToken)
+      for (const result of pendingRewardProbeResults) {
+        if (result?.status !== 'success') continue
+        const [, rewardTokens] = result.result as [bigint, Address[], bigint[]]
+        rewardTokens.forEach((token) => tokenAddresses.add(token))
+      }
 
       // Fetch token symbols
       const symbolCalls = [...tokenAddresses].map((token) => ({
@@ -202,6 +218,7 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
       for (let i = 0; i < poolLength; i++) {
         const poolResult = poolInfoResults[i]
         const rewarderResult = rewarderResults[i]
+        const pendingRewardProbeResult = pendingRewardProbeResults[i]
         if (poolResult?.status !== 'success') continue
 
         const [lpToken, allocPoint, lastRewardTime, accEonPerShare] = poolResult.result as [
@@ -213,7 +230,7 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
         const rewarder =
           rewarderResult?.status === 'success'
             ? (rewarderResult.result as Address)
-            : ('0x0000000000000000000000000000000000000000' as Address)
+            : ZERO_ADDRESS
 
         const lpIndex = lpAddresses.indexOf(lpToken)
         if (lpIndex === -1) continue
@@ -239,8 +256,31 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
 
         // Estimate APR based on emissions
         // APR = (eonPerSecond * poolShare * SECONDS_PER_YEAR * eonPrice) / TVLUsd
-        let eonPrice = rewardToken ? (priceByAddress.get(rewardToken.toLowerCase()) ?? 0) : 0
-        if (eonPrice <= 0 && estfUsdFallback && Number.isFinite(estfUsdFallback) && estfUsdFallback > 0) {
+        const rewardTokenInfo = findTokenInfo(chainId, eonToken)
+        const rewardSymbol = symbolMap.get(eonToken.toLowerCase()) ?? rewardTokenInfo?.symbol ?? 'EON'
+        const rewardDecimals = rewardTokenInfo?.decimals ?? 18
+        const extraRewardTokens =
+          pendingRewardProbeResult?.status === 'success'
+            ? ((pendingRewardProbeResult.result as [bigint, Address[], bigint[]])[1] ?? []).map((token) => {
+                const tokenInfo = findTokenInfo(chainId, token)
+                return {
+                  token,
+                  symbol: symbolMap.get(token.toLowerCase()) ?? tokenInfo?.symbol ?? 'Reward',
+                  decimals: tokenInfo?.decimals ?? 18,
+                }
+              })
+            : []
+
+        let eonPrice = priceByAddress.get(eonToken.toLowerCase()) ?? 0
+        const canUseEstfFallback =
+          rewardToken && eonToken.toLowerCase() === rewardToken.toLowerCase()
+        if (
+          eonPrice <= 0 &&
+          canUseEstfFallback &&
+          estfUsdFallback &&
+          Number.isFinite(estfUsdFallback) &&
+          estfUsdFallback > 0
+        ) {
           eonPrice = estfUsdFallback
         }
 
@@ -293,7 +333,11 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
           allocPoint,
           lastRewardTime,
           accEonPerShare,
-          rewarder: rewarder === '0x0000000000000000000000000000000000000000' ? null : rewarder,
+          rewarder: rewarder === ZERO_ADDRESS ? null : rewarder,
+          rewardToken: eonToken,
+          rewardSymbol,
+          rewardDecimals,
+          extraRewardTokens,
           lpSymbol0: symbol0,
           lpSymbol1: symbol1,
           lpDecimals,
@@ -321,7 +365,7 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
         const pendingCalls = poolsData.map((pool) => ({
           address: masterChefAddress,
           abi: eonMasterChefAbi,
-          functionName: 'pendingEon' as const,
+          functionName: 'pendingRewards' as const,
           args: [BigInt(pool.pid), userAddress] as const,
         }))
 
@@ -338,12 +382,16 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
           if (userInfoResult?.status !== 'success') continue
 
           const [stakedAmount] = userInfoResult.result as [bigint, bigint]
-          const pendingEon = pendingResult?.status === 'success' ? (pendingResult.result as bigint) : 0n
+          const pendingRewards: [bigint, Address[], bigint[]] =
+            pendingResult?.status === 'success'
+              ? (pendingResult.result as [bigint, Address[], bigint[]])
+              : [0n, [] as Address[], [] as bigint[]]
+          const [pendingEon, extraRewardTokens, extraRewardAmounts] = pendingRewards
 
           // Only include if user has staked or pending rewards
-          if (stakedAmount > 0n || pendingEon > 0n) {
-            const eonPrice = rewardToken ? (priceByAddress.get(rewardToken.toLowerCase()) ?? 0) : 0
-            const pendingValueUsd = Number(formatUnits(pendingEon, 18)) * eonPrice
+          if (stakedAmount > 0n || pendingEon > 0n || extraRewardAmounts.some((amount) => amount > 0n)) {
+            const eonPrice = priceByAddress.get(pool.rewardToken.toLowerCase()) ?? 0
+            const pendingValueUsd = Number(formatUnits(pendingEon, pool.rewardDecimals)) * eonPrice
 
             // Simplified staked value calculation
             const stakedValueUsd = 0 // Would need LP price calculation
@@ -352,7 +400,14 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
               pid: pool.pid,
               stakedAmount,
               pendingEon,
-              pendingExtraRewards: [], // Would need to query rewarder contract
+              pendingExtraRewards: extraRewardTokens.map((token, rewardIndex) => {
+                const tokenInfo = findTokenInfo(chainId, token)
+                return {
+                  token,
+                  amount: extraRewardAmounts[rewardIndex] ?? 0n,
+                  symbol: symbolMap.get(token.toLowerCase()) ?? tokenInfo?.symbol ?? 'Reward',
+                }
+              }),
               stakedValueUsd,
               pendingValueUsd,
             })

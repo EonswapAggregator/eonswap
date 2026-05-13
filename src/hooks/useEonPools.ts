@@ -8,6 +8,7 @@ import type { EonAmmPool, EonAmmUserPosition } from '../lib/amm/poolTypes'
 import { tokensForChain, type Token } from '../lib/tokens'
 import { fetchSimplePricesUsd, coingeckoIdForToken } from '../lib/coingecko'
 import { useEonAmmRealtimeRefresh } from './useEonRealtimeEvents'
+import { EON_BASE_MAINNET } from '../lib/eonBaseMainnet'
 
 const POLL_INTERVAL_MS = 30_000
 const MAX_PAIRS_TO_FETCH = 500
@@ -24,6 +25,15 @@ type UseEonPoolsResult = {
 function findTokenInfo(chainId: number, address: Address): Token | null {
   const tokens = tokensForChain(chainId)
   return tokens.find((t) => t.address.toLowerCase() === address.toLowerCase()) ?? null
+}
+
+const EONSWAP_TOKEN_ADDRESSES = new Set<string>([
+  EON_BASE_MAINNET.token.address.toLowerCase(),
+  EON_BASE_MAINNET.extraRewardToken.address.toLowerCase(),
+])
+
+function isEonSwapToken(address: Address): boolean {
+  return EONSWAP_TOKEN_ADDRESSES.has(address.toLowerCase())
 }
 
 export function useEonPools(chainId: number): UseEonPoolsResult {
@@ -172,12 +182,25 @@ export function useEonPools(chainId: number): UseEonPoolsResult {
         const info0 = tokenInfoMap.get(token0) ?? { symbol: 'TKN', decimals: 18 }
         const info1 = tokenInfoMap.get(token1) ?? { symbol: 'TKN', decimals: 18 }
 
-        // Calculate TVL
+        // Calculate TVL. For EonSwap-token/WETH pools, prefer the on-chain
+        // reserve ratio anchored to WETH over token-list fallback prices.
         const price0 = priceByAddress.get(token0.toLowerCase()) ?? 0
         const price1 = priceByAddress.get(token1.toLowerCase()) ?? 0
-        const tvl0 = Number(formatUnits(reserve0, info0.decimals)) * price0
-        const tvl1 = Number(formatUnits(reserve1, info1.decimals)) * price1
-        const tvlUsd = tvl0 + tvl1
+        let tvlUsd = 0
+        const token0IsWeth = token0.toLowerCase() === EON_BASE_MAINNET.amm.weth.toLowerCase()
+        const token1IsWeth = token1.toLowerCase() === EON_BASE_MAINNET.amm.weth.toLowerCase()
+        const token0IsEonSwap = isEonSwapToken(token0)
+        const token1IsEonSwap = isEonSwapToken(token1)
+
+        if (token0IsWeth && token1IsEonSwap && price0 > 0) {
+          tvlUsd = Number(formatUnits(reserve0, info0.decimals)) * price0 * 2
+        } else if (token1IsWeth && token0IsEonSwap && price1 > 0) {
+          tvlUsd = Number(formatUnits(reserve1, info1.decimals)) * price1 * 2
+        } else {
+          const tvl0 = Number(formatUnits(reserve0, info0.decimals)) * price0
+          const tvl1 = Number(formatUnits(reserve1, info1.decimals)) * price1
+          tvlUsd = tvl0 + tvl1
+        }
 
         poolsData.push({
           address: pairAddress,

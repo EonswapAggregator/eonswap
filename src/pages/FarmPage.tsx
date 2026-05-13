@@ -22,6 +22,7 @@ import { toast } from "sonner";
 
 import { FarmGrid } from "../components/farm/FarmGrid";
 import { useEonFarm } from "../hooks/useEonFarm";
+import { tokenByAddress } from "../lib/tokens";
 import { sendTxEventToRelay } from "../lib/txEvents";
 import { useEonSwapStore } from "../store/useEonSwapStore";
 
@@ -257,7 +258,7 @@ export function FarmPage() {
         ? `${pool.lpSymbol0}/${pool.lpSymbol1}`
         : `Pool #${pid}`;
       const rewardsStr = userPos?.pendingEon
-        ? `${formatUnits(userPos.pendingEon, 18)} EON`
+        ? `${formatUnits(userPos.pendingEon, pool?.rewardDecimals ?? 18)} ${pool?.rewardSymbol ?? "Rewards"}`
         : "Rewards";
       const summary = `Harvest ${rewardsStr} from ${poolName}`;
       const activityId = crypto.randomUUID();
@@ -354,6 +355,10 @@ export function FarmPage() {
     (sum, pos) => sum + pos.pendingEon,
     0n,
   );
+  const rewardToken = masterChefState
+    ? tokenByAddress(CHAIN_ID, masterChefState.eonToken)
+    : undefined;
+  const rewardSymbol = rewardToken?.symbol ?? "rewards";
 
   return (
     <div className="relative min-w-0 max-w-full overflow-hidden">
@@ -410,7 +415,7 @@ export function FarmPage() {
             className="text-balance text-[clamp(1.75rem,8vw,2.75rem)] font-semibold leading-[1.15] tracking-tight text-white"
           >
             <span className="block">Stake LP tokens,</span>
-            <span className="mt-1 block text-uni-pink">earn ESTF rewards.</span>
+            <span className="mt-1 block text-uni-pink">earn {rewardSymbol} rewards.</span>
           </motion.h1>
 
           <motion.p
@@ -418,7 +423,7 @@ export function FarmPage() {
             variants={fadeUp}
             className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-neutral-400 md:text-lg"
           >
-            Stake your LP tokens into farm pools to earn ESTF emissions. The
+            Stake your LP tokens into farm pools to earn {rewardSymbol} emissions. The
             longer you stake, the more rewards you accumulate.
           </motion.p>
 
@@ -480,7 +485,7 @@ export function FarmPage() {
                 </p>
               </div>
 
-              {/* ESTF / Day */}
+              {/* Rewards / Day */}
               <div className="group px-6 py-6 text-center transition duration-200 hover:bg-uni-surface-2">
                 <div className="mb-3 flex items-center justify-center">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-uni-pink/[0.1] ring-1 ring-uni-pink/20">
@@ -488,7 +493,7 @@ export function FarmPage() {
                   </div>
                 </div>
                 <p className="text-xs font-medium uppercase tracking-widest text-neutral-500">
-                  ESTF / Day
+                  {rewardSymbol} / Day
                 </p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
                   {loading
@@ -538,7 +543,7 @@ export function FarmPage() {
                   {loading
                     ? "..."
                     : userAddress
-                      ? `${Number(formatUnits(totalPendingEon, 18)).toFixed(4)} ESTF`
+                      ? `${Number(formatUnits(totalPendingEon, rewardToken?.decimals ?? 18)).toFixed(4)} ${rewardSymbol}`
                       : "—"}
                 </p>
               </div>

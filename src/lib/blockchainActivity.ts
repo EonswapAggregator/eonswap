@@ -1,6 +1,7 @@
 import { erc20Abi, formatUnits, type Address, type PublicClient } from "viem";
 import { eonAmmFactoryAbi, eonAmmPairAbi } from "./amm/abis";
 import { EON_BASE_MAINNET } from "./eonBaseMainnet";
+import { getMonitorRelayBaseUrl } from "./monitorRelayUrl";
 
 export type BlockchainSwapActivity = {
   id: string;
@@ -175,23 +176,22 @@ function matchesWalletActivity(
 export async function fetchIndexedSwapActivities(
   limit = 50,
   lookbackBlocks = 100_000,
+  walletAddress?: Address,
 ): Promise<
   | { ok: true; activities: BlockchainSwapActivity[] }
   | { ok: false; error: string }
 > {
-  if (import.meta.env.DEV) {
-    return {
-      ok: false,
-      error: "Vercel activity index is not available in Vite dev",
-    };
-  }
-
   try {
+    const relayBaseUrl = getMonitorRelayBaseUrl();
     const q = new URLSearchParams({
       limit: String(limit),
       lookbackBlocks: String(lookbackBlocks),
     });
-    const response = await fetch(`/api/activity?${q}`, {
+    if (walletAddress) q.set("wallet", walletAddress);
+    const url = relayBaseUrl
+      ? `${relayBaseUrl}/api/activity?${q}`
+      : `/api/activity?${q}`;
+    const response = await fetch(url, {
       headers: { Accept: "application/json" },
     });
     const payload = (await response.json()) as IndexedActivityResponse;
