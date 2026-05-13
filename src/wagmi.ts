@@ -66,9 +66,18 @@ export const wagmiConfig = getDefaultConfig({
   },
   transports: {
     [base.id]: fallback(
-      rpcUrls.map((url) => http(url)),
+      rpcUrls.map((url) => http(url, {
+        timeout: 10_000, // 10s timeout per RPC call
+        fetchOptions: {
+          headers: {
+            'User-Agent': 'EonSwap/1.0',
+          },
+        },
+      })),
       {
-        rank: true,
+        rank: true, // Auto-prioritize by health/speed
+        retryCount: 3,
+        retryDelay: 100,
       },
     ),
   },
