@@ -18,6 +18,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      sourcemap: false, // Disable source maps to avoid corrupted map files
+    },
     server: {
       proxy: {
         // Dev: same-origin /__eonswap-relay/* → remote relay (no browser CORS)
