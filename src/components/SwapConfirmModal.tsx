@@ -3,7 +3,13 @@ import { AlertTriangle, Copy, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatParsedAmountInput, formatTokenAmountUi } from '../lib/format'
-import { formatUsdApprox, priceImpactPercentFromUsd, priceImpactPercentFromAmounts, totalNetworkFeeUsd } from '../lib/quoteDisplay'
+import {
+  formatUsdApprox,
+  parsePriceImpactPercent,
+  priceImpactLabelFromPercent,
+  priceImpactPercentFromUsd,
+  totalNetworkFeeUsd,
+} from '../lib/quoteDisplay'
 import { formatSlippagePercent } from '../lib/slippage'
 import { getEonChain } from '../lib/chains'
 import { useEonSwapStore } from '../store/useEonSwapStore'
@@ -34,6 +40,7 @@ export function SwapConfirmModal({
   const quoteAmountOutWei = useEonSwapStore((s) => s.quoteAmountOutWei)
   const quoteGasUsd = useEonSwapStore((s) => s.quoteGasUsd)
   const quoteL1FeeUsd = useEonSwapStore((s) => s.quoteL1FeeUsd)
+  const quotePriceImpact = useEonSwapStore((s) => s.quotePriceImpact)
   const routeSources = useEonSwapStore((s) => s.routeSources)
 
   useEffect(() => {
@@ -63,28 +70,21 @@ export function SwapConfirmModal({
   }, [quoteGasUsd, quoteL1FeeUsd])
 
   const priceImpactPct = useMemo(() => {
-    // Try USD-based first
+    if (quotePriceImpact) {
+      const parsed = parsePriceImpactPercent(quotePriceImpact)
+      if (parsed != null) return parsed
+    }
+
     if (quoteAmountInUsd && quoteAmountOutUsd) {
       return priceImpactPercentFromUsd(quoteAmountInUsd, quoteAmountOutUsd)
     }
-    // Fallback to amount-based
-    if (sellAmountInput && quoteAmountOutWei) {
-      return priceImpactPercentFromAmounts(
-        sellAmountInput,
-        quoteAmountOutWei,
-        sellToken.decimals,
-        buyToken.decimals,
-      )
-    }
+
     return null
-  }, [quoteAmountInUsd, quoteAmountOutUsd, sellAmountInput, quoteAmountOutWei, sellToken.decimals, buyToken.decimals])
+  }, [quotePriceImpact, quoteAmountInUsd, quoteAmountOutUsd])
 
   const priceImpactLabel = useMemo(() => {
     if (priceImpactPct == null) return null
-    const v = Math.max(0, priceImpactPct)
-    if (v < 0.005) return '<0.01%'
-    if (v < 0.1) return `${v.toFixed(2)}%`
-    return `${v.toFixed(2)}%`
+    return priceImpactLabelFromPercent(priceImpactPct)
   }, [priceImpactPct])
 
   const isHighPriceImpact = priceImpactPct != null && priceImpactPct >= 5

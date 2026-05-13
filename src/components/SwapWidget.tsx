@@ -11,7 +11,7 @@ import { isEonAmmSwapChain } from '../lib/chains'
 import { isNativeToken } from '../lib/tokens'
 import { base } from 'wagmi/chains'
 import { useEonSwapStore } from '../store/useEonSwapStore'
-import { priceImpactPercentFromUsd, priceImpactPercentFromAmounts } from '../lib/quoteDisplay'
+import { parsePriceImpactPercent, priceImpactPercentFromUsd } from '../lib/quoteDisplay'
 import { defaultSlippageBpsByContext } from '../lib/slippage'
 import { BestRoute } from './BestRoute'
 import { SlippageSettings } from './SlippageSettings'
@@ -61,7 +61,6 @@ export function SwapWidget() {
   const quoteError = useEonSwapStore((s) => s.quoteError)
   const quoteAmountInUsd = useEonSwapStore((s) => s.quoteAmountInUsd)
   const quoteAmountOutUsd = useEonSwapStore((s) => s.quoteAmountOutUsd)
-  const quoteAmountOutWei = useEonSwapStore((s) => s.quoteAmountOutWei)
   const quotePriceImpact = useEonSwapStore((s) => s.quotePriceImpact)
   const quoteLoading = useEonSwapStore((s) => s.quoteLoading)
   const priceImpactWarnPct = useEonSwapStore((s) => s.priceImpactWarnPct)
@@ -239,33 +238,21 @@ export function SwapWidget() {
     maxSwapUsd > 0 &&
     quoteInUsdNum > maxSwapUsd
   
-  // Calculate price impact - prefer router-calculated (from reserves), then USD, then token amounts
+  // Calculate price impact - prefer router-calculated reserves, then USD notionals.
+  // Raw token amount fallback is intentionally avoided for different assets because
+  // it compares nominal units (e.g. ETH vs ESTF) and can hide real pool depletion.
   const impactPct = useMemo(() => {
-    // Method 1: Router-calculated from reserves (most accurate for AMM)
-    // This is computed by getAmountsOut which has access to actual pool reserves
     if (quotePriceImpact) {
-      const parsed = Number.parseFloat(quotePriceImpact)
-      if (Number.isFinite(parsed) && parsed >= 0) return parsed
+      const parsed = parsePriceImpactPercent(quotePriceImpact)
+      if (parsed != null) return parsed
     }
     
-    // Method 2: USD-based calculation (accurate when prices available)
     if (quoteAmountInUsd && quoteAmountOutUsd) {
       return priceImpactPercentFromUsd(quoteAmountInUsd, quoteAmountOutUsd)
     }
-    
-    // Method 3: Token amount-based calculation (fallback - less accurate)
-    // Use sellAmountWei (bigint) converted to string, not sellAmountInput (formatted)
-    if (sellAmountWei && quoteAmountOutWei) {
-      return priceImpactPercentFromAmounts(
-        sellAmountWei.toString(),
-        quoteAmountOutWei,
-        sellToken.decimals,
-        buyToken.decimals,
-      )
-    }
-    
+
     return null
-  }, [quotePriceImpact, quoteAmountInUsd, quoteAmountOutUsd, sellAmountWei, quoteAmountOutWei, sellToken.decimals, buyToken.decimals])
+  }, [quotePriceImpact, quoteAmountInUsd, quoteAmountOutUsd])
       
   const extremePriceImpact =
     impactPct != null &&
@@ -276,13 +263,13 @@ export function SwapWidget() {
     Number.isFinite(impactPct) &&
     impactPct >= highPriceImpactThresholdPct
 
-  const preflightError = !isConnected
-    ? 'Connect wallet'
-    : wrongNetwork
+  const preflightError = missingAmount
+    ? 'Enter amount'
+    : !isConnected
+      ? 'Connect wallet'
+      : wrongNetwork
       ? 'Switch network'
-      : missingAmount
-        ? 'Enter amount'
-        : insufficientTokenBalance
+      : insufficientTokenBalance
           ? `Insufficient ${sellToken.symbol}`
           : insufficientGasFee
             ? 'Insufficient gas'
@@ -496,8 +483,6 @@ export function SwapWidget() {
                   <Loader2 className="h-5 w-5 animate-spin" />
                   Working…
                 </>
-              ) : !isConnected ? (
-                'Connect Wallet'
               ) : wrongNetwork ? (
                 `Switch to ${base.name}`
               ) : preflightError ? (

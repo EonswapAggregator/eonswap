@@ -1,7 +1,17 @@
 import { base } from 'viem/chains'
+import { baseRpcUrls } from './rpcUrls'
 
 /** Networks enabled in the app: Base mainnet only */
-const baseChain = { ...base, name: 'Base', shortName: 'Base' }
+const baseChain = {
+  ...base,
+  name: 'Base',
+  shortName: 'Base',
+  rpcUrls: {
+    ...base.rpcUrls,
+    default: { http: baseRpcUrls() },
+    public: { http: baseRpcUrls() },
+  },
+}
 
 export const eonChains = [baseChain] as const
 

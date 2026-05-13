@@ -184,8 +184,7 @@ async function estimateUsdForToken(tokenAddress: string, amountWei: bigint, deci
 async function calculatePriceImpactFromReserves(
   client: ContractReader,
   chainId: number,
-  tokenIn: ViemAddress,
-  tokenOut: ViemAddress,
+  path: readonly ViemAddress[],
   amountIn: bigint,
   amountOut: bigint,
 ): Promise<string | undefined> {
@@ -193,46 +192,47 @@ async function calculatePriceImpactFromReserves(
     const factoryAddress = EON_AMM_FACTORY[chainId]
     if (!factoryAddress) return undefined
 
-    // Get pair address from factory
-    const pairAddress = await client.readContract<ViemAddress>({
-      address: factoryAddress,
-      abi: FACTORY_ABI,
-      functionName: 'getPair',
-      args: [tokenIn, tokenOut],
-    })
+    let spotPrice = 1
 
-    if (!pairAddress || pairAddress === '0x0000000000000000000000000000000000000000') {
-      return undefined
+    for (let i = 0; i < path.length - 1; i += 1) {
+      const tokenIn = path[i]!
+      const tokenOut = path[i + 1]!
+      const pairAddress = await client.readContract<ViemAddress>({
+        address: factoryAddress,
+        abi: FACTORY_ABI,
+        functionName: 'getPair',
+        args: [tokenIn, tokenOut],
+      })
+
+      if (!pairAddress || pairAddress === '0x0000000000000000000000000000000000000000') {
+        return undefined
+      }
+
+      const [reserves, token0] = await Promise.all([
+        client.readContract<readonly [bigint, bigint, number]>({
+          address: pairAddress,
+          abi: PAIR_ABI,
+          functionName: 'getReserves',
+        }),
+        client.readContract<ViemAddress>({
+          address: pairAddress,
+          abi: PAIR_ABI,
+          functionName: 'token0',
+        }),
+      ])
+
+      const [reserve0, reserve1] = reserves
+      const isToken0In = token0.toLowerCase() === tokenIn.toLowerCase()
+      const reserveIn = isToken0In ? reserve0 : reserve1
+      const reserveOut = isToken0In ? reserve1 : reserve0
+
+      if (reserveIn === 0n || reserveOut === 0n) {
+        return '100.00'
+      }
+
+      spotPrice *= Number(reserveOut) / Number(reserveIn)
     }
 
-    // Get reserves and token0
-    const [reserves, token0] = await Promise.all([
-      client.readContract<readonly [bigint, bigint, number]>({
-        address: pairAddress,
-        abi: PAIR_ABI,
-        functionName: 'getReserves',
-      }),
-      client.readContract<ViemAddress>({
-        address: pairAddress,
-        abi: PAIR_ABI,
-        functionName: 'token0',
-      }),
-    ])
-
-    const [reserve0, reserve1] = reserves
-    
-    // Determine which reserve is for tokenIn and tokenOut
-    const isToken0In = token0.toLowerCase() === tokenIn.toLowerCase()
-    const reserveIn = isToken0In ? reserve0 : reserve1
-    const reserveOut = isToken0In ? reserve1 : reserve0
-
-    if (reserveIn === 0n || reserveOut === 0n) {
-      return '100.00' // Pool is empty, 100% impact
-    }
-
-    // Spot price (before trade) = reserveOut / reserveIn
-    const spotPrice = Number(reserveOut) / Number(reserveIn)
-    
     // Execution price = amountOut / amountIn
     const executionPrice = Number(amountOut) / Number(amountIn)
 
@@ -331,8 +331,7 @@ export async function fetchEonAmmQuoteFromRouter(params: EonAmmQuoteParams): Pro
   const calculatedPriceImpact = await calculatePriceImpactFromReserves(
     client as unknown as ContractReader,
     params.chainId,
-    path[0] as ViemAddress,
-    path[path.length - 1] as ViemAddress,
+    path,
     BigInt(params.amountIn),
     amountOut,
   )

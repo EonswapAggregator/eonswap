@@ -842,8 +842,8 @@ export function TokenPriceChart({
 
       {timeTicks.length > 0 ? (
         <div className="mt-1 flex items-center justify-between text-[10px] text-neutral-500">
-          {timeTicks.map((tick) => (
-            <span key={`tt-${tick.idx}`}>{tick.label}</span>
+          {timeTicks.map((tick, i) => (
+            <span key={`tt-${i}-${tick.idx}-${tick.label}`}>{tick.label}</span>
           ))}
         </div>
       ) : null}

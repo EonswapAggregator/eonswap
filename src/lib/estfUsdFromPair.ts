@@ -41,21 +41,8 @@ const PAIR_ABI = [
   },
 ] as const
 
-function resolveBaseRpcUrl(): string | null {
-  const alchemyKey = String(import.meta.env.VITE_ALCHEMY_API_KEY ?? '').trim()
-  if (alchemyKey) {
-    return `https://base-mainnet.g.alchemy.com/v2/${alchemyKey}`
-  }
-
-  const fromEnv = String(import.meta.env.VITE_BASE_RPC_URL ?? '').trim()
-  if (fromEnv) return fromEnv
-
-  const chain = getEonChain(base.id) ?? base
-  return chain.rpcUrls.default.http[0] ?? null
-}
-
-const rpcUrl = resolveBaseRpcUrl()
 const chain = getEonChain(base.id) ?? base
+const rpcUrl = chain.rpcUrls.default.http[0] ?? null
 const client = rpcUrl
   ? createPublicClient({
       chain,

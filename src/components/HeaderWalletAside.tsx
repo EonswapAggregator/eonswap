@@ -95,7 +95,7 @@ export function EstfPriceChip({ className = '' }: { className?: string }) {
       
       {/* ESTF Logo */}
       <img 
-        src="/tokens/0x7bd09674b3c721e35973993d5b6a79cda7da9c7f.svg" 
+        src={`/tokens/${EON_BASE_MAINNET.token.address.toLowerCase()}.svg`}
         alt="ESTF"
         className="h-5 w-5 shrink-0 rounded-full"
       />

@@ -62,7 +62,7 @@ function isAllowedLogoUrl(url: string): boolean {
 
 /**
  * Optional `VITE_TOKEN_LOGO_0x{40_hex_lowercase}` — full URL or site path.
- * Example: `VITE_TOKEN_LOGO_0x7bd09674b3c721e35973993d5b6a79cda7da9c7f=https://cdn.example/estf.webp`
+ * Example: `VITE_TOKEN_LOGO_0x295685df8e07a6d529a849ae7688c524494fd010=https://cdn.example/estf.webp`
  */
 function viteTokenLogoOverrideForAddress(addrKey: string): string | null {
   const key = `VITE_TOKEN_LOGO_${addrKey.toLowerCase()}`

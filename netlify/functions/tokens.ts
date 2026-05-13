@@ -45,19 +45,19 @@ export const handler: Handler = async (event: HandlerEvent) => {
     },
     {
       chainId: 8453,
-      address: '0x7bd09674b3c721e35973993d5b6a79cda7da9c7f',
+      address: '0x295685df8e07a6d529a849ae7688c524494fd010',
       name: 'EonSwap Token',
       symbol: 'ESTF',
       decimals: 18,
-      logoURI: 'https://eonswap.us/tokens/estf.png',
+      logoURI: 'https://eonswap.us/tokens/0x295685df8e07a6d529a849ae7688c524494fd010.svg',
     },
     {
       chainId: 8453,
-      address: '0xbc11e3093afdbeb88d32ef893027202fc2b84f9d',
+      address: '0xd48463db303da9818ef565e84aca266234b38f08',
       name: 'EonSwap Reward',
       symbol: 'ESR',
       decimals: 18,
-      logoURI: 'https://eonswap.us/tokens/esr.png',
+      logoURI: 'https://eonswap.us/tokens/0xd48463db303da9818ef565e84aca266234b38f08.svg',
     },
     {
       chainId: 8453,

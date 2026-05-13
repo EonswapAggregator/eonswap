@@ -11,6 +11,7 @@ import {
 import { fetchRelayActivities } from "../lib/activityRelay";
 import { getMonitorRelayBaseUrl } from "../lib/monitorRelayUrl";
 import { eonChains } from "../lib/chains";
+import { EON_BASE_MAINNET } from "../lib/eonBaseMainnet";
 import { truncateAddress } from "../lib/format";
 import {
   type ActivityItem,
@@ -1633,20 +1634,20 @@ function PlatformTab() {
       items: [
         {
           name: "Router",
-          address: "0xccc8b61b06544c942446846b6715f86c1c2823ce",
+          address: EON_BASE_MAINNET.amm.router,
         },
         {
           name: "Factory",
-          address: "0xd7b56729dcaa67aa2fa4a72795e3ed94ac03071b",
+          address: EON_BASE_MAINNET.amm.factory,
         },
-        { name: "WETH", address: "0x4200000000000000000000000000000000000006" },
+        { name: "WETH", address: EON_BASE_MAINNET.amm.weth },
         {
           name: "Integration Manager",
-          address: "0x0589ee6bf6635cbb5bad92fa638b96c6f506f302",
+          address: EON_BASE_MAINNET.amm.integrationManager,
         },
         {
           name: "TWAP Guard",
-          address: "0x3f98649e3844bf06ecf8ee303469c35dfb4d3f5f",
+          address: EON_BASE_MAINNET.amm.twapGuard,
         },
       ],
     },
@@ -1655,11 +1656,11 @@ function PlatformTab() {
       items: [
         {
           name: "ESTF Token",
-          address: "0x7bd09674b3c721e35973993d5b6a79cda7da9c7f",
+          address: EON_BASE_MAINNET.token.address,
         },
         {
           name: "ESR Token",
-          address: "0xbc11e3093afdbeb88d32ef893027202fc2b84f9d",
+          address: EON_BASE_MAINNET.extraRewardToken.address,
         },
       ],
     },
@@ -1668,11 +1669,7 @@ function PlatformTab() {
       items: [
         {
           name: "ESTF/WETH",
-          address: "0x79680a4500df8e0599e9916c52b3b1983bd6ee04",
-        },
-        {
-          name: "ESR/WETH",
-          address: "0x1a46207d6c02b95c159ab2f4b8b521b061b49173",
+          address: EON_BASE_MAINNET.amm.pairEstfWeth,
         },
       ],
     },
@@ -1681,11 +1678,11 @@ function PlatformTab() {
       items: [
         {
           name: "MasterChef",
-          address: "0x1ffbe00f3810e97a8306961d8dc4054abd4f4a2c",
+          address: EON_BASE_MAINNET.farm.masterChef,
         },
         {
           name: "Rewarder",
-          address: "0x769142cd599cd46fd8f833a3bf5bc1147129e887",
+          address: EON_BASE_MAINNET.farm.rewarder,
         },
       ],
     },
@@ -1694,15 +1691,15 @@ function PlatformTab() {
       items: [
         {
           name: "Fee Treasury",
-          address: "0x7f10d2bb44eafa46669e0befc23fd54808046d77",
+          address: EON_BASE_MAINNET.ops.feeTreasury,
         },
         {
           name: "Vesting Vault",
-          address: "0x5871de9b49198f8016932ffe6599a6199079c6b4",
+          address: EON_BASE_MAINNET.ops.vestingVault,
         },
         {
           name: "Emission Governor",
-          address: "0x87fa28cf1e03cade52eaa26e24c4aecb00389944",
+          address: EON_BASE_MAINNET.ops.emissionGovernor,
         },
       ],
     },
@@ -1711,7 +1708,7 @@ function PlatformTab() {
       items: [
         {
           name: "Timelock",
-          address: "0x95c5b1c146dc2a3da953a99435395d311f6089ae",
+          address: EON_BASE_MAINNET.timelock,
         },
         {
           name: "Referral",

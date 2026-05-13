@@ -46,16 +46,24 @@ export function priceImpactPercentFromAmounts(
   }
 }
 
+export function parsePriceImpactPercent(value: string): number | null {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+}
+
+export function priceImpactLabelFromPercent(value: number): string {
+  const v = Math.max(0, value)
+  if (v < 0.005) return '<0.01%'
+  return `${v.toFixed(2)}%`
+}
+
 export function formatPriceImpactLabel(
   amountInUsd: string,
   amountOutUsd: string,
 ): string | null {
   const impact = priceImpactPercentFromUsd(amountInUsd, amountOutUsd)
   if (impact == null) return null
-  const v = Math.max(0, impact)
-  if (v < 0.005) return '<0.01%'
-  if (v < 0.1) return `${v.toFixed(2)}%`
-  return `${v.toFixed(2)}%`
+  return priceImpactLabelFromPercent(impact)
 }
 
 export function formatUsdApprox(value: string): string | null {

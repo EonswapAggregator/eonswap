@@ -439,8 +439,8 @@ export function FarmPage() {
             <button
               type="button"
               onClick={() => void refresh()}
-              disabled={loading}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-uni-border bg-transparent px-6 py-3 text-sm font-medium text-white transition hover:bg-uni-surface disabled:opacity-60"
+              aria-busy={loading}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-uni-border bg-transparent px-6 py-3 text-sm font-medium text-white transition hover:bg-uni-surface"
             >
               <RefreshCw
                 className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}

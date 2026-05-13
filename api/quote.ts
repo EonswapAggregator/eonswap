@@ -1,11 +1,22 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const ROUTER_ADDRESS = "0xEbEe6F5518482c2de9EcF5483916d7591bf0d474";
+const FACTORY_ADDRESS = "0x24FF44E8B0839660Dfc381466be1fF8d946cE5C8";
 const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
-const RPC_URL = "https://mainnet.base.org";
+const RPC_URLS = [
+  process.env.BASE_RPC_URL,
+  process.env.VITE_BASE_RPC_URL,
+  ...(process.env.BASE_FALLBACK_RPC_URLS || "").split(","),
+  "https://mainnet.base.org",
+]
+  .map((url) => String(url || "").trim())
+  .filter(Boolean);
 
 // ABI for getAmountsOut
 const GET_AMOUNTS_OUT_SELECTOR = "0xd06ca61f";
+const GET_PAIR_SELECTOR = "0xe6a43905";
+const TOKEN0_SELECTOR = "0x0dfe1681";
+const GET_RESERVES_SELECTOR = "0x0902f1ac";
 
 /**
  * GET /api/quote
@@ -93,8 +104,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const amounts = decodeAmountsOut(result);
     const amountOut = amounts[amounts.length - 1];
 
-    // Calculate price impact (simplified)
-    const priceImpact = calculatePriceImpact(amount, amountOut);
+    const priceImpact = await calculatePriceImpact(
+      actualTokenIn,
+      actualTokenOut,
+      amount,
+      amountOut,
+    );
 
     return res.status(200).json({
       data: {
@@ -157,6 +172,14 @@ function encodeGetAmountsOut(amountIn: string, path: string[]): string {
   );
 }
 
+function encodeGetPair(tokenA: string, tokenB: string): string {
+  return (
+    GET_PAIR_SELECTOR +
+    tokenA.slice(2).padStart(64, "0") +
+    tokenB.slice(2).padStart(64, "0")
+  );
+}
+
 function decodeAmountsOut(result: string): string[] {
   // Skip 0x prefix and first 64 bytes (offset)
   const data = result.slice(2);
@@ -177,29 +200,71 @@ function decodeAmountsOut(result: string): string[] {
 }
 
 async function ethCall(to: string, data: string): Promise<string> {
-  const response = await fetch(RPC_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      method: "eth_call",
-      params: [{ to, data }, "latest"],
-      id: 1,
-    }),
-    signal: AbortSignal.timeout(10000),
-  });
-
-  const json = await response.json();
-
-  if (json.error) {
-    throw new Error(json.error.message || "RPC call failed");
+  let lastError: unknown = null;
+  for (const rpcUrl of RPC_URLS) {
+    try {
+      const response = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "eth_call",
+          params: [{ to, data }, "latest"],
+          id: 1,
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const json = await response.json();
+      if (json.error) throw new Error(json.error.message || "RPC call failed");
+      return json.result;
+    } catch (error) {
+      lastError = error;
+    }
   }
-
-  return json.result;
+  throw lastError instanceof Error ? lastError : new Error("All RPC calls failed");
 }
 
-function calculatePriceImpact(_amountIn: string, _amountOut: string): string {
-  // Simplified: would need reserves for accurate calculation
-  // Return placeholder
-  return "< 0.5%";
+function decodeAddress(result: string): string {
+  return `0x${result.slice(-40)}`.toLowerCase();
+}
+
+function formatImpactBps(bps: bigint): string {
+  if (bps <= 0n) return "0.00%";
+  const whole = bps / 100n;
+  const frac = (bps % 100n).toString().padStart(2, "0");
+  return `${whole}.${frac}%`;
+}
+
+async function calculatePriceImpact(
+  tokenIn: string,
+  tokenOut: string,
+  amountIn: string,
+  amountOut: string,
+): Promise<string | undefined> {
+  const pairResult = await ethCall(FACTORY_ADDRESS, encodeGetPair(tokenIn, tokenOut));
+  const pairAddress = decodeAddress(pairResult);
+  if (pairAddress === "0x0000000000000000000000000000000000000000") {
+    return undefined;
+  }
+
+  const [token0Result, reservesResult] = await Promise.all([
+    ethCall(pairAddress, TOKEN0_SELECTOR),
+    ethCall(pairAddress, GET_RESERVES_SELECTOR),
+  ]);
+  const token0 = decodeAddress(token0Result);
+  const reserve0 = BigInt(`0x${reservesResult.slice(2, 66)}`);
+  const reserve1 = BigInt(`0x${reservesResult.slice(66, 130)}`);
+  const reserveIn = tokenIn.toLowerCase() === token0 ? reserve0 : reserve1;
+  const reserveOut = tokenIn.toLowerCase() === token0 ? reserve1 : reserve0;
+  const input = BigInt(amountIn);
+  const output = BigInt(amountOut);
+
+  if (reserveIn <= 0n || reserveOut <= 0n || input <= 0n || output <= 0n) {
+    return undefined;
+  }
+
+  const spotOutput = (input * reserveOut) / reserveIn;
+  if (spotOutput <= 0n || output >= spotOutput) return "0.00%";
+  const impactBps = ((spotOutput - output) * 10_000n) / spotOutput;
+  return formatImpactBps(impactBps);
 }

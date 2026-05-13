@@ -6,9 +6,12 @@ import {
   createTrackerFromEnv,
   ReferralTrackerService,
 } from "./referralTracker.mjs";
+import { createAmmIndexerFromEnv } from "./ammIndexer.mjs";
+import { TelegramRetryQueue } from "./telegramQueue.mjs";
 
 // Global tracker instance for on-chain tracking
 let referralTracker = null;
+let ammIndexer = null;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ACTIVITY_LOG_PATH =
@@ -20,6 +23,12 @@ const TX_EVENT_LOG_PATH =
 const REFERRAL_LOG_PATH =
   process.env.RELAY_REFERRAL_LOG_PATH?.trim() ||
   join(__dirname, "data", "referrals.jsonl");
+const TELEGRAM_QUEUE_PATH =
+  process.env.RELAY_TELEGRAM_QUEUE_PATH?.trim() ||
+  join(__dirname, "data", "telegram-queue.json");
+const TELEGRAM_DEAD_LETTER_PATH =
+  process.env.RELAY_TELEGRAM_DEAD_LETTER_PATH?.trim() ||
+  join(__dirname, "data", "telegram-dead-letter.json");
 const RELAY_ADMIN_SECRET = process.env.RELAY_ADMIN_SECRET?.trim() || "";
 
 const PORT = Number(process.env.PORT || process.env.RELAY_PORT || 8787);
@@ -762,64 +771,81 @@ async function sendAlert(message) {
   }
 }
 
-async function sendTelegramMessage(message) {
+async function sendTelegramNow(message) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
-  try {
-    if (TELEGRAM_BANNER_URL) {
-      const photoRes = await fetch(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            chat_id: TELEGRAM_CHAT_ID,
-            photo: TELEGRAM_BANNER_URL,
-            caption: message.slice(0, 1024),
-            parse_mode: "HTML",
-            disable_notification: false,
-          }),
-        },
-      );
-      if (photoRes.ok) return;
-    }
-    try {
-      const bytes = await readFile(TELEGRAM_BANNER_LOCAL_PATH);
-      const form = new FormData();
-      form.set("chat_id", TELEGRAM_CHAT_ID);
-      form.set("parse_mode", "HTML");
-      form.set("caption", message.slice(0, 1024));
-      form.set(
-        "photo",
-        new Blob([bytes], { type: "image/png" }),
-        TELEGRAM_BANNER_LOCAL_PATH.split("/").pop() || "hero-banner.png",
-      );
-      const localPhotoRes = await fetch(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
-        {
-          method: "POST",
-          body: form,
-        },
-      );
-      if (localPhotoRes.ok) return;
-    } catch {
-      // local banner fallback is best-effort
-    }
-    await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+  if (TELEGRAM_BANNER_URL) {
+    const photoRes = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           chat_id: TELEGRAM_CHAT_ID,
-          text: message,
+          photo: TELEGRAM_BANNER_URL,
+          caption: message.slice(0, 1024),
           parse_mode: "HTML",
-          disable_web_page_preview: true,
+          disable_notification: false,
         }),
       },
     );
-  } catch {
-    // non-blocking
+    if (photoRes.ok) return;
+    await throwTelegramError(photoRes);
   }
+  try {
+    const bytes = await readFile(TELEGRAM_BANNER_LOCAL_PATH);
+    const form = new FormData();
+    form.set("chat_id", TELEGRAM_CHAT_ID);
+    form.set("parse_mode", "HTML");
+    form.set("caption", message.slice(0, 1024));
+    form.set(
+      "photo",
+      new Blob([bytes], { type: "image/png" }),
+      TELEGRAM_BANNER_LOCAL_PATH.split("/").pop() || "hero-banner.png",
+    );
+    const localPhotoRes = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+      {
+        method: "POST",
+        body: form,
+      },
+    );
+    if (localPhotoRes.ok) return;
+  } catch {
+    // local banner fallback is best-effort
+  }
+  const res = await fetch(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      }),
+    },
+  );
+  if (!res.ok) await throwTelegramError(res);
+}
+
+async function throwTelegramError(res) {
+  const json = await res.json().catch(() => null);
+  const retryAfter = Number(json?.parameters?.retry_after || 0);
+  const error = new Error(json?.description || `Telegram request failed (${res.status})`);
+  if (retryAfter > 0) error.retryAfterMs = retryAfter * 1_000;
+  throw error;
+}
+
+const telegramQueue = new TelegramRetryQueue({
+  queuePath: TELEGRAM_QUEUE_PATH,
+  deadLetterPath: TELEGRAM_DEAD_LETTER_PATH,
+  sendNow: sendTelegramNow,
+});
+
+async function sendTelegramMessage(message, dedupeKey = "") {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+  await telegramQueue.enqueue({ dedupeKey, message });
 }
 
 function etherscanApiKeyForRelay() {
@@ -975,6 +1001,16 @@ function json(req, res, code, payload, opts = {}) {
   if (acao) headers["access-control-allow-origin"] = acao;
   res.writeHead(code, headers);
   res.end(JSON.stringify(payload));
+}
+
+function isForbiddenOrigin(req) {
+  return !CORS_ALLOW_ALL && !corsOriginHeader(req);
+}
+
+function hasAdminAuthorization(req) {
+  if (!RELAY_ADMIN_SECRET) return false;
+  const auth = String(req.headers.authorization || "");
+  return auth === `Bearer ${RELAY_ADMIN_SECRET}`;
 }
 
 createServer(async (req, res) => {
@@ -1316,7 +1352,10 @@ createServer(async (req, res) => {
           ? feeRealizedUsd
           : undefined,
       });
-      await sendTelegramMessage(msg);
+      await sendTelegramMessage(
+        msg,
+        `${chainId}:${txHash}:${kind}:${wallet || "unknown"}`,
+      );
       return json(req, res, 200, { ok: true });
     } catch (e) {
       if (
@@ -1354,6 +1393,9 @@ createServer(async (req, res) => {
   if (req.method === "POST" && u.pathname === "/referral/register-referrer") {
     if (isReferralRateLimited(req)) {
       return json(req, res, 429, { ok: false, error: "Rate limited" });
+    }
+    if (isForbiddenOrigin(req)) {
+      return json(req, res, 403, { ok: false, error: "Forbidden origin" });
     }
     try {
       const payload = await readJsonBody(req);
@@ -1401,7 +1443,7 @@ createServer(async (req, res) => {
     if (isReferralRateLimited(req)) {
       return json(req, res, 429, { ok: false, error: "Rate limited" });
     }
-    if (!CORS_ALLOW_ALL && !corsOriginHeader(req)) {
+    if (isForbiddenOrigin(req)) {
       return json(req, res, 403, { ok: false, error: "Forbidden origin" });
     }
     const address = String(u.searchParams.get("address") || "").trim();
@@ -1422,6 +1464,9 @@ createServer(async (req, res) => {
   if (req.method === "POST" && u.pathname === "/referral/register") {
     if (isReferralRateLimited(req)) {
       return json(req, res, 429, { ok: false, error: "Rate limited" });
+    }
+    if (isForbiddenOrigin(req)) {
+      return json(req, res, 403, { ok: false, error: "Forbidden origin" });
     }
     try {
       const payload = await readJsonBody(req);
@@ -1487,6 +1532,15 @@ createServer(async (req, res) => {
   if (req.method === "POST" && u.pathname === "/referral/track-swap") {
     if (isReferralRateLimited(req)) {
       return json(req, res, 429, { ok: false, error: "Rate limited" });
+    }
+    if (isForbiddenOrigin(req)) {
+      return json(req, res, 403, { ok: false, error: "Forbidden origin" });
+    }
+    if (!hasAdminAuthorization(req)) {
+      return json(req, res, 401, {
+        ok: false,
+        error: "Server-side swap tracking required",
+      });
     }
     try {
       const payload = await readJsonBody(req);
@@ -1558,6 +1612,9 @@ createServer(async (req, res) => {
     if (isReferralRateLimited(req)) {
       return json(req, res, 429, { ok: false, error: "Rate limited" });
     }
+    if (isForbiddenOrigin(req)) {
+      return json(req, res, 403, { ok: false, error: "Forbidden origin" });
+    }
     const address = String(u.searchParams.get("address") || "").trim();
     if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) {
       return json(req, res, 400, { ok: false, error: "Invalid address" });
@@ -1570,6 +1627,9 @@ createServer(async (req, res) => {
   if (req.method === "GET" && u.pathname === "/referral/lookup") {
     if (isReferralRateLimited(req)) {
       return json(req, res, 429, { ok: false, error: "Rate limited" });
+    }
+    if (isForbiddenOrigin(req)) {
+      return json(req, res, 403, { ok: false, error: "Forbidden origin" });
     }
     const code = String(u.searchParams.get("code") || "")
       .trim()
@@ -1614,6 +1674,7 @@ createServer(async (req, res) => {
   );
   void runChecks();
   setInterval(() => void runChecks(), POLL_MS);
+  telegramQueue.start();
 
   // Start referral tracker if configured
   if (process.env.EON_REFERRAL_ADDRESS && process.env.TRACKER_RPC_URL) {
@@ -1628,4 +1689,15 @@ createServer(async (req, res) => {
         console.error("[relay] Failed to start referral tracker:", err.message),
       );
   }
+
+  createAmmIndexerFromEnv()
+    .then((indexer) => {
+      if (indexer) {
+        ammIndexer = indexer;
+        console.log("[relay] AMM indexer started");
+      }
+    })
+    .catch((err) =>
+      console.error("[relay] Failed to start AMM indexer:", err.message),
+    );
 });

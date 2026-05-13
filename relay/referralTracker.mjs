@@ -13,18 +13,21 @@
 
 import { fileURLToPath } from "url";
 import {
-  createPublicClient,
   createWalletClient,
   http,
   parseAbi,
   formatUnits,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { base, baseSepolia, sepolia } from "viem/chains";
+import { chainForId, createFallbackPublicClient, rpcUrlsFromEnv } from "./rpc.mjs";
 
 // ABI fragments
 const EonPairSwapEventAbi = parseAbi([
   "event Swap(address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)",
+]);
+
+const EonFactoryEventAbi = parseAbi([
+  "event PairCreated(address indexed token0, address indexed token1, address pair, uint256)",
 ]);
 
 const EonReferralAbi = parseAbi([
@@ -44,13 +47,6 @@ const EonPairAbi = parseAbi([
   "function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
 ]);
 
-// Chain configs
-const CHAIN_CONFIGS = {
-  8453: { chain: base, name: "Base Mainnet" },
-  84532: { chain: baseSepolia, name: "Base Sepolia" },
-  11155111: { chain: sepolia, name: "Ethereum Sepolia" },
-};
-
 /**
  * ReferralTrackerService
  * Monitors swap events and updates EonReferral contract
@@ -58,23 +54,21 @@ const CHAIN_CONFIGS = {
 export class ReferralTrackerService {
   constructor(config) {
     this.chainId = config.chainId;
-    this.chainConfig = CHAIN_CONFIGS[this.chainId];
-
-    if (!this.chainConfig) {
-      throw new Error(`Unsupported chain: ${this.chainId}`);
-    }
+    this.chain = chainForId(this.chainId);
 
     // Setup clients
-    this.publicClient = createPublicClient({
-      chain: this.chainConfig.chain,
-      transport: http(config.rpcUrl),
+    this.publicClient = createFallbackPublicClient({
+      chainId: this.chainId,
+      rpcUrls: config.rpcUrls,
+      wsRpcUrls: config.wsRpcUrls,
+      preferWebSocket: false,
     });
 
     if (config.trackerPrivateKey) {
       const account = privateKeyToAccount(config.trackerPrivateKey);
       this.walletClient = createWalletClient({
         account,
-        chain: this.chainConfig.chain,
+        chain: this.chain,
         transport: http(config.rpcUrl),
       });
       this.trackerAddress = account.address;
@@ -92,7 +86,7 @@ export class ReferralTrackerService {
     // Price oracle (simple, you may want to integrate Chainlink or similar)
     this.ethPriceUsd = 3000; // Default, should be updated periodically
 
-    console.log(`[ReferralTracker] Initialized for ${this.chainConfig.name}`);
+    console.log(`[ReferralTracker] Initialized for ${this.chain.name}`);
     console.log(
       `[ReferralTracker] Tracker address: ${this.trackerAddress || "READ-ONLY MODE"}`,
     );
@@ -107,14 +101,8 @@ export class ReferralTrackerService {
     // Load all pair addresses from factory
     await this.loadAllPairs();
 
-    // Start watching for Swap events
-    this.unwatch = this.publicClient.watchContractEvent({
-      abi: EonPairSwapEventAbi,
-      eventName: "Swap",
-      onLogs: (logs) => this.handleSwapLogs(logs),
-      onError: (error) =>
-        console.error("[ReferralTracker] Watch error:", error),
-    });
+    this.watchSwapEvents();
+    this.watchPairCreatedEvents();
 
     console.log(
       `[ReferralTracker] Watching ${this.pairAddresses.size} pairs for swaps`,
@@ -129,6 +117,53 @@ export class ReferralTrackerService {
       this.unwatch();
       console.log("[ReferralTracker] Stopped watching");
     }
+    if (this.unwatchPairCreated) {
+      this.unwatchPairCreated();
+      console.log("[ReferralTracker] Stopped pair creation watcher");
+    }
+  }
+
+  watchSwapEvents() {
+    if (this.unwatch) {
+      this.unwatch();
+      this.unwatch = null;
+    }
+    const addresses = [...this.pairAddresses];
+    if (!addresses.length) {
+      console.warn("[ReferralTracker] No pairs loaded, swap watcher disabled");
+      return;
+    }
+    this.unwatch = this.publicClient.watchContractEvent({
+      address: addresses,
+      abi: EonPairSwapEventAbi,
+      eventName: "Swap",
+      onLogs: (logs) => this.handleSwapLogs(logs),
+      onError: (error) =>
+        console.error("[ReferralTracker] Watch error:", error),
+    });
+  }
+
+  watchPairCreatedEvents() {
+    if (!this.factoryAddress) return;
+    this.unwatchPairCreated = this.publicClient.watchContractEvent({
+      address: this.factoryAddress,
+      abi: EonFactoryEventAbi,
+      eventName: "PairCreated",
+      onLogs: (logs) => {
+        let changed = false;
+        for (const log of logs) {
+          const pair = String(log.args?.pair || "").toLowerCase();
+          if (/^0x[a-fA-F0-9]{40}$/.test(pair) && !this.pairAddresses.has(pair)) {
+            this.pairAddresses.add(pair);
+            changed = true;
+            console.log(`[ReferralTracker] New pair detected: ${pair}`);
+          }
+        }
+        if (changed) this.watchSwapEvents();
+      },
+      onError: (error) =>
+        console.error("[ReferralTracker] PairCreated watch error:", error),
+    });
   }
 
   /**
@@ -173,6 +208,9 @@ export class ReferralTrackerService {
   async handleSwapLogs(logs) {
     for (const log of logs) {
       const txHash = log.transactionHash;
+      const pairAddress = String(log.address || "").toLowerCase();
+
+      if (!this.pairAddresses.has(pairAddress)) continue;
 
       // Skip if already processed
       if (this.processedTxs.has(txHash)) continue;
@@ -337,12 +375,13 @@ export class ReferralTrackerService {
 export async function createTrackerFromEnv() {
   const chainId = Number(process.env.TRACKER_CHAIN_ID || 8453);
   const rpcUrl = process.env.TRACKER_RPC_URL;
+  const rpcUrls = rpcUrlsFromEnv("TRACKER");
   const trackerPrivateKey = process.env.TRACKER_PRIVATE_KEY;
   const referralAddress = process.env.EON_REFERRAL_ADDRESS;
   const factoryAddress = process.env.EON_FACTORY_ADDRESS;
   const swapFeeBps = Number(process.env.SWAP_FEE_BPS || 30);
 
-  if (!rpcUrl || !referralAddress) {
+  if (!rpcUrls.length || !referralAddress) {
     console.error(
       "[ReferralTracker] Missing required env vars: TRACKER_RPC_URL, EON_REFERRAL_ADDRESS",
     );
@@ -351,7 +390,8 @@ export async function createTrackerFromEnv() {
 
   const tracker = new ReferralTrackerService({
     chainId,
-    rpcUrl,
+    rpcUrl: rpcUrls[0],
+    rpcUrls,
     trackerPrivateKey,
     referralAddress,
     factoryAddress,

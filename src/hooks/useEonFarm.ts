@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { erc20Abi, formatUnits, type Address } from 'viem'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 
@@ -48,19 +48,25 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState(0)
+  const fetchInFlightRef = useRef<Promise<void> | null>(null)
 
   const masterChefAddress = getMasterChefAddress(chainId)
   const rewardToken = EON_REWARD_TOKEN[chainId]
   const extraRewardToken = EON_EXTRA_REWARD_TOKEN[chainId]
 
   const fetchFarms = useCallback(async () => {
+    if (fetchInFlightRef.current) {
+      return fetchInFlightRef.current
+    }
+
     if (!masterChefAddress || !publicClient) {
       setError('MasterChef not configured for this chain')
       setLoading(false)
       return
     }
 
-    try {
+    const run = (async () => {
+      try {
       setLoading(true)
       setError(null)
 
@@ -357,13 +363,18 @@ export function useEonFarm(chainId: number): UseEonFarmResult {
       setPools(poolsData)
       setUserPositions(positions)
       setLastUpdated(Date.now())
-    } catch (err) {
+      } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch farms'
       setError(msg)
       console.error('[useEonFarm]', err)
-    } finally {
+      } finally {
       setLoading(false)
-    }
+        fetchInFlightRef.current = null
+      }
+    })()
+
+    fetchInFlightRef.current = run
+    return run
   }, [chainId, publicClient, userAddress, masterChefAddress, rewardToken, extraRewardToken])
 
   // Initial fetch

@@ -71,6 +71,8 @@ Activity rows are written when users trigger `addActivity` / `patchActivity` in 
 - Health probes for EonSwap, CoinGecko, and Etherscan.
 - Webhook alerts with cooldown for critical degraded providers and high latency.
 - Response security headers enabled on relay endpoints.
+- Durable Telegram notification queue with retry/backoff and dead-letter storage.
+- Optional AMM indexer with RPC fallback, websocket listener, HTTP backfill, block confirmations, pair auto-discovery, and JSONL event storage.
 
 ## Referral Tracker (On-chain)
 
@@ -93,8 +95,9 @@ Set these environment variables to enable the tracker:
 ```bash
 # Required - Base Mainnet
 TRACKER_RPC_URL=https://mainnet.base.org
+TRACKER_FALLBACK_RPC_URLS=https://base-mainnet.g.alchemy.com/v2/...,https://your-secondary-rpc.example
 EON_REFERRAL_ADDRESS=0xD878c03e94Dc9a42AB79C78Af7b06fAf341CAd55
-EON_FACTORY_ADDRESS=0xd7b56729dcaa67aa2fa4a72795e3ed94ac03071b
+EON_FACTORY_ADDRESS=0x24FF44E8B0839660Dfc381466be1fF8d946cE5C8
 
 # Required for on-chain tracking
 TRACKER_PRIVATE_KEY=0x...                        # Tracker wallet private key
@@ -103,6 +106,23 @@ TRACKER_CHAIN_ID=8453                            # Chain ID (default: 8453 = Bas
 # Optional
 SWAP_FEE_BPS=30                                  # Swap fee basis points (default: 30 = 0.3%)
 ```
+
+## AMM Indexer
+
+Enable the indexer in the same relay process:
+
+```bash
+INDEXER_ENABLED=1
+INDEXER_CHAIN_ID=8453
+INDEXER_FACTORY_ADDRESS=0x24FF44E8B0839660Dfc381466be1fF8d946cE5C8
+INDEXER_RPC_URL=https://base-mainnet.g.alchemy.com/v2/...
+INDEXER_FALLBACK_RPC_URLS=https://mainnet.base.org,https://your-secondary-rpc.example
+INDEXER_WS_RPC_URL=wss://base-mainnet.g.alchemy.com/v2/...
+INDEXER_CONFIRMATIONS=8
+INDEXER_BATCH_BLOCKS=500
+```
+
+Data is persisted under `relay/data/indexer/` by default. For high traffic, replace this JSONL store with Postgres while keeping the same cursor, confirmation, and dedupe semantics.
 
 ### Setup Steps
 

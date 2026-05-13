@@ -24,12 +24,13 @@ import { Pagination } from "../Pagination";
 import { usePagination } from "../../hooks/usePagination";
 import { sendTxEventToRelay } from "../../lib/txEvents";
 import { useEonSwapStore } from "../../store/useEonSwapStore";
+import { EON_BASE_MAINNET } from "../../lib/eonBaseMainnet";
 
 /** EonSwap branded token addresses on Base mainnet */
 const EONSWAP_TOKENS = [
-  "0x7bd09674b3c721e35973993d5b6a79cda7da9c7f", // ESTF
-  "0xbc11e3093afdbeb88d32ef893027202fc2b84f9d", // ESR
-];
+  EON_BASE_MAINNET.token.address.toLowerCase(),
+  EON_BASE_MAINNET.extraRewardToken.address.toLowerCase(),
+]
 
 /** Check if the pool contains EonSwap branded token (ESTF or ESR) */
 function isEonSwapPool(pool: EonAmmPool): boolean {

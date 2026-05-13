@@ -4,8 +4,10 @@ import { formatTokenAmountUi } from '../lib/format'
 import {
   formatPriceImpactLabel,
   formatUsdApprox,
-  priceImpactPercentFromUsd,
+  parsePriceImpactPercent,
+  priceImpactLabelFromPercent,
   priceImpactPercentFromAmounts,
+  priceImpactPercentFromUsd,
   totalNetworkFeeUsd,
 } from '../lib/quoteDisplay'
 import { formatSlippagePercent } from '../lib/slippage'
@@ -77,8 +79,8 @@ export function SwapQuoteDetails({ wrongNetwork }: Props) {
     
     // Method 1: Router-calculated from reserves (most accurate for AMM)
     if (quotePriceImpact) {
-      const parsed = Number.parseFloat(quotePriceImpact)
-      if (Number.isFinite(parsed) && parsed >= 0) return parsed
+      const parsed = parsePriceImpactPercent(quotePriceImpact)
+      if (parsed != null) return parsed
     }
     
     // Method 2: USD-based calculation (accurate when prices available)
@@ -88,7 +90,7 @@ export function SwapQuoteDetails({ wrongNetwork }: Props) {
     
     // Method 3: Token amount-based calculation (fallback)
     // ✅ FIX (L-1): Convert formatted input to wei string
-    if (sellAmountInput && quoteAmountOutWei) {
+    if (sellToken.address.toLowerCase() === buyToken.address.toLowerCase() && sellAmountInput && quoteAmountOutWei) {
       try {
         const sellAmountWei = parseUnits(sellAmountInput.trim(), sellToken.decimals)
         return priceImpactPercentFromAmounts(
@@ -106,10 +108,10 @@ export function SwapQuoteDetails({ wrongNetwork }: Props) {
   })()
 
   const priceImpactLabel =
-    hasResolvedQuote && quoteAmountInUsd && quoteAmountOutUsd
-      ? formatPriceImpactLabel(quoteAmountInUsd, quoteAmountOutUsd)
-      : impactPct != null
-        ? `${impactPct < 0.005 ? '<0.01' : impactPct.toFixed(2)}%`
+    impactPct != null
+      ? priceImpactLabelFromPercent(impactPct)
+      : hasResolvedQuote && quoteAmountInUsd && quoteAmountOutUsd
+        ? formatPriceImpactLabel(quoteAmountInUsd, quoteAmountOutUsd)
         : null
 
   const networkTotal =

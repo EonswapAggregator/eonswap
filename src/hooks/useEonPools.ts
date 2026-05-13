@@ -10,7 +10,7 @@ import { fetchSimplePricesUsd, coingeckoIdForToken } from '../lib/coingecko'
 import { useEonAmmRealtimeRefresh } from './useEonRealtimeEvents'
 
 const POLL_INTERVAL_MS = 30_000
-const MAX_PAIRS_TO_FETCH = 50
+const MAX_PAIRS_TO_FETCH = 500
 
 type UseEonPoolsResult = {
   pools: EonAmmPool[]

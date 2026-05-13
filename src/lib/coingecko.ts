@@ -149,12 +149,22 @@ export async function fetchSimplePricesUsd(
     return cached;
   }
 
+  const missingFromApi = missing.filter((id) => !(id in FALLBACK_PRICES));
+  const fallbackOnly = missing.filter((id) => id in FALLBACK_PRICES);
+  if (fallbackOnly.length > 0) {
+    const fallbackPrices = Object.fromEntries(
+      fallbackOnly.map((id) => [id, FALLBACK_PRICES[id]!]),
+    );
+    setCachedPrices(fallbackPrices);
+    if (missingFromApi.length === 0) return { ...cached, ...fallbackPrices };
+  }
+
   // Check for in-flight request with same IDs
-  const cacheKey = missing.sort().join(",");
+  const cacheKey = missingFromApi.sort().join(",");
   const existing = inflightRequests.get(cacheKey);
   if (existing) {
     const freshPrices = await existing;
-    return { ...cached, ...freshPrices };
+    return { ...cached, ...Object.fromEntries(fallbackOnly.map((id) => [id, FALLBACK_PRICES[id]!])), ...freshPrices };
   }
 
   // Create queued request
@@ -163,7 +173,7 @@ export async function fetchSimplePricesUsd(
       try {
         const baseUrl = getCoingeckoBaseUrl();
         const url = new URL(`${baseUrl}/simple/price`, window.location.origin);
-        url.searchParams.set("ids", missing.join(","));
+        url.searchParams.set("ids", missingFromApi.join(","));
         url.searchParams.set("vs_currencies", "usd");
 
         const res = await fetch(url.toString());
@@ -213,7 +223,7 @@ export async function fetchSimplePricesUsd(
 
         const priceData = json as Record<string, { usd?: number }>;
         const out: Record<string, number> = {};
-        for (const id of missing) {
+        for (const id of missingFromApi) {
           const v = Number(priceData[id]?.usd ?? 0);
           if (Number.isFinite(v) && v > 0) out[id] = v;
         }
@@ -237,7 +247,11 @@ export async function fetchSimplePricesUsd(
   const freshPrices = await requestPromise;
 
   // Merge with fallbacks for any still-missing prices
-  const result = { ...cached, ...freshPrices };
+  const result = {
+    ...cached,
+    ...Object.fromEntries(fallbackOnly.map((id) => [id, FALLBACK_PRICES[id]!])),
+    ...freshPrices,
+  };
   for (const id of ids) {
     if (!(id in result) && FALLBACK_PRICES[id]) {
       result[id] = FALLBACK_PRICES[id];

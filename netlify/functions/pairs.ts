@@ -1,20 +1,22 @@
 import type { Handler, HandlerEvent } from '@netlify/functions'
 
-const FACTORY_ADDRESS = '0xd7b56729dcaa67aa2fa4a72795e3ed94ac03071b'
-const RPC_URL = 'https://mainnet.base.org'
+const FACTORY_ADDRESS = '0x24FF44E8B0839660Dfc381466be1fF8d946cE5C8'
+const RPC_URLS = [
+  process.env.BASE_RPC_URL,
+  process.env.VITE_BASE_RPC_URL,
+  ...(process.env.BASE_FALLBACK_RPC_URLS || '').split(','),
+  'https://mainnet.base.org',
+]
+  .map((url) => String(url || '').trim())
+  .filter(Boolean)
+const MAX_PAIRS = Number(process.env.PAIRS_MAX_SCAN || 500)
 
 const KNOWN_PAIRS = [
   {
-    address: '0x79680a4500df8e0599e9916c52b3b1983bd6ee04',
-    token0: '0x7bd09674b3c721e35973993d5b6a79cda7da9c7f',
+    address: '0x539e2da338ca3ae9b5fedc6d102978a741b641cf',
+    token0: '0x295685df8e07a6d529a849AE7688c524494fD010',
     token1: '0x4200000000000000000000000000000000000006',
     symbol: 'ESTF/WETH',
-  },
-  {
-    address: '0x1a46207d6c02b95c159ab2f4b8b521b061b49173',
-    token0: '0xbc11e3093afdbeb88d32ef893027202fc2b84f9d',
-    token1: '0x4200000000000000000000000000000000000006',
-    symbol: 'ESR/WETH',
   },
 ]
 
@@ -22,6 +24,8 @@ const GET_RESERVES_SELECTOR = '0x0902f1ac'
 const TOKEN0_SELECTOR = '0x0dfe1681'
 const TOKEN1_SELECTOR = '0xd21220a7'
 const TOTAL_SUPPLY_SELECTOR = '0x18160ddd'
+const ALL_PAIRS_LENGTH_SELECTOR = '0x574f2ba3'
+const ALL_PAIRS_SELECTOR = '0x1e3dd18b'
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
@@ -80,10 +84,15 @@ export const handler: Handler = async (event: HandlerEvent) => {
       }
     }
 
+    const pairAddresses = await getAllPairAddresses().catch(() =>
+      KNOWN_PAIRS.map((p) => p.address)
+    )
+
     const pairsData = await Promise.all(
-      KNOWN_PAIRS.map(async (p) => {
-        const data = await getPairData(p.address)
-        return data ? { ...data, symbol: p.symbol } : null
+      pairAddresses.map(async (address) => {
+        const data = await getPairData(address)
+        const known = KNOWN_PAIRS.find((p) => p.address.toLowerCase() === address.toLowerCase())
+        return data ? { ...data, symbol: known?.symbol } : null
       })
     )
 
@@ -157,23 +166,52 @@ async function getPairData(pairAddress: string): Promise<PairData | null> {
 }
 
 async function ethCall(to: string, data: string): Promise<string> {
-  const response = await fetch(RPC_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      method: 'eth_call',
-      params: [{ to, data }, 'latest'],
-      id: 1,
-    }),
-    signal: AbortSignal.timeout(10000),
-  })
+  let lastError: unknown = null
+  for (const rpcUrl of RPC_URLS) {
+    try {
+      const response = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_call',
+          params: [{ to, data }, 'latest'],
+          id: 1,
+        }),
+        signal: AbortSignal.timeout(10000),
+      })
 
-  const json = await response.json()
+      const json = await response.json()
 
-  if (json.error) {
-    throw new Error(json.error.message || 'RPC call failed')
+      if (json.error) {
+        throw new Error(json.error.message || 'RPC call failed')
+      }
+
+      return json.result
+    } catch (error) {
+      lastError = error
+    }
   }
 
-  return json.result
+  throw lastError instanceof Error ? lastError : new Error('All RPC calls failed')
+}
+
+function encodeAllPairs(index: number): string {
+  return ALL_PAIRS_SELECTOR + BigInt(index).toString(16).padStart(64, '0')
+}
+
+async function getAllPairAddresses(): Promise<string[]> {
+  const lengthResult = await ethCall(FACTORY_ADDRESS, ALL_PAIRS_LENGTH_SELECTOR)
+  const length = Number(BigInt(lengthResult))
+  const count = Math.min(Number.isFinite(length) ? length : 0, MAX_PAIRS)
+  if (count <= 0) return []
+
+  const pairs = await Promise.all(
+    Array.from({ length: count }, async (_, i) => {
+      const result = await ethCall(FACTORY_ADDRESS, encodeAllPairs(i))
+      return `0x${result.slice(-40)}`.toLowerCase()
+    })
+  )
+
+  return [...new Set(pairs)]
 }
