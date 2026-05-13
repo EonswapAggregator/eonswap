@@ -21,6 +21,16 @@ const SwapPage = lazy(() =>
 const PoolPage = lazy(() =>
   import("./pages/PoolPage").then((m) => ({ default: m.PoolPage })),
 );
+const PoolDetailPage = lazy(() =>
+  import("./pages/PoolDetailPage").then((m) => ({
+    default: m.PoolDetailPage,
+  })),
+);
+const TokenDetailPage = lazy(() =>
+  import("./pages/TokenDetailPage").then((m) => ({
+    default: m.TokenDetailPage,
+  })),
+);
 const FarmPage = lazy(() =>
   import("./pages/FarmPage").then((m) => ({ default: m.FarmPage })),
 );
@@ -122,6 +132,8 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/swap" element={<SwapPage />} />
             <Route path="/liquidity" element={<PoolPage />} />
+            <Route path="/pools/:address" element={<PoolDetailPage />} />
+            <Route path="/tokens/:address" element={<TokenDetailPage />} />
             <Route
               path="/pool"
               element={<Navigate to="/liquidity" replace />}

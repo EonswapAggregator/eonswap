@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { formatUnits, parseUnits, type Address } from "viem";
 import { useAccount, useBalance } from "wagmi";
 import { base } from "viem/chains";
@@ -238,6 +239,15 @@ function PoolCard({
         {/* Pool details - always visible */}
         <div className="border-t border-uni-border bg-uni-surface-2/50 px-5 py-4 md:px-6">
           <div className="grid gap-2 text-xs">
+            <div className="flex min-w-0 justify-between gap-3">
+              <span className="shrink-0 text-neutral-500">Pool</span>
+              <Link
+                to={`/pools/${pool.address}`}
+                className="min-w-0 truncate text-right font-mono text-uni-pink hover:underline"
+              >
+                {pool.address.slice(0, 6)}...{pool.address.slice(-4)}
+              </Link>
+            </div>
             <div className="flex min-w-0 justify-between gap-3">
               <span className="shrink-0 text-neutral-500">Pool Address</span>
               <a

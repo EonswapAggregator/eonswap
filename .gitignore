@@ -9,6 +9,7 @@ documentation/docs/.vitepress/cache/
 !.env.example
 logs/*.log
 logs/*.err.log
+.codex-run-logs/
 relay/data/*.jsonl
 relay/data/*.json
 relay/data/indexer/

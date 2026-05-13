@@ -405,7 +405,7 @@ export function FarmPage() {
             </span>
             <span className="inline-flex items-center gap-1.5 text-xs text-neutral-500">
               <Shield className="h-3.5 w-3.5 text-uni-pink/80" aria-hidden />
-              Powered by EonMasterChef
+              Powered by Eon AMM
             </span>
           </motion.div>
 
