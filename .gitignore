@@ -1,11 +1,18 @@
 node_modules
 dist
+documentation/docs/.vitepress/.temp/
+documentation/docs/.vitepress/cache/
 *.local
 .DS_Store
 .env
 .env.*
 !.env.example
+logs/*.log
+logs/*.err.log
 relay/data/*.jsonl
+relay/data/*.json
+relay/data/indexer/
+relay/data/indexer-test-*/
 test-results/
 .vscode/
 
