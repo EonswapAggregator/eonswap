@@ -19,17 +19,6 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
-      middlewareMode: false,
-      middleware: [
-        (req, res, next) => {
-          // Dev: Set permissive CSP to allow Google Fonts, GA, etc.
-          res.setHeader(
-            "Content-Security-Policy",
-            "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
-          );
-          next();
-        },
-      ],
       proxy: {
         // Dev: same-origin /__eonswap-relay/* → remote relay (no browser CORS)
         ...(relayDevProxy
