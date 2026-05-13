@@ -205,7 +205,7 @@ export function FarmCard({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.45 }}
-      className="group relative min-w-0 overflow-visible rounded-3xl border border-uni-border bg-uni-surface shadow-uni-card transition-all duration-300 hover:border-uni-pink/30 hover:shadow-[0_0_30px_-10px_rgba(255,0,122,0.25)]"
+      className="group relative min-w-0 overflow-visible rounded-3xl"
     >
       {/* Featured Badge - floating at top */}
       {isEonSwapPool(pool) && (
@@ -217,14 +217,15 @@ export function FarmCard({
         </div>
       )}
 
-      {/* Gradient glow on hover */}
-      <div
-        className="pointer-events-none absolute -inset-px rounded-3xl bg-gradient-to-b from-uni-pink/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-        aria-hidden
-      />
+      <div className="relative overflow-hidden rounded-3xl border border-uni-border bg-uni-surface shadow-uni-card transition-all duration-300 group-hover:border-uni-pink/30 group-hover:shadow-[0_0_30px_-10px_rgba(255,0,122,0.25)]">
+        {/* Gradient glow on hover */}
+        <div
+          className="pointer-events-none absolute -inset-px rounded-3xl bg-gradient-to-b from-uni-pink/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+          aria-hidden
+        />
 
-      {/* Header */}
-      <div className={`relative p-5 md:p-6 ${isEonSwapPool(pool) ? 'pt-7' : ''}`}>
+        {/* Header */}
+        <div className={`relative p-5 md:p-6 ${isEonSwapPool(pool) ? 'pt-7' : ''}`}>
         <div className="flex min-w-0 items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-4">
             {/* Token pair icons */}
@@ -347,17 +348,17 @@ export function FarmCard({
             </>
           )}
         </button>
-      </div>
+        </div>
 
-      {/* Expanded panel */}
-      {expanded && (
-        <motion.div
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: 'auto', opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.25 }}
-          className="border-t border-uni-border bg-uni-surface-2 px-5 py-5 md:px-6"
-        >
+        {/* Expanded panel */}
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="border-t border-uni-border bg-uni-surface-2 px-5 py-5 md:px-6"
+          >
           {!userAddress ? (
             <div className="text-center text-sm text-neutral-400">
               Connect your wallet to stake LP tokens
@@ -504,8 +505,9 @@ export function FarmCard({
               <span className="min-w-0 truncate">Extra {extraRewardLabel} rewards active</span>
             </div>
           )}
-        </motion.div>
-      )}
+          </motion.div>
+        )}
+      </div>
     </motion.div>
   )
 }

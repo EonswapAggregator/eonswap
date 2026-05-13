@@ -95,7 +95,7 @@ function PoolCard({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.45 }}
-      className="group relative overflow-visible rounded-3xl border border-uni-border bg-uni-surface shadow-uni-card transition-all duration-300 hover:border-uni-pink/30 hover:shadow-[0_0_30px_-10px_rgba(255,0,122,0.25)]"
+      className="group relative min-w-0 overflow-visible rounded-3xl"
     >
       {/* Featured Badge - floating at top */}
       {isEonSwapPool(pool) && (
@@ -107,18 +107,19 @@ function PoolCard({
         </div>
       )}
 
-      {/* Gradient glow on hover */}
-      <div
-        className="pointer-events-none absolute -inset-px rounded-3xl bg-gradient-to-b from-uni-pink/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-        aria-hidden
-      />
+      <div className="relative overflow-hidden rounded-3xl border border-uni-border bg-uni-surface shadow-uni-card transition-all duration-300 group-hover:border-uni-pink/30 group-hover:shadow-[0_0_30px_-10px_rgba(255,0,122,0.25)]">
+        {/* Gradient glow on hover */}
+        <div
+          className="pointer-events-none absolute -inset-px rounded-3xl bg-gradient-to-b from-uni-pink/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+          aria-hidden
+        />
 
-      {/* Header */}
-      <div
-        className={`relative p-5 md:p-6 ${isEonSwapPool(pool) ? "pt-7" : ""}`}
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
+        {/* Header */}
+        <div
+          className={`relative p-5 md:p-6 ${isEonSwapPool(pool) ? "pt-7" : ""}`}
+        >
+        <div className="flex min-w-0 items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
             {/* Token pair icons */}
             <div className="relative">
               <div className="flex items-center -space-x-3">
@@ -149,8 +150,8 @@ function PoolCard({
               </div>
             </div>
 
-            <div>
-              <h3 className="text-lg font-semibold text-white">
+            <div className="min-w-0">
+              <h3 className="truncate text-lg font-semibold text-white">
                 {pool.symbol0}/{pool.symbol1}
               </h3>
               <p className="text-xs text-neutral-500">Eon AMM • Base</p>
@@ -158,7 +159,7 @@ function PoolCard({
           </div>
 
           {/* TVL Badge - inside card */}
-          <div className="text-right">
+          <div className="shrink-0 text-right">
             <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
               TVL
             </p>
@@ -170,19 +171,19 @@ function PoolCard({
 
         {/* Stats row */}
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-uni-border bg-uni-surface-2 p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-500">
+          <div className="min-w-0 rounded-xl border border-uni-border bg-uni-surface-2 p-3">
+            <p className="truncate text-[10px] font-medium uppercase tracking-wider text-neutral-500">
               {pool.symbol0} Reserve
             </p>
-            <p className="mt-1 text-sm font-medium tabular-nums text-neutral-200">
+            <p className="mt-1 truncate text-sm font-medium tabular-nums text-neutral-200">
               {formatTokenAmount(pool.reserve0, pool.decimals0)}
             </p>
           </div>
-          <div className="rounded-xl border border-uni-border bg-uni-surface-2 p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-500">
+          <div className="min-w-0 rounded-xl border border-uni-border bg-uni-surface-2 p-3">
+            <p className="truncate text-[10px] font-medium uppercase tracking-wider text-neutral-500">
               {pool.symbol1} Reserve
             </p>
-            <p className="mt-1 text-sm font-medium tabular-nums text-neutral-200">
+            <p className="mt-1 truncate text-sm font-medium tabular-nums text-neutral-200">
               {formatTokenAmount(pool.reserve1, pool.decimals1)}
             </p>
           </div>
@@ -191,20 +192,22 @@ function PoolCard({
         {/* User position badge */}
         {userPosition && (
           <div className="mt-4 rounded-xl border border-uni-pink/30 bg-uni-pink/[0.08] p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
                 <Percent className="h-4 w-4 text-uni-pink" />
-                <span className="text-xs font-medium text-uni-pink">
+                <span className="truncate text-xs font-medium text-uni-pink">
                   Your Position
                 </span>
               </div>
-              <span className="text-sm font-semibold text-white">
+              <span className="shrink-0 text-sm font-semibold text-white">
                 {formatUsd(userPosition.valueUsd)}
               </span>
             </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-neutral-400">
-              <span>Pool share: {sharePercent}%</span>
-              <span>{formatTokenAmount(userPosition.lpBalance, 18)} LP</span>
+            <div className="mt-2 flex min-w-0 items-center justify-between gap-3 text-xs text-neutral-400">
+              <span className="min-w-0 truncate">Pool share: {sharePercent}%</span>
+              <span className="shrink-0 truncate">
+                {formatTokenAmount(userPosition.lpBalance, 18)} LP
+              </span>
             </div>
           </div>
         )}
@@ -230,33 +233,34 @@ function PoolCard({
             </button>
           )}
         </div>
-      </div>
+        </div>
 
-      {/* Pool details - always visible */}
-      <div className="border-t border-uni-border bg-uni-surface-2/50 px-5 py-4 md:px-6">
-        <div className="grid gap-2 text-xs">
-          <div className="flex justify-between">
-            <span className="text-neutral-500">Pool Address</span>
-            <a
-              href={`https://basescan.org/address/${pool.address}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-uni-pink hover:underline"
-            >
-              {pool.address.slice(0, 6)}...{pool.address.slice(-4)}
-            </a>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-neutral-500">Total Supply</span>
-            <span className="font-mono text-neutral-300">
-              {formatTokenAmount(pool.totalSupply, 18)} LP
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-neutral-500">Reserve Updated</span>
-            <span className="text-neutral-300">
-              {new Date(pool.blockTimestampLast * 1000).toLocaleString()}
-            </span>
+        {/* Pool details - always visible */}
+        <div className="border-t border-uni-border bg-uni-surface-2/50 px-5 py-4 md:px-6">
+          <div className="grid gap-2 text-xs">
+            <div className="flex min-w-0 justify-between gap-3">
+              <span className="shrink-0 text-neutral-500">Pool Address</span>
+              <a
+                href={`https://basescan.org/address/${pool.address}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="min-w-0 truncate text-right font-mono text-uni-pink hover:underline"
+              >
+                {pool.address.slice(0, 6)}...{pool.address.slice(-4)}
+              </a>
+            </div>
+            <div className="flex min-w-0 justify-between gap-3">
+              <span className="shrink-0 text-neutral-500">Total Supply</span>
+              <span className="min-w-0 truncate text-right font-mono text-neutral-300">
+                {formatTokenAmount(pool.totalSupply, 18)} LP
+              </span>
+            </div>
+            <div className="flex min-w-0 justify-between gap-3">
+              <span className="shrink-0 text-neutral-500">Reserve Updated</span>
+              <span className="min-w-0 truncate text-right text-neutral-300">
+                {new Date(pool.blockTimestampLast * 1000).toLocaleString()}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -1231,7 +1235,7 @@ export function PoolGrid({
 
   return (
     <>
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {currentPools.map((pool, index) => {
           const position = userPositions.find(
             (p) => p.poolAddress.toLowerCase() === pool.address.toLowerCase(),
