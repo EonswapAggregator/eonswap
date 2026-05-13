@@ -6,7 +6,7 @@ export function baseRpcUrls(): string[] {
   const publicRpcProviders = [
     'https://rpc.ankr.com/base',
     'https://base.rpc.thirdweb.com',
-    'https://base-mainnet.public.blastapi.io',
+    'https://base-rpc.publicnode.com',
   ]
   
   const urls = import.meta.env.DEV
