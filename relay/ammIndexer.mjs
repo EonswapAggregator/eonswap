@@ -381,8 +381,10 @@ export class AmmIndexerService {
 }
 
 export async function createAmmIndexerFromEnv() {
-  if (process.env.INDEXER_ENABLED !== "1") return null;
+  const enabled = String(process.env.INDEXER_ENABLED || "").toLowerCase();
+  if (enabled === "0" || enabled === "false") return null;
   const factoryAddress = process.env.INDEXER_FACTORY_ADDRESS || process.env.EON_FACTORY_ADDRESS;
+  if (enabled !== "1" && !factoryAddress) return null;
   const indexer = new AmmIndexerService({
     chainId: Number(process.env.INDEXER_CHAIN_ID || 8453),
     factoryAddress,

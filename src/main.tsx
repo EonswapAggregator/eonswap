@@ -6,10 +6,13 @@ import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 import "@rainbow-me/rainbowkit/styles.css";
 import "./index.css";
-import "./lib/chartCacheDebug";
 import App from "./App.tsx";
 import { eonRainbowTheme } from "./theme/eonRainbowTheme";
 import { wagmiConfig } from "./wagmi";
+
+if (import.meta.env.DEV) {
+  void import("./lib/chartCacheDebug");
+}
 
 const queryClient = new QueryClient();
 

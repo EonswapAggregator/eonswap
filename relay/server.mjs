@@ -1111,9 +1111,14 @@ createServer(async (req, res) => {
       return json(req, res, 403, { ok: false, error: "Forbidden origin" });
     }
     if (!ammIndexer) {
-      return json(req, res, 503, {
+      return json(req, res, 200, {
         ok: false,
-        error: "AMM indexer is not enabled",
+        data: [],
+        error: "AMM indexer is not ready",
+        meta: {
+          indexerReady: false,
+          indexerEnabled: process.env.INDEXER_ENABLED !== "0",
+        },
       });
     }
     const limitRaw = Number(u.searchParams.get("limit") || "100");

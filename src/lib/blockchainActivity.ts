@@ -83,6 +83,7 @@ type PairInfo = {
 };
 
 type IndexedActivityResponse = {
+  ok?: boolean;
   data?: SerializedBlockchainSwapActivity[];
   error?: string;
   message?: string;
@@ -203,6 +204,13 @@ export async function fetchIndexedSwapActivities(
           payload.message ||
           payload.error ||
           `Activity index returned ${response.status}`,
+      };
+    }
+
+    if (payload.ok === false) {
+      return {
+        ok: false,
+        error: payload.message || payload.error || "Activity index is not ready",
       };
     }
 
