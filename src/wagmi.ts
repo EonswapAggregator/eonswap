@@ -1,6 +1,6 @@
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { http, fallback } from "wagmi";
-import { base } from "wagmi/chains";
+import { base } from "viem/chains";
 import { baseRpcUrls } from "./lib/rpcUrls";
 
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;

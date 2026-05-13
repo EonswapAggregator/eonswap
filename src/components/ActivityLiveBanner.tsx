@@ -1,5 +1,5 @@
 import { useAccount, useBlockNumber } from "wagmi";
-import { base } from "wagmi/chains";
+import { base } from "viem/chains";
 import { getEonChain, isSupportedChain } from "../lib/chains";
 import { nativeChainDisplayLogoUrl } from "../lib/tokenLogos";
 import { Link } from "react-router-dom";

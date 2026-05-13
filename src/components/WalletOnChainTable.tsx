@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { base } from 'wagmi/chains'
+import { base } from 'viem/chains'
 import {
   Check,
   ChevronDown,
