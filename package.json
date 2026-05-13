@@ -59,6 +59,8 @@
   },
   "overrides": {
     "axios": "1.16.0",
+    "motion-dom": "12.4.5",
+    "motion-utils": "12.0.0",
     "@coinbase/cdp-sdk": {
       "axios": "1.16.0"
     },
