@@ -30,6 +30,24 @@ const TELEGRAM_DEAD_LETTER_PATH =
   process.env.RELAY_TELEGRAM_DEAD_LETTER_PATH?.trim() ||
   join(__dirname, "data", "telegram-dead-letter.json");
 const RELAY_ADMIN_SECRET = process.env.RELAY_ADMIN_SECRET?.trim() || "";
+const DEFAULT_EONSWAP_SUBGRAPH_ID =
+  "FoKBv95x7Z8uMuBZsBTkHKyHFGE9DTVVicwHp3U3eT5s";
+const THE_GRAPH_API_KEY =
+  process.env.THE_GRAPH_API_KEY?.trim() ||
+  process.env.GRAPH_API_KEY?.trim() ||
+  process.env.THE_GRAPH_GATEWAY_API_KEY?.trim() ||
+  "";
+const THE_GRAPH_SUBGRAPH_ID =
+  process.env.THE_GRAPH_SUBGRAPH_ID?.trim() || DEFAULT_EONSWAP_SUBGRAPH_ID;
+const THE_GRAPH_SUBGRAPH_URL =
+  process.env.THE_GRAPH_SUBGRAPH_URL?.trim() ||
+  process.env.RELAY_SUBGRAPH_URL?.trim() ||
+  "";
+const THE_GRAPH_CACHE_MS = Number(process.env.THE_GRAPH_CACHE_MS || 30_000);
+console.log(
+  `[relay] The Graph gateway ${isTheGraphConfigured() ? "configured" : "not configured"} ` +
+    `(subgraph=${THE_GRAPH_SUBGRAPH_ID}, cacheMs=${THE_GRAPH_CACHE_MS})`,
+);
 
 const PORT = Number(process.env.PORT || process.env.RELAY_PORT || 8787);
 /** Railway/Render/Fly expect HTTP on $PORT and often require binding all interfaces. */
@@ -149,6 +167,217 @@ const explorerRateMap = new Map();
 const leaderboardRateMap = new Map();
 const referralRateMap = new Map();
 const recentTxEvents = new Map();
+const subgraphCache = new Map();
+
+function getTheGraphEndpoint() {
+  if (THE_GRAPH_SUBGRAPH_URL) return THE_GRAPH_SUBGRAPH_URL;
+  if (THE_GRAPH_API_KEY) {
+    return `https://gateway.thegraph.com/api/${THE_GRAPH_API_KEY}/subgraphs/id/${THE_GRAPH_SUBGRAPH_ID}`;
+  }
+  return `https://gateway.thegraph.com/api/subgraphs/id/${THE_GRAPH_SUBGRAPH_ID}`;
+}
+
+function isTheGraphConfigured() {
+  return Boolean(THE_GRAPH_SUBGRAPH_URL || THE_GRAPH_API_KEY);
+}
+
+function normalizeTimestampMs(value) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) return Date.now();
+  return numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
+}
+
+function normalizeGraphAddress(value, fallback = "0x0000000000000000000000000000000000000000") {
+  const address = String(value || "").toLowerCase();
+  return /^0x[a-f0-9]{40}$/u.test(address) ? address : fallback;
+}
+
+function graphCacheGet(key) {
+  const entry = subgraphCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    subgraphCache.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function graphCacheSet(key, value, ttlMs = THE_GRAPH_CACHE_MS) {
+  if (ttlMs <= 0) return;
+  subgraphCache.set(key, {
+    value,
+    expiresAt: Date.now() + ttlMs,
+  });
+}
+
+async function queryTheGraph(query, variables = {}, cacheKey = "") {
+  if (!isTheGraphConfigured()) {
+    throw new Error("The Graph gateway is not configured");
+  }
+  if (cacheKey) {
+    const cached = graphCacheGet(cacheKey);
+    if (cached) return cached;
+  }
+
+  const headers = {
+    accept: "application/json",
+    "content-type": "application/json",
+  };
+  if (THE_GRAPH_API_KEY && THE_GRAPH_SUBGRAPH_URL) {
+    headers.authorization = `Bearer ${THE_GRAPH_API_KEY}`;
+  }
+
+  const response = await fetch(getTheGraphEndpoint(), {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ query, variables }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const detail = payload?.errors?.[0]?.message || payload?.error || response.statusText;
+    throw new Error(`The Graph HTTP ${response.status}: ${String(detail).slice(0, 180)}`);
+  }
+  if (Array.isArray(payload?.errors) && payload.errors.length > 0) {
+    throw new Error(String(payload.errors[0]?.message || "The Graph query failed").slice(0, 180));
+  }
+  const data = payload?.data || {};
+  if (cacheKey) graphCacheSet(cacheKey, data);
+  return data;
+}
+
+async function fetchSubgraphSwapActivities({ limit = 100, walletAddress } = {}) {
+  const capped = Math.min(500, Math.max(1, Math.floor(Number(limit) || 100)));
+  const wallet = walletAddress ? normalizeGraphAddress(walletAddress, "") : "";
+  const walletVar = wallet ? ", $wallet: String!" : "";
+  const where = wallet ? ", where: { wallet: $wallet }" : "";
+  const query = `
+    query EonSwapActivities($first: Int!${walletVar}) {
+      activities(first: $first, orderBy: timestamp, orderDirection: desc${where}) {
+        id
+        type
+        pair {
+          id
+          address
+          token0 { id address symbol decimals }
+          token1 { id address symbol decimals }
+        }
+        token0 { id address symbol decimals }
+        token1 { id address symbol decimals }
+        wallet { id }
+        amount0
+        amount1
+        points
+        txHash
+        logIndex
+        blockNumber
+        timestamp
+      }
+    }
+  `;
+  const variables = wallet ? { first: capped, wallet } : { first: capped };
+  const data = await queryTheGraph(
+    query,
+    variables,
+    `swaps:${capped}:${wallet || "global"}`,
+  );
+
+  return (Array.isArray(data.activities) ? data.activities : []).map((activity) => {
+    const pair = activity?.pair || {};
+    const token0 = activity.token0 || pair.token0 || {};
+    const token1 = activity.token1 || pair.token1 || {};
+    const amount0 = String(activity.amount0 || "0");
+    const amount1 = String(activity.amount1 || "0");
+    return {
+      id: String(activity.id || `${activity.txHash || "0x"}-${activity.logIndex || 0}`),
+      kind: String(activity.type || "ACTIVITY"),
+      pair: normalizeGraphAddress(pair.address || pair.id),
+      token0: normalizeGraphAddress(token0.address || token0.id),
+      token1: normalizeGraphAddress(token1.address || token1.id),
+      symbol0: String(token0.symbol || "TKN"),
+      symbol1: String(token1.symbol || "TKN"),
+      decimals0: Number(token0.decimals ?? 18),
+      decimals1: Number(token1.decimals ?? 18),
+      txHash: String(activity.txHash || "0x"),
+      blockNumber: Number(activity.blockNumber || 0),
+      timestamp: normalizeTimestampMs(activity.timestamp),
+      from: normalizeGraphAddress(activity.wallet?.id),
+      amount0,
+      amount1,
+      amount0In: amount0,
+      amount1In: amount1,
+      amount0Out: "0",
+      amount1Out: "0",
+      points: String(activity.points || "0"),
+      to: normalizeGraphAddress(activity.wallet?.id),
+    };
+  });
+}
+
+async function fetchSubgraphLeaderboard(limit = 50) {
+  const capped = Math.min(100, Math.max(1, Math.floor(Number(limit) || 50)));
+  const query = `
+    query EonSwapLeaderboard($first: Int!) {
+      wallets(first: $first, orderBy: totalPoints, orderDirection: desc, where: { totalPoints_gt: 0 }) {
+        id
+        swapCount
+        liquidityEventCount
+        farmEventCount
+        referralCount
+        totalWethVolume
+        totalPoints
+        swapPoints
+        liquidityPoints
+        farmPoints
+        referralPoints
+        updatedAt
+      }
+    }
+  `;
+  const data = await queryTheGraph(query, { first: capped }, `leaderboard:${capped}`);
+  return (Array.isArray(data.wallets) ? data.wallets : []).map((wallet, index) => ({
+    rank: index + 1,
+    address: normalizeGraphAddress(wallet.id),
+    successCount: Number(wallet.swapCount || 0),
+    activityCount:
+      Number(wallet.swapCount || 0) +
+      Number(wallet.liquidityEventCount || 0) +
+      Number(wallet.farmEventCount || 0) +
+      Number(wallet.referralCount || 0),
+    liquidityEventCount: Number(wallet.liquidityEventCount || 0),
+    farmEventCount: Number(wallet.farmEventCount || 0),
+    referralCount: Number(wallet.referralCount || 0),
+    totalWethVolume: String(wallet.totalWethVolume || "0"),
+    totalPoints: String(wallet.totalPoints || "0"),
+    swapPoints: String(wallet.swapPoints || "0"),
+    liquidityPoints: String(wallet.liquidityPoints || "0"),
+    farmPoints: String(wallet.farmPoints || "0"),
+    referralPoints: String(wallet.referralPoints || "0"),
+    tier: leaderboardTier({
+      activityCount:
+        Number(wallet.swapCount || 0) +
+        Number(wallet.liquidityEventCount || 0) +
+        Number(wallet.farmEventCount || 0) +
+        Number(wallet.referralCount || 0),
+      totalPoints: String(wallet.totalPoints || "0"),
+    }),
+    lastSuccessAt: normalizeTimestampMs(wallet.updatedAt),
+  }));
+}
+
+function leaderboardTier({ activityCount = 0, totalPoints = "0" } = {}) {
+  let points = 0n;
+  try {
+    points = BigInt(String(totalPoints || "0"));
+  } catch {
+    points = 0n;
+  }
+  if (activityCount >= 100 || points >= 100000000000000000000n) return "Diamond";
+  if (activityCount >= 50 || points >= 50000000000000000000n) return "Platinum";
+  if (activityCount >= 20 || points >= 10000000000000000000n) return "Gold";
+  if (activityCount >= 5 || points > 0n) return "Silver";
+  return "Bronze";
+}
 
 function classifyError(error) {
   const msg = String(error?.message || error || "");
@@ -629,8 +858,25 @@ function buildAddressLeaderboard(activities, limit) {
     const addr = row.from;
     if (!addr || !/^0x[a-fA-F0-9]{40}$/i.test(addr)) continue;
     const key = addr.toLowerCase();
-    const cur = byAddr.get(key) || { successCount: 0, lastSuccessAt: 0 };
-    cur.successCount += 1;
+    const cur = byAddr.get(key) || {
+      successCount: 0,
+      activityCount: 0,
+      liquidityEventCount: 0,
+      farmEventCount: 0,
+      referralCount: 0,
+      lastSuccessAt: 0,
+    };
+    const kind = String(row.kind || "").toLowerCase();
+    cur.activityCount += 1;
+    if (kind.includes("swap")) {
+      cur.successCount += 1;
+    } else if (kind.includes("lp") || kind.includes("liquidity")) {
+      cur.liquidityEventCount += 1;
+    } else if (kind.includes("farm")) {
+      cur.farmEventCount += 1;
+    } else if (kind.includes("referral")) {
+      cur.referralCount += 1;
+    }
     const t = Number(row.serverAt) || Number(row.createdAt) || 0;
     if (t > cur.lastSuccessAt) cur.lastSuccessAt = t;
     byAddr.set(key, cur);
@@ -638,14 +884,28 @@ function buildAddressLeaderboard(activities, limit) {
   const sorted = [...byAddr.entries()].sort((a, b) => {
     const [, ca] = a;
     const [, cb] = b;
-    if (cb.successCount !== ca.successCount)
-      return cb.successCount - ca.successCount;
+    if (cb.activityCount !== ca.activityCount)
+      return cb.activityCount - ca.activityCount;
     return cb.lastSuccessAt - ca.lastSuccessAt;
   });
   return sorted.slice(0, limit).map(([address, stats], i) => ({
     rank: i + 1,
     address,
     successCount: stats.successCount,
+    activityCount: stats.activityCount,
+    liquidityEventCount: stats.liquidityEventCount,
+    farmEventCount: stats.farmEventCount,
+    referralCount: stats.referralCount,
+    totalWethVolume: "0",
+    totalPoints: String(stats.activityCount),
+    swapPoints: String(stats.successCount),
+    liquidityPoints: String(stats.liquidityEventCount),
+    farmPoints: String(stats.farmEventCount),
+    referralPoints: String(stats.referralCount),
+    tier: leaderboardTier({
+      activityCount: stats.activityCount,
+      totalPoints: String(stats.activityCount),
+    }),
     lastSuccessAt: stats.lastSuccessAt,
   }));
 }
@@ -1051,6 +1311,29 @@ createServer(async (req, res) => {
     const limit = Number.isFinite(limitRaw)
       ? Math.min(100, Math.max(1, Math.floor(limitRaw)))
       : 50;
+    if (isTheGraphConfigured()) {
+      try {
+        const entries = await fetchSubgraphLeaderboard(limit);
+        return json(
+          req,
+          res,
+          200,
+          {
+            ok: true,
+            generatedAt: Date.now(),
+            metric: "total_points",
+            source: "subgraph",
+            entries,
+          },
+          { cacheControl: "public, max-age=30, stale-while-revalidate=60" },
+        );
+      } catch (e) {
+        console.warn(
+          "Subgraph leaderboard failed, falling back to relay activity log:",
+          e instanceof Error ? e.message : e,
+        );
+      }
+    }
     const activities = await readActivitiesMerged();
     const entries = buildAddressLeaderboard(activities, limit);
     return json(
@@ -1060,7 +1343,7 @@ createServer(async (req, res) => {
       {
         ok: true,
         generatedAt: Date.now(),
-        metric: "successful_swaps",
+        metric: "activity_count",
         entries,
       },
       { cacheControl: "public, max-age=30" },
@@ -1110,6 +1393,43 @@ createServer(async (req, res) => {
     if (!CORS_ALLOW_ALL && !corsOriginHeader(req)) {
       return json(req, res, 403, { ok: false, error: "Forbidden origin" });
     }
+    const limitRaw = Number(u.searchParams.get("limit") || "100");
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(500, Math.max(1, Math.floor(limitRaw)))
+      : 100;
+    const wallet = String(u.searchParams.get("wallet") || "").trim();
+    if (wallet && !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+      return json(req, res, 400, { ok: false, error: "Invalid wallet" });
+    }
+    if (isTheGraphConfigured()) {
+      try {
+        const activities = await fetchSubgraphSwapActivities({
+          limit,
+          walletAddress: wallet || undefined,
+        });
+        return json(
+          req,
+          res,
+          200,
+          {
+            ok: true,
+            data: activities,
+            meta: {
+              source: "subgraph",
+              chainId: 8453,
+              subgraphId: THE_GRAPH_SUBGRAPH_ID,
+              cachedForMs: THE_GRAPH_CACHE_MS,
+            },
+          },
+          { cacheControl: "public, max-age=15, stale-while-revalidate=45" },
+        );
+      } catch (e) {
+        console.warn(
+          "Subgraph activity failed, falling back to AMM indexer:",
+          e instanceof Error ? e.message : e,
+        );
+      }
+    }
     if (!ammIndexer) {
       return json(req, res, 200, {
         ok: false,
@@ -1118,16 +1438,9 @@ createServer(async (req, res) => {
         meta: {
           indexerReady: false,
           indexerEnabled: process.env.INDEXER_ENABLED !== "0",
+          subgraphConfigured: isTheGraphConfigured(),
         },
       });
-    }
-    const limitRaw = Number(u.searchParams.get("limit") || "100");
-    const limit = Number.isFinite(limitRaw)
-      ? Math.min(500, Math.max(1, Math.floor(limitRaw)))
-      : 100;
-    const wallet = String(u.searchParams.get("wallet") || "").trim();
-    if (wallet && !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
-      return json(req, res, 400, { ok: false, error: "Invalid wallet" });
     }
     const activities = await ammIndexer.getSwapActivities({
       limit,

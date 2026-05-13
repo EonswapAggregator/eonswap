@@ -1,6 +1,8 @@
 import { motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -56,6 +58,247 @@ const fadeUp = {
   }),
 };
 
+const ACTIVITY_PAGE_SIZE = 10;
+
+function formatActivityKind(kind?: string): string {
+  if (!kind) return "Swap";
+  return kind
+    .split("_")
+    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function activityKindClass(kind?: string): string {
+  if (!kind) return "border-sky-500/20 bg-sky-500/10 text-sky-200";
+  if (kind.includes("SWAP")) {
+    return "border-sky-500/20 bg-sky-500/10 text-sky-200";
+  }
+  if (kind.includes("LIQUIDITY") || kind.includes("LP_TOKEN")) {
+    return "border-emerald-500/20 bg-emerald-500/10 text-emerald-200";
+  }
+  if (kind.includes("FARM")) {
+    return "border-amber-500/20 bg-amber-500/10 text-amber-200";
+  }
+  if (kind.includes("VESTING") || kind.includes("AIRDROP")) {
+    return "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-200";
+  }
+  if (kind.includes("REFERRAL")) {
+    return "border-violet-500/20 bg-violet-500/10 text-violet-200";
+  }
+  return "border-neutral-500/20 bg-neutral-500/10 text-neutral-200";
+}
+
+function formatActivityContext(activity: BlockchainSwapActivity): string {
+  const hasPair =
+    activity.pair !== "0x0000000000000000000000000000000000000000";
+  const hasSymbols = activity.symbol0 !== "TKN" || activity.symbol1 !== "TKN";
+  if (hasPair && hasSymbols) return `${activity.symbol0}/${activity.symbol1}`;
+  if (activity.kind?.includes("FARM")) return "Farm";
+  if (activity.kind?.includes("VESTING")) return "Vesting";
+  if (activity.kind?.includes("AIRDROP")) return "Airdrop";
+  if (activity.kind?.includes("REFERRAL")) return "Referral";
+  return "EonSwap";
+}
+
+function PaginationControls({
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+}) {
+  const start = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const end = Math.min(totalItems, currentPage * pageSize);
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-uni-border bg-uni-surface-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-xs text-neutral-500">
+        Showing <span className="font-medium text-neutral-300">{start}</span>-
+        <span className="font-medium text-neutral-300">{end}</span> of{" "}
+        <span className="font-medium text-neutral-300">{totalItems}</span>
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage <= 1}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-uni-border bg-uni-surface text-neutral-300 transition hover:border-uni-pink/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Previous page"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="min-w-20 text-center text-xs font-medium text-neutral-400">
+          Page {currentPage} / {totalPages}
+        </span>
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage >= totalPages}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-uni-border bg-uni-surface text-neutral-300 transition hover:border-uni-pink/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Next page"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ActivityColGroup({ showWallet }: { showWallet: boolean }) {
+  return (
+    <colgroup>
+      <col className="w-28" />
+      <col className="w-40" />
+      {showWallet && <col className="w-36" />}
+      <col />
+      <col className="w-36" />
+      <col className="w-28" />
+      <col className="w-24" />
+    </colgroup>
+  );
+}
+
+function ActivityTable({
+  activities,
+  currentPage,
+  onPageChange,
+  showWallet,
+}: {
+  activities: BlockchainSwapActivity[];
+  currentPage: number;
+  onPageChange: (page: number) => void;
+  showWallet: boolean;
+}) {
+  const totalPages = Math.max(1, Math.ceil(activities.length / ACTIVITY_PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageActivities = activities.slice(
+    (safePage - 1) * ACTIVITY_PAGE_SIZE,
+    safePage * ACTIVITY_PAGE_SIZE,
+  );
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-uni-border bg-uni-surface shadow-[0_18px_60px_rgba(0,0,0,0.22)]">
+      <div className="flex flex-col gap-1 border-b border-uni-border bg-uni-surface-2 px-4 py-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-white">Market Activity</p>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            Latest swaps, liquidity moves, farm actions, and reward events
+          </p>
+        </div>
+        <p className="text-xs font-medium text-neutral-500">
+          {activities.length} total
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] table-fixed text-left text-sm">
+          <ActivityColGroup showWallet={showWallet} />
+          <thead>
+            <tr className="border-b border-uni-border bg-uni-surface-2/80">
+              <th className="w-28 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Time
+              </th>
+              <th className="w-40 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Type
+              </th>
+              {showWallet && (
+                <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Wallet
+                </th>
+              )}
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Activity
+              </th>
+              <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Context
+              </th>
+              <th className="hidden w-28 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-neutral-500 lg:table-cell">
+                Block
+              </th>
+              <th className="w-24 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Tx
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {pageActivities.map((activity) => {
+              const timeAgo = formatTimeAgo(activity.timestamp);
+              const shortAddr = activity.from
+                ? `${activity.from.slice(0, 6)}...${activity.from.slice(-4)}`
+                : "-";
+              const txUrl = explorerTxUrl(8453, activity.txHash);
+              const summary = formatSwapActivity(activity);
+
+              return (
+                <tr
+                  key={activity.id}
+                  className="border-b border-uni-border/50 transition hover:bg-uni-surface-2/80"
+                >
+                  <td className="whitespace-nowrap px-4 py-3 text-neutral-500">
+                    {timeAgo}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <span
+                      className={`inline-flex max-w-36 items-center rounded-full border px-2.5 py-1 text-xs font-medium ${activityKindClass(activity.kind)}`}
+                    >
+                      <span className="truncate">
+                        {formatActivityKind(activity.kind)}
+                      </span>
+                    </span>
+                  </td>
+                  {showWallet && (
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-neutral-300">
+                      <span className="block truncate">{shortAddr}</span>
+                    </td>
+                  )}
+                  <td className="px-4 py-3 text-white">
+                    <span className="line-clamp-2">{summary}</span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-neutral-400">
+                    <span className="block truncate">
+                      {formatActivityContext(activity)}
+                    </span>
+                  </td>
+                  <td className="hidden whitespace-nowrap px-4 py-3 text-right font-mono text-xs text-neutral-500 lg:table-cell">
+                    {activity.blockNumber || "-"}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right">
+                    {txUrl ? (
+                      <a
+                        href={txUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-uni-pink transition hover:bg-uni-pink/10 hover:text-uni-pink-light"
+                      >
+                        View
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    ) : (
+                      <span className="text-neutral-600">-</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <PaginationControls
+        currentPage={safePage}
+        totalPages={totalPages}
+        totalItems={activities.length}
+        pageSize={ACTIVITY_PAGE_SIZE}
+        onPageChange={onPageChange}
+      />
+    </div>
+  );
+}
+
 export function ActivityPage() {
   const prefersReducedMotion = useReducedMotion();
   const { address } = useAccount();
@@ -73,6 +316,8 @@ export function ActivityPage() {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [myOnChainLoading, setMyOnChainLoading] = useState(false);
   const [myOnChainError, setMyOnChainError] = useState<string | null>(null);
+  const [globalPage, setGlobalPage] = useState(1);
+  const [myPage, setMyPage] = useState(1);
   const publicClient = usePublicClient({ chainId: EON_BASE_MAINNET.chainId });
 
   const loadGlobalActivities = useCallback(async () => {
@@ -90,6 +335,7 @@ export function ActivityPage() {
     }
     if (result.ok) {
       setGlobalActivities(result.activities);
+      setGlobalPage(1);
     } else {
       setGlobalError(result.error);
     }
@@ -119,6 +365,7 @@ export function ActivityPage() {
     }
     if (result.ok) {
       setMyOnChainActivities(result.activities);
+      setMyPage(1);
     } else {
       setMyOnChainError(result.error);
     }
@@ -158,9 +405,9 @@ export function ActivityPage() {
 
   const statCards = [
     {
-      label: "Total Swaps",
+      label: "Total Events",
       value: stats.total,
-      sub: "Scanned on-chain",
+      sub: "Indexed on-chain",
       icon: TrendingUp,
       color: "text-uni-pink",
       bgGlow: "bg-uni-pink/20",
@@ -223,7 +470,7 @@ export function ActivityPage() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative mx-auto max-w-7xl px-4 pb-8 pt-10 md:px-6 md:pb-12 md:pt-14">
+      <section className="relative mx-auto max-w-6xl px-4 pb-8 pt-10 md:px-6 md:pb-12 md:pt-14">
         <motion.div
           initial="hidden"
           animate="show"
@@ -349,7 +596,7 @@ export function ActivityPage() {
                       Success Rate
                     </p>
                     <p className="text-xs text-neutral-500">
-                      {stats.success} of {stats.total} swaps completed
+                      {stats.success} of {stats.total} events indexed
                     </p>
                   </div>
                 </div>
@@ -371,7 +618,7 @@ export function ActivityPage() {
       </section>
 
       {/* Session Swaps Section */}
-      <section className="relative mx-auto max-w-7xl px-4 pb-16 pt-10 md:px-6 md:pb-24">
+      <section className="relative mx-auto max-w-6xl px-4 pb-16 pt-10 md:px-6 md:pb-24">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -383,9 +630,9 @@ export function ActivityPage() {
                 <Globe className="h-5 w-5 text-uni-pink" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">Global Swaps</h2>
+                <h2 className="text-xl font-bold text-white">Global Activity</h2>
                 <p className="text-sm text-neutral-500">
-                  {globalActivities.length} swaps - realtime from blockchain
+                  Live EonSwap activity from indexed on-chain events
                 </p>
               </div>
             </div>
@@ -395,9 +642,9 @@ export function ActivityPage() {
                 <History className="h-5 w-5 text-uni-pink" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">My Swaps</h2>
+                <h2 className="text-xl font-bold text-white">My Activity</h2>
                 <p className="text-sm text-neutral-500">
-                  {myOnChainActivities.length} swaps - from your wallet on-chain
+                  Your wallet activity across swaps, liquidity, and farms
                 </p>
               </div>
             </div>
@@ -407,12 +654,6 @@ export function ActivityPage() {
             <ActivityLiveBanner
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              stats={{
-                total:
-                  viewMode === "global"
-                    ? globalActivities.length
-                    : myOnChainActivities.length,
-              }}
               onRefresh={
                 viewMode === "global"
                   ? loadGlobalActivities
@@ -456,10 +697,10 @@ export function ActivityPage() {
                       <Globe className="h-8 w-8 text-neutral-600" />
                     </div>
                     <h3 className="text-lg font-semibold text-white">
-                      No recent swaps
+                      No recent activity
                     </h3>
                     <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
-                      No indexed swap transactions found yet. Try refreshing in
+                      No indexed EonSwap activity found yet. Try refreshing in
                       a moment after a new trade confirms.
                     </p>
                   </div>
@@ -468,70 +709,12 @@ export function ActivityPage() {
               {!globalLoading &&
                 !globalError &&
                 globalActivities.length > 0 && (
-                  <div className="overflow-hidden rounded-2xl border border-uni-border bg-uni-surface">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm">
-                        <thead>
-                          <tr className="border-b border-uni-border bg-uni-surface-2">
-                            <th className="px-4 py-3 font-semibold text-neutral-400">
-                              Time
-                            </th>
-                            <th className="px-4 py-3 font-semibold text-neutral-400">
-                              Wallet
-                            </th>
-                            <th className="px-4 py-3 font-semibold text-neutral-400">
-                              Action
-                            </th>
-                            <th className="px-4 py-3 font-semibold text-neutral-400 text-right">
-                              Tx
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {globalActivities.map((activity) => {
-                            const timeAgo = formatTimeAgo(activity.timestamp);
-                            const shortAddr = activity.from
-                              ? `${activity.from.slice(0, 6)}...${activity.from.slice(-4)}`
-                              : "-";
-                            const txUrl = explorerTxUrl(8453, activity.txHash);
-                            const summary = formatSwapActivity(activity);
-
-                            return (
-                              <tr
-                                key={activity.id}
-                                className="border-b border-uni-border/50 transition hover:bg-uni-surface-2"
-                              >
-                                <td className="whitespace-nowrap px-4 py-3 text-neutral-500">
-                                  {timeAgo}
-                                </td>
-                                <td className="whitespace-nowrap px-4 py-3 font-mono text-neutral-300">
-                                  {shortAddr}
-                                </td>
-                                <td className="px-4 py-3 text-white">
-                                  {summary}
-                                </td>
-                                <td className="whitespace-nowrap px-4 py-3 text-right">
-                                  {txUrl ? (
-                                    <a
-                                      href={txUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-uni-pink transition hover:text-uni-pink-light"
-                                    >
-                                      View
-                                      <ExternalLink className="h-3.5 w-3.5" />
-                                    </a>
-                                  ) : (
-                                    <span className="text-neutral-600">-</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  <ActivityTable
+                    activities={globalActivities}
+                    currentPage={globalPage}
+                    onPageChange={setGlobalPage}
+                    showWallet
+                  />
                 )}
             </>
           )}
@@ -575,11 +758,11 @@ export function ActivityPage() {
                       <History className="h-8 w-8 text-neutral-600" />
                     </div>
                     <h3 className="text-lg font-semibold text-white">
-                      No swaps yet
+                      No activity yet
                     </h3>
                     <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
                       {address
-                        ? "No on-chain swaps were found for this wallet in the scanned smart contract history."
+                        ? "No on-chain activity was found for this wallet in the indexed EonSwap history."
                         : "Connect your wallet to load swap history from smart contract events."}
                     </p>
                     <div className="mt-6">
@@ -597,70 +780,12 @@ export function ActivityPage() {
               {!myOnChainLoading &&
                 !myOnChainError &&
                 myOnChainActivities.length > 0 && (
-                  <div className="overflow-hidden rounded-2xl border border-uni-border bg-uni-surface">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm">
-                        <thead>
-                          <tr className="border-b border-uni-border bg-uni-surface-2">
-                            <th className="px-4 py-3 font-semibold text-neutral-400">
-                              Time
-                            </th>
-                            <th className="px-4 py-3 font-semibold text-neutral-400">
-                              Action
-                            </th>
-                            <th className="px-4 py-3 font-semibold text-neutral-400">
-                              Status
-                            </th>
-                            <th className="px-4 py-3 font-semibold text-neutral-400 text-right">
-                              Tx
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {myOnChainActivities.map((activity) => {
-                            const timeAgo = formatTimeAgo(activity.timestamp);
-                            const txUrl = explorerTxUrl(8453, activity.txHash);
-                            const summary = formatSwapActivity(activity);
-
-                            return (
-                              <tr
-                                key={activity.id}
-                                className="border-b border-uni-border/50 transition hover:bg-uni-surface-2"
-                              >
-                                <td className="whitespace-nowrap px-4 py-3 text-neutral-500">
-                                  {timeAgo}
-                                </td>
-                                <td className="px-4 py-3 text-white">
-                                  {summary}
-                                </td>
-                                <td className="whitespace-nowrap px-4 py-3">
-                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/12 px-2.5 py-1 text-xs font-medium text-emerald-200 ring-1 ring-emerald-500/20">
-                                    <CheckCircle2 className="h-3.5 w-3.5" />
-                                    On-chain
-                                  </span>
-                                </td>
-                                <td className="whitespace-nowrap px-4 py-3 text-right">
-                                  {txUrl ? (
-                                    <a
-                                      href={txUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-uni-pink transition hover:text-uni-pink-light"
-                                    >
-                                      View
-                                      <ExternalLink className="h-3.5 w-3.5" />
-                                    </a>
-                                  ) : (
-                                    <span className="text-neutral-600">-</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  <ActivityTable
+                    activities={myOnChainActivities}
+                    currentPage={myPage}
+                    onPageChange={setMyPage}
+                    showWallet={false}
+                  />
                 )}
             </>
           )}

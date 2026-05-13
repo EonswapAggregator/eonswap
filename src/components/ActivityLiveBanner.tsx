@@ -8,7 +8,6 @@ import { Wallet, Globe, User, RefreshCw } from "lucide-react";
 interface ActivityLiveBannerProps {
   viewMode?: "global" | "my";
   onViewModeChange?: (mode: "global" | "my") => void;
-  stats?: { total: number };
   onRefresh?: () => void;
   refreshLoading?: boolean;
 }
@@ -16,7 +15,6 @@ interface ActivityLiveBannerProps {
 export function ActivityLiveBanner({
   viewMode = "global",
   onViewModeChange,
-  stats,
   onRefresh,
   refreshLoading = false,
 }: ActivityLiveBannerProps) {
@@ -75,13 +73,6 @@ export function ActivityLiveBanner({
                 >
                   <User className="h-4 w-4" />
                   My Activity
-                  {stats && stats.total > 0 && (
-                    <span
-                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${viewMode === "my" ? "bg-white/20" : "bg-uni-surface-2"}`}
-                    >
-                      {stats.total}
-                    </span>
-                  )}
                 </button>
               </div>
               <span
@@ -175,8 +166,8 @@ export function ActivityLiveBanner({
                 Connect Your Wallet
               </p>
               <p className="mt-1 text-sm text-neutral-500">
-                My Activity shows transactions from your connected wallet. You
-                can switch back to Global Activity anytime.
+                Connect your wallet to view your swaps, liquidity actions, and
+                farm activity across EonSwap.
               </p>
             </div>
             <Link

@@ -16,6 +16,7 @@ relay/data/indexer/
 relay/data/indexer-test-*/
 test-results/
 .vscode/
+subgraph/
 
 # Local QA / manual check screenshots (not for version control)
 desktop-*-check.png

@@ -37,6 +37,10 @@ Optional env:
 - `RELAY_EVENTS_MAX_BODY_BYTES` (default `262144`)
 - `RELAY_ADMIN_SECRET` (optional; required for `GET /admin/activities`)
 - `RELAY_ACTIVITY_LOG_PATH` (optional; default `relay/data/activities.jsonl`)
+- `THE_GRAPH_API_KEY` (optional but recommended; server-side The Graph Gateway API key)
+- `THE_GRAPH_SUBGRAPH_ID` (default `FoKBv95x7Z8uMuBZsBTkHKyHFGE9DTVVicwHp3U3eT5s`)
+- `THE_GRAPH_SUBGRAPH_URL` (optional; endpoint without API key, used with `Authorization: Bearer <THE_GRAPH_API_KEY>`)
+- `THE_GRAPH_CACHE_MS` (default `30000`; relay cache for repeated activity/leaderboard queries)
 
 ## Endpoints
 
@@ -47,6 +51,9 @@ Optional env:
 - `POST /events/activity` – append one activity row (swap lifecycle) for admin reporting (rate-limited per IP)
 - `GET /admin/activities` – return merged activity rows (latest row per `id`); header `Authorization: Bearer <RELAY_ADMIN_SECRET>`
 - `GET /explorer/txlist?chainId=<id>&address=<0x...>&offset=<n>` – proxy Etherscan V2 txlist using relay API key (keeps key out of frontend). Optional token auth via `x-relay-explorer-token` (recommended when called via your own trusted proxy/server path).
+
+- `GET /api/activity?limit=100&wallet=0x...` - returns indexed swap activity. Prefers The Graph Gateway when configured, then falls back to the local AMM indexer.
+- `GET /public/leaderboard?limit=50` - returns wallet activity ranking with points, tier, volume, and activity breakdown. Prefers the subgraph and uses relay caching/rate limiting.
 
 `/events/tx` includes basic hardening:
 
@@ -65,6 +72,17 @@ VITE_MONITOR_RELAY_URL=http://127.0.0.1:8787
 When configured, `Status` page health panel prefers relay data for EonSwap/CoinGecko/Etherscan.
 
 Activity rows are written when users trigger `addActivity` / `patchActivity` in the app (if `VITE_MONITOR_RELAY_URL` is set). On the **Admin** page, use **Refresh from relay** with the same secret as `RELAY_ADMIN_SECRET` to load all logged activity.
+
+For The Graph production queries, keep the gateway key on this relay:
+
+```bash
+THE_GRAPH_API_KEY=...
+THE_GRAPH_SUBGRAPH_ID=FoKBv95x7Z8uMuBZsBTkHKyHFGE9DTVVicwHp3U3eT5s
+THE_GRAPH_SUBGRAPH_URL=https://gateway.thegraph.com/api/subgraphs/id/FoKBv95x7Z8uMuBZsBTkHKyHFGE9DTVVicwHp3U3eT5s
+THE_GRAPH_CACHE_MS=30000
+```
+
+Do not put the Graph API key in frontend `VITE_*` variables. The frontend should keep using `VITE_MONITOR_RELAY_URL`, and the relay will proxy/cache subgraph reads.
 
 ## Added reliability hardening
 

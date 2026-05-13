@@ -5,6 +5,7 @@ import { getMonitorRelayBaseUrl } from "./monitorRelayUrl";
 
 export type BlockchainSwapActivity = {
   id: string;
+  kind?: string;
   pair: `0x${string}`;
   token0: `0x${string}`;
   token1: `0x${string}`;
@@ -16,10 +17,13 @@ export type BlockchainSwapActivity = {
   blockNumber: number;
   timestamp: number;
   from: `0x${string}`;
+  amount0?: bigint;
+  amount1?: bigint;
   amount0In: bigint;
   amount1In: bigint;
   amount0Out: bigint;
   amount1Out: bigint;
+  points?: bigint;
   to: `0x${string}`;
 };
 
@@ -44,12 +48,15 @@ const MAX_CACHED_ACTIVITIES = 250;
 
 type SerializedBlockchainSwapActivity = Omit<
   BlockchainSwapActivity,
-  "amount0In" | "amount1In" | "amount0Out" | "amount1Out"
+  "amount0" | "amount1" | "amount0In" | "amount1In" | "amount0Out" | "amount1Out" | "points"
 > & {
+  amount0?: string;
+  amount1?: string;
   amount0In: string;
   amount1In: string;
   amount0Out: string;
   amount1Out: string;
+  points?: string;
 };
 
 type ActivityCache = {
@@ -94,10 +101,13 @@ function serializeActivity(
 ): SerializedBlockchainSwapActivity {
   return {
     ...activity,
+    amount0: activity.amount0?.toString(),
+    amount1: activity.amount1?.toString(),
     amount0In: activity.amount0In.toString(),
     amount1In: activity.amount1In.toString(),
     amount0Out: activity.amount0Out.toString(),
     amount1Out: activity.amount1Out.toString(),
+    points: activity.points?.toString(),
   };
 }
 
@@ -106,10 +116,13 @@ function deserializeActivity(
 ): BlockchainSwapActivity {
   return {
     ...activity,
+    amount0: activity.amount0 != null ? BigInt(activity.amount0) : undefined,
+    amount1: activity.amount1 != null ? BigInt(activity.amount1) : undefined,
     amount0In: BigInt(activity.amount0In),
     amount1In: BigInt(activity.amount1In),
     amount0Out: BigInt(activity.amount0Out),
     amount1Out: BigInt(activity.amount1Out),
+    points: activity.points != null ? BigInt(activity.points) : undefined,
   };
 }
 
@@ -553,6 +566,53 @@ export async function fetchBlockchainSwapLeaderboard(
  * Format swap activity for display.
  */
 export function formatSwapActivity(activity: BlockchainSwapActivity): string {
+  const kind = activity.kind;
+  if (kind) {
+    const amount0 = activity.amount0 ?? activity.amount0In + activity.amount0Out;
+    const amount1 = activity.amount1 ?? activity.amount1In + activity.amount1Out;
+    const value0 = Number(formatUnits(amount0, activity.decimals0));
+    const value1 = Number(formatUnits(amount1, activity.decimals1));
+    const text0 = Number.isFinite(value0)
+      ? value0.toFixed(value0 < 1 ? 6 : 4)
+      : "0";
+    const text1 = Number.isFinite(value1)
+      ? value1.toFixed(value1 < 1 ? 6 : 4)
+      : "0";
+
+    switch (kind) {
+      case "SWAP":
+        return `Swap ${text0} ${activity.symbol0} / ${text1} ${activity.symbol1}`;
+      case "LIQUIDITY_ADD":
+        return `Added liquidity ${text0} ${activity.symbol0} + ${text1} ${activity.symbol1}`;
+      case "LIQUIDITY_REMOVE":
+        return `Removed liquidity ${text0} ${activity.symbol0} + ${text1} ${activity.symbol1}`;
+      case "LP_TOKEN_MINT":
+        return `LP tokens minted ${text0}`;
+      case "FARM_DEPOSIT":
+        return `Farm deposit ${text0}`;
+      case "FARM_WITHDRAW":
+        return `Farm withdraw ${text0}`;
+      case "FARM_EMERGENCY_WITHDRAW":
+        return `Emergency farm withdraw ${text0}`;
+      case "FARM_HARVEST":
+        return `Farm harvest ${text0}`;
+      case "VESTING_GRANT":
+        return `Vesting grant ${text0}`;
+      case "VESTING_CLAIM":
+        return `Vesting claim ${text0}`;
+      case "AIRDROP_CLAIM":
+        return `Airdrop claim ${text0}`;
+      case "REFERRAL_REGISTERED":
+        return "Referral registered";
+      case "REFERRAL_SWAP":
+        return `Referral swap volume ${text0}`;
+      case "REFERRAL_REWARD_CLAIM":
+        return `Referral reward claim ${text0}`;
+      default:
+        return kind.replaceAll("_", " ").toLowerCase();
+    }
+  }
+
   const token0In = activity.amount0In > 0n;
   const inputAmount = token0In ? activity.amount0In : activity.amount1In;
   const outputAmount = token0In ? activity.amount1Out : activity.amount0Out;

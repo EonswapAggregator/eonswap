@@ -8,6 +8,17 @@ export type LeaderboardEntry = {
   rank: number;
   address: string;
   successCount: number;
+  activityCount?: number;
+  liquidityEventCount?: number;
+  farmEventCount?: number;
+  referralCount?: number;
+  totalWethVolume?: string;
+  totalPoints?: string;
+  swapPoints?: string;
+  liquidityPoints?: string;
+  farmPoints?: string;
+  referralPoints?: string;
+  tier?: string;
   lastSuccessAt: number;
 };
 
