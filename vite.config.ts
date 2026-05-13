@@ -22,6 +22,9 @@ export default defineConfig(({ mode }) => {
       sourcemap: false, // Disable source maps to avoid corrupted map files
     },
     sourcemap: false, // Disable source maps for dev server too
+    optimizeDeps: {
+      exclude: ['@safe-global/safe-apps-sdk'], // Exclude problematic package from optimization
+    },
     server: {
       proxy: {
         // Dev: same-origin /__eonswap-relay/* → remote relay (no browser CORS)
