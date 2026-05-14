@@ -322,6 +322,26 @@ export function LeaderboardPage() {
     }
   }, 0n)
 
+  const sortedEntries = useMemo(
+    () =>
+      [...entries]
+        .sort((a, b) => {
+          const volumeDiff =
+            parseWethVolume(b.totalWethVolume) - parseWethVolume(a.totalWethVolume)
+          if (volumeDiff !== 0) return volumeDiff
+
+          const activityDiff = getActivityTotal(b) - getActivityTotal(a)
+          if (activityDiff !== 0) return activityDiff
+
+          return b.lastSuccessAt - a.lastSuccessAt
+        })
+        .map((entry, index) => ({
+          ...entry,
+          rank: index + 1,
+        })),
+    [entries],
+  )
+
   const stats = [
     {
       label: 'Total Traders',
@@ -332,7 +352,7 @@ export function LeaderboardPage() {
     },
     {
       label: 'Top Trader',
-      value: entries[0] ? getActivityTotal(entries[0]) : 0,
+      value: sortedEntries[0] ? getActivityTotal(sortedEntries[0]) : 0,
       sub: 'Most activity',
       icon: Trophy,
       color: 'text-amber-400',
@@ -348,16 +368,16 @@ export function LeaderboardPage() {
 
   const desktopTotalPages = Math.max(
     1,
-    Math.ceil(entries.length / LEADERBOARD_PAGE_SIZE),
+    Math.ceil(sortedEntries.length / LEADERBOARD_PAGE_SIZE),
   )
   const safeLeaderboardPage = Math.min(leaderboardPage, desktopTotalPages)
   const desktopEntries = useMemo(
     () =>
-      entries.slice(
+      sortedEntries.slice(
         (safeLeaderboardPage - 1) * LEADERBOARD_PAGE_SIZE,
         safeLeaderboardPage * LEADERBOARD_PAGE_SIZE,
       ),
-    [entries, safeLeaderboardPage],
+    [safeLeaderboardPage, sortedEntries],
   )
 
   useEffect(() => {
@@ -643,13 +663,13 @@ export function LeaderboardPage() {
               ) : !error ? (
                 <>
                   <div className="divide-y divide-uni-border/60 md:hidden">
-                    {entries.length === 0 ? (
+                    {sortedEntries.length === 0 ? (
                       <div className="px-5 py-12 text-center text-sm text-neutral-500">
                         No results yet. Wallets will appear here after confirmed
                         EonSwap activity is indexed.
                       </div>
                     ) : null}
-                    {entries.map((row, index) => (
+                    {sortedEntries.map((row, index) => (
                       <article key={row.address} className="min-w-0 px-4 py-4">
                         <div className="flex min-w-0 items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
@@ -775,7 +795,7 @@ export function LeaderboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {!error && entries.length === 0 ? (
+                    {!error && sortedEntries.length === 0 ? (
                       <tr>
                         <td
                           colSpan={8}
@@ -854,7 +874,7 @@ export function LeaderboardPage() {
               <LeaderboardPaginationControls
                 currentPage={safeLeaderboardPage}
                 totalPages={desktopTotalPages}
-                totalItems={entries.length}
+                totalItems={sortedEntries.length}
                 pageSize={LEADERBOARD_PAGE_SIZE}
                 onPageChange={setLeaderboardPage}
               />

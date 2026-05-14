@@ -3,6 +3,7 @@ import {
   normalizeMonitorRelayBaseUrl,
 } from "./monitorRelayUrl";
 import type { ActivityKind } from "../store/useEonSwapStore";
+import { isBlacklistedLeaderboardAddress } from "./leaderboardBlacklist";
 
 export type LeaderboardEntry = {
   rank: number;
@@ -102,7 +103,12 @@ export async function fetchRelayLeaderboard(
     return {
       ok: true,
       generatedAt: Number(json.generatedAt) || Date.now(),
-      entries: json.entries,
+      entries: json.entries
+        .filter((entry) => !isBlacklistedLeaderboardAddress(entry.address))
+        .map((entry, index) => ({
+          ...entry,
+          rank: index + 1,
+        })),
     };
   } catch {
     return { ok: false, error: "Network error" };

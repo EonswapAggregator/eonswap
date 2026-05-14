@@ -2,6 +2,7 @@ import { erc20Abi, formatUnits, type Address, type PublicClient } from "viem";
 import { eonAmmFactoryAbi, eonAmmPairAbi } from "./amm/abis";
 import { EON_BASE_MAINNET } from "./eonBaseMainnet";
 import { getMonitorRelayBaseUrl } from "./monitorRelayUrl";
+import { isBlacklistedLeaderboardAddress } from "./leaderboardBlacklist";
 
 export type BlockchainSwapActivity = {
   id: string;
@@ -591,6 +592,7 @@ export async function fetchBlockchainSwapLeaderboard(
 
   for (const activity of result.activities) {
     const key = activity.from.toLowerCase();
+    if (isBlacklistedLeaderboardAddress(key)) continue;
     const current = byWallet.get(key);
     if (!current) {
       byWallet.set(key, {

@@ -95,6 +95,10 @@ const EXPLORER_RATE_LIMIT_PER_MIN = Number(
 const LEADERBOARD_RATE_LIMIT_PER_MIN = Number(
   process.env.RELAY_LEADERBOARD_RATE_LIMIT_PER_MIN || 30,
 );
+const LEADERBOARD_BLACKLIST = new Set([
+  "0x0000000000000000000000000000000000000001",
+  "0x36e5182994c381b88d3761c9574f8867e135b280",
+]);
 const EVENT_MAX_BODY_BYTES = Number(
   process.env.RELAY_EVENTS_MAX_BODY_BYTES || 262_144,
 );
@@ -190,6 +194,11 @@ function normalizeTimestampMs(value) {
 function normalizeGraphAddress(value, fallback = "0x0000000000000000000000000000000000000000") {
   const address = String(value || "").toLowerCase();
   return /^0x[a-f0-9]{40}$/u.test(address) ? address : fallback;
+}
+
+function isBlacklistedLeaderboardAddress(value) {
+  const address = normalizeGraphAddress(value, "");
+  return Boolean(address) && LEADERBOARD_BLACKLIST.has(address);
 }
 
 function graphCacheGet(key) {
@@ -340,34 +349,40 @@ async function fetchSubgraphLeaderboard(limit = 50) {
     }
   `;
   const data = await queryTheGraph(query, { first: capped }, `leaderboard:${capped}`);
-  return (Array.isArray(data.wallets) ? data.wallets : []).map((wallet, index) => ({
-    rank: index + 1,
-    address: normalizeGraphAddress(wallet.id),
-    successCount: Number(wallet.swapCount || 0),
-    activityCount:
-      Number(wallet.swapCount || 0) +
-      Number(wallet.liquidityEventCount || 0) +
-      Number(wallet.farmEventCount || 0) +
-      Number(wallet.referralCount || 0),
-    liquidityEventCount: Number(wallet.liquidityEventCount || 0),
-    farmEventCount: Number(wallet.farmEventCount || 0),
-    referralCount: Number(wallet.referralCount || 0),
-    totalWethVolume: String(wallet.totalWethVolume || "0"),
-    totalPoints: String(wallet.totalPoints || "0"),
-    swapPoints: String(wallet.swapPoints || "0"),
-    liquidityPoints: String(wallet.liquidityPoints || "0"),
-    farmPoints: String(wallet.farmPoints || "0"),
-    referralPoints: String(wallet.referralPoints || "0"),
-    tier: leaderboardTier({
+  return (Array.isArray(data.wallets) ? data.wallets : [])
+    .map((wallet) => ({
+      address: normalizeGraphAddress(wallet.id),
+      successCount: Number(wallet.swapCount || 0),
       activityCount:
         Number(wallet.swapCount || 0) +
         Number(wallet.liquidityEventCount || 0) +
         Number(wallet.farmEventCount || 0) +
         Number(wallet.referralCount || 0),
+      liquidityEventCount: Number(wallet.liquidityEventCount || 0),
+      farmEventCount: Number(wallet.farmEventCount || 0),
+      referralCount: Number(wallet.referralCount || 0),
+      totalWethVolume: String(wallet.totalWethVolume || "0"),
       totalPoints: String(wallet.totalPoints || "0"),
-    }),
-    lastSuccessAt: normalizeTimestampMs(wallet.updatedAt),
-  }));
+      swapPoints: String(wallet.swapPoints || "0"),
+      liquidityPoints: String(wallet.liquidityPoints || "0"),
+      farmPoints: String(wallet.farmPoints || "0"),
+      referralPoints: String(wallet.referralPoints || "0"),
+      tier: leaderboardTier({
+        activityCount:
+          Number(wallet.swapCount || 0) +
+          Number(wallet.liquidityEventCount || 0) +
+          Number(wallet.farmEventCount || 0) +
+          Number(wallet.referralCount || 0),
+        totalPoints: String(wallet.totalPoints || "0"),
+      }),
+      lastSuccessAt: normalizeTimestampMs(wallet.updatedAt),
+    }))
+    .filter((wallet) => !isBlacklistedLeaderboardAddress(wallet.address))
+    .slice(0, capped)
+    .map((wallet, index) => ({
+      rank: index + 1,
+      ...wallet,
+    }));
 }
 
 function leaderboardTier({ activityCount = 0, totalPoints = "0" } = {}) {
@@ -954,6 +969,7 @@ function buildAddressLeaderboard(activities, limit) {
     const addr = row.from;
     if (!addr || !/^0x[a-fA-F0-9]{40}$/i.test(addr)) continue;
     const key = addr.toLowerCase();
+    if (isBlacklistedLeaderboardAddress(key)) continue;
     const cur = byAddr.get(key) || {
       successCount: 0,
       activityCount: 0,
