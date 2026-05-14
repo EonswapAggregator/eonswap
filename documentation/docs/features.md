@@ -41,12 +41,12 @@ ESTF staking is presented as an upcoming feature in the app.
 
 ## Airdrop
 
-Claim ESTF tokens from community airdrops.
+The airdrop interface is present in the app, but the current Base deployment is still awaiting campaign activation.
 
-- Merkle-proof verification
-- Multiple airdrop campaigns
-- Fast eligibility checks
-- Wallet-claimed distribution
+- Merkle-proof claim infrastructure
+- Wallet eligibility flow in the app
+- Campaign timeline and preview state
+- Activation-ready claim surface for future distributions
 
 ## Leaderboard
 

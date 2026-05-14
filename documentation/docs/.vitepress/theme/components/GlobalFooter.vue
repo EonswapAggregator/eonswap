@@ -4,10 +4,17 @@
     <div class="eonswap-docs-footer__inner">
       <div class="footer-links">
         <a href="/docs/terms" class="footer-link">Terms</a>
-        <span class="separator">·</span>
+        <span class="separator">|</span>
         <a href="/docs/privacy" class="footer-link">Privacy</a>
-        <span class="separator">·</span>
-        <a href="https://eonswap.us/contact-support" target="_blank" rel="noopener noreferrer" class="footer-link">Contact</a>
+        <span class="separator">|</span>
+        <a
+          href="https://eonswap.us/contact-support"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="footer-link"
+        >
+          Contact
+        </a>
       </div>
       <div class="footer-socials">
         <a href="https://x.com/eonswapus" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="X/Twitter">

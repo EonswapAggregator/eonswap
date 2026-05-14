@@ -4,7 +4,7 @@
 
 ### What is EonSwap?
 
-EonSwap is a decentralized exchange (DEX) on Base that allows you to swap tokens, provide liquidity, and farm rewards — all non-custodially.
+EonSwap is a decentralized exchange (DEX) on Base that lets you swap tokens, provide liquidity, and farm rewards without giving up custody of your assets.
 
 ### Is EonSwap custodial?
 
@@ -82,25 +82,25 @@ ESR (EONSWAP REWARD) is a bonus reward token distributed in certain farming pool
 
 - Swap for it on EonSwap
 - Farm LP tokens to earn ESTF
-- Check airdrop eligibility
+- Check airdrop eligibility when a campaign is active
 - Provide liquidity
 
 ### Where can I see token contracts?
 
 | Token | Contract |
 |-------|----------|
-| ESTF | `0x295685df8e07a6d529a849AE7688c524494fD010` |
-| ESR | `0xd48463DB303dA9818Ef565e84aCa266234B38f08` |
+| ESTF | [`0x295685df8e07a6d529a849AE7688c524494fD010`](https://basescan.org/address/0x295685df8e07a6d529a849AE7688c524494fD010) |
+| ESR | [`0xd48463DB303dA9818Ef565e84aCa266234B38f08`](https://basescan.org/address/0xd48463DB303dA9818Ef565e84aCa266234B38f08) |
 
 ## Airdrop
 
 ### How do I check airdrop eligibility?
 
-Go to the Airdrop page and connect your wallet. If you're eligible, you'll see your claimable amount.
+Go to the Airdrop page and connect your wallet. If a campaign is active on the current deployment, eligible wallets will see a claimable amount there.
 
 ### When are airdrops distributed?
 
-Airdrops are distributed in multiple campaigns. Follow our [Twitter](https://x.com/eonswapus) for announcements.
+Airdrops are distributed in campaigns. The claim interface can be visible before a production campaign is activated, so use the page status plus our [Twitter](https://x.com/eonswapus) announcements as the source of truth.
 
 ## Support
 

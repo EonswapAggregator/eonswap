@@ -66,7 +66,8 @@ const sidebar = [
 
 export default defineConfig({
   title: 'EonSwap Docs',
-  description: 'Official documentation for EonSwap — the decentralized exchange on Base. Learn about swaps, liquidity, farming, staking, and more.',
+  description:
+    'Official documentation for EonSwap - the decentralized exchange on Base. Learn about swaps, liquidity, farming, staking, and more.',
   base: '/docs/',
   lastUpdated: true,
   cleanUrls: true,
@@ -76,7 +77,13 @@ export default defineConfig({
     ['meta', { name: 'theme-color', content: '#ff007a' }],
     ['meta', { name: 'og:type', content: 'website' }],
     ['meta', { name: 'og:title', content: 'EonSwap Documentation' }],
-    ['meta', { name: 'og:description', content: 'The official documentation for EonSwap DEX on Base' }],
+    [
+      'meta',
+      {
+        name: 'og:description',
+        content: 'The official documentation for EonSwap DEX on Base',
+      },
+    ],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
   ],
   themeConfig: {
@@ -89,7 +96,8 @@ export default defineConfig({
       label: 'On this page',
     },
     editLink: {
-      pattern: 'https://github.com/EonswapAggregator/eonswap/edit/main/documentation/docs/:path',
+      pattern:
+        'https://github.com/EonswapAggregator/eonswap/edit/main/documentation/docs/:path',
       text: 'Edit this page on GitHub',
     },
     search: {
@@ -100,12 +108,24 @@ export default defineConfig({
     },
     socialLinks: [
       { icon: 'github', link: 'https://github.com/EonswapAggregator/eonswap' },
-      { icon: 'x', link: 'https://x.com/eonswapus', ariaLabel: 'EonSwap on X' },
-      { icon: 'telegram', link: 'https://t.me/eonswap', ariaLabel: 'EonSwap on Telegram' },
-      { icon: 'discord', link: 'https://discord.gg/AAEq22Sqng', ariaLabel: 'EonSwap on Discord' },
+      {
+        icon: 'x',
+        link: 'https://x.com/eonswapus',
+        ariaLabel: 'EonSwap on X',
+      },
+      {
+        icon: 'telegram',
+        link: 'https://t.me/eonswap',
+        ariaLabel: 'EonSwap on Telegram',
+      },
+      {
+        icon: 'discord',
+        link: 'https://discord.gg/AAEq22Sqng',
+        ariaLabel: 'EonSwap on Discord',
+      },
     ],
     footer: {
-      message: 'Built with ❤️ on Base',
+      message: 'Built on Base',
       copyright: `© ${new Date().getFullYear()} EonSwap. All rights reserved.`,
     },
   },
