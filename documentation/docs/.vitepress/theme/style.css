@@ -401,9 +401,18 @@
    ======================================== */
 
 .vp-doc table {
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  overflow-x: auto;
+  border-collapse: separate;
+  border-spacing: 0;
   border-radius: 12px;
-  overflow: hidden;
   border: 1px solid var(--eon-border);
+  background: color-mix(in srgb, var(--vp-c-bg) 92%, transparent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 0, 122, 0.35) transparent;
 }
 
 .vp-doc th {
@@ -413,10 +422,18 @@
   font-size: 0.85em;
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--eon-border) !important;
+  white-space: nowrap;
 }
 
+.vp-doc th,
 .vp-doc td {
+  padding: 0.85rem 1rem;
+  vertical-align: top;
   border-bottom: 1px solid var(--eon-border) !important;
+}
+
+.vp-doc tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .vp-doc tr:hover td {
@@ -425,6 +442,51 @@
 
 .vp-doc tr:last-child td {
   border-bottom: none !important;
+}
+
+.vp-doc td code,
+.vp-doc th code {
+  font-size: 0.82em;
+  word-break: break-all;
+}
+
+.vp-doc td code[href],
+.vp-doc td a code {
+  display: inline-block;
+  padding: 0.42rem 0.62rem;
+  border-radius: 8px;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  font-weight: 500;
+}
+
+.vp-doc td a code {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.vp-doc td a {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+  .vp-doc th,
+  .vp-doc td {
+    padding: 0.7rem 0.8rem;
+    font-size: 0.92rem;
+  }
+
+  .vp-doc table {
+    border-radius: 10px;
+  }
+
+  .vp-doc td code[href],
+  .vp-doc td a code {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    padding: 0.36rem 0.52rem;
+  }
 }
 
 /* ========================================

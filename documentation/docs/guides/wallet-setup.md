@@ -71,7 +71,7 @@ You need ETH on Base for gas fees. Options:
 
 1. Open MetaMask on Base network
 2. Click "Import tokens"
-3. Enter contract: `0x7bd09674b3c721e35973993d5b6a79cda7da9c7f`
+3. Enter contract: `0x295685df8e07a6d529a849AE7688c524494fD010`
 4. Symbol and decimals auto-fill
 5. Click "Add custom token"
 
@@ -108,4 +108,3 @@ You need ETH on Base for gas fees. Options:
 - [Getting Started](/getting-started)
 - [Supported Networks](/supported-networks)
 - [Troubleshooting](/guides/troubleshooting)
-

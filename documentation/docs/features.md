@@ -1,10 +1,10 @@
 # Features
 
-EonSwap provides a complete DeFi experience on Base with these core features.
+EonSwap brings together the core trading and incentive flows currently exposed in the website app.
 
 ## Swap
 
-Trade tokens instantly using our automated market maker (AMM).
+Trade tokens on Base using the EonSwap AMM.
 
 - Real-time price quotes
 - Slippage protection settings
@@ -14,9 +14,9 @@ Trade tokens instantly using our automated market maker (AMM).
 
 ## Liquidity
 
-Provide liquidity to earn trading fees.
+Provide liquidity to supported pools and earn trading fees.
 
-- Add liquidity to any supported pair
+- Add liquidity to supported pairs
 - Receive LP tokens representing your share
 - Earn 0.3% of trading fees proportionally
 - Remove liquidity anytime
@@ -26,18 +26,18 @@ Provide liquidity to earn trading fees.
 Stake LP tokens to earn ESTF and ESR rewards.
 
 - Multiple farming pools available
-- Dual rewards (ESTF + ESR)
-- Flexible stake/unstake
-- Auto-compounding rewards display
-- APR calculator
+- Dual rewards where eligible
+- Flexible stake and unstake flow
+- Pending reward tracking
+- Pool APR and TVL visibility
 
 ## Stake
 
-Stake ESTF tokens for additional benefits.
+ESTF staking is presented as an upcoming feature in the app.
 
-- Single-sided staking
-- Earn protocol rewards
-- Governance participation
+- xESTF staking plans
+- veESTF governance plans
+- Future reward participation
 
 ## Airdrop
 
@@ -45,17 +45,17 @@ Claim ESTF tokens from community airdrops.
 
 - Merkle-proof verification
 - Multiple airdrop campaigns
-- Check eligibility instantly
-- One-click claim
+- Fast eligibility checks
+- Wallet-claimed distribution
 
 ## Leaderboard
 
-Track top performers on the platform.
+Track top on-chain performers on the platform.
 
-- Top traders by volume
-- Top liquidity providers
-- Weekly/monthly rankings
-- Achievement badges
+- Ranked wallet activity
+- Volume-aware ordering
+- Activity breakdown by swaps, liquidity, and farm events
+- Freshness based on indexed on-chain data
 
 ## Referral
 
@@ -67,12 +67,12 @@ Earn rewards by inviting others.
 
 ## Activity
 
-Monitor all your transactions.
+Monitor protocol and wallet activity.
 
-- Complete transaction history
-- Pending/success/failed status
-- Filter by type (swap, add LP, farm, etc.)
-- Export transaction data
+- Indexed protocol activity feed
+- Wallet and market views
+- Explorer links for verification
+- Support for swap, liquidity, farm, referral, vesting, and claim events
 
 ## Status
 

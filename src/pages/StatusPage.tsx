@@ -236,7 +236,7 @@ export function StatusPage() {
           </motion.div>
 
           <motion.div custom={4} variants={fadeUp} className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <button onClick={() => void refreshHealth()} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border border-uni-border bg-uni-surface px-4 py-2.5 text-sm font-medium text-neutral-300 transition hover:border-uni-pink/30 hover:bg-uni-surface-2 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className={'h-4 w-4 ' + (refreshing ? 'animate-spin' : '')} />{refreshing ? 'Refreshing...' : 'Refresh All'}</button>
+            <button aria-label="Refresh All" onClick={() => void refreshHealth()} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border border-uni-border bg-uni-surface px-4 py-2.5 text-sm font-medium text-neutral-300 transition hover:border-uni-pink/30 hover:bg-uni-surface-2 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className={'h-4 w-4 ' + (refreshing ? 'animate-spin' : '')} />{refreshing ? 'Refreshing...' : 'Refresh All'}</button>
             {lastRefresh && <span className="text-xs text-neutral-500">Updated {lastRefresh.toLocaleTimeString()}</span>}
           </motion.div>
         </motion.div>

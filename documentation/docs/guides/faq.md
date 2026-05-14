@@ -89,8 +89,8 @@ ESR (EONSWAP REWARD) is a bonus reward token distributed in certain farming pool
 
 | Token | Contract |
 |-------|----------|
-| ESTF | `0x7bd09674b3c721e35973993d5b6a79cda7da9c7f` |
-| ESR | `0xbc11e3093afdbeb88d32ef893027202fc2b84f9d` |
+| ESTF | `0x295685df8e07a6d529a849AE7688c524494fD010` |
+| ESR | `0xd48463DB303dA9818Ef565e84aCa266234B38f08` |
 
 ## Airdrop
 

@@ -1,51 +1,70 @@
 # How It Works
 
-EonSwap is an automated market maker (AMM) DEX on Base, similar to Uniswap V2. Here's how each feature works.
+EonSwap is an automated market maker (AMM) exchange on Base. The current app focuses on swaps, liquidity, farms, activity tracking, referrals, and leaderboard visibility.
 
 ## Non-Custodial Design
 
-- You connect your wallet (MetaMask, Coinbase Wallet, etc.)
+- You connect your wallet (MetaMask, Coinbase Wallet, and similar wallets)
 - You always control your funds
 - EonSwap never asks for seed phrases or private keys
 - All transactions require your wallet signature
 
 ## Swap
 
-1. Select tokens to swap (e.g., ETH → ESTF)
+1. Select the tokens you want to trade, such as ETH to ESTF
 2. Enter the amount you want to trade
-3. Review quote, price impact, and fees
-4. Approve token spending (first time only)
-5. Confirm swap in your wallet
-6. Transaction executes on-chain
+3. Review the quote, route, price impact, and fees
+4. Approve token spending if needed
+5. Confirm the swap in your wallet
+6. The transaction settles on-chain on Base
 
-**How pricing works:** EonSwap uses the constant product formula (x × y = k) to determine prices. Larger trades have more price impact.
+**How pricing works:** EonSwap uses a constant product pool model. Larger trades move the pool ratio more and can increase price impact.
 
 ## Liquidity
 
-1. Choose a token pair (e.g., ESTF/WETH)
-2. Provide equal value of both tokens
+1. Choose a token pair such as ESTF/WETH
+2. Provide equal value of both assets
 3. Receive LP tokens representing your pool share
-4. Earn 0.3% of all trades in that pair
-5. Withdraw anytime by burning LP tokens
+4. Earn 0.3% of trading fees generated in that pool
+5. Remove liquidity later by redeeming your LP position
 
-**Impermanent loss:** If token prices diverge significantly, you may have less value than holding. Learn more in our [Risk Disclosure](/risk-disclosure).
+**Impermanent loss:** If token prices diverge significantly, your position can underperform simply holding the assets. Learn more in our [Risk Disclosure](/risk-disclosure).
 
 ## Farm
 
 1. Stake LP tokens in the MasterChef contract
-2. Earn ESTF rewards every block (~2 seconds on Base)
+2. Earn ESTF rewards based on pool emissions
 3. Earn bonus ESR rewards on eligible pools
-4. Claim or compound rewards anytime
-5. Unstake LP tokens when ready
+4. Claim rewards when you want
+5. Unstake LP tokens when you are ready to exit
 
-**Emission:** ~3.17 ESTF per second, distributed across all pools proportionally.
+**Distribution model:** Rewards are split across pools according to their allocation settings in the farm contracts.
+
+## Activity
+
+1. Open the activity page to review recent protocol actions
+2. Inspect swaps, liquidity actions, farm events, airdrop claims, and referral activity
+3. Switch between market-wide activity and wallet-oriented views when available
+4. Open transaction hashes in the explorer for deeper verification
+
+## Leaderboard
+
+1. EonSwap aggregates wallet activity and trading volume into leaderboard entries
+2. Rankings can reflect swaps, liquidity, farm actions, and related indexed activity
+3. The page is intended to highlight active wallets, not internal protocol addresses
 
 ## Airdrop
 
 1. Check eligibility using your wallet address
-2. If eligible, see your claimable amount
-3. Click claim and confirm transaction
-4. ESTF tokens are sent to your wallet
+2. Review your claimable amount if you qualify
+3. Submit the claim transaction
+4. Receive ESTF directly in your wallet
+
+## Referral
+
+1. Connect your wallet on the referral page
+2. Generate and share your referral link
+3. Track referred users, activity, and reward progress from the referral dashboard
 
 ## Smart Contracts
 
@@ -55,6 +74,6 @@ EonSwap is an automated market maker (AMM) DEX on Base, similar to Uniswap V2. H
 | EonRouter | Handles swaps and liquidity |
 | EonPair | Individual trading pair pools |
 | MasterChef | Farm reward distribution |
-| EonToken (ESTF) | Governance token |
+| EonToken (ESTF) | Ecosystem token |
 
 All contracts are deployed on **Base Mainnet** and verified on BaseScan.
