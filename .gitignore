@@ -17,9 +17,8 @@ test-results/
 playwright-report/
 coverage/
 .vscode/
-subgraph/
-
 # Local QA / manual check screenshots (not for version control)
 desktop-*-check.png
 .vercel/
 tsc_output.txt
+relay-*.log
