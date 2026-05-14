@@ -1,55 +1,85 @@
 # Roadmap
 
-EonSwap's roadmap focuses on building a robust DeFi ecosystem on Base.
+EonSwap is building a Base-native DeFi stack around swapping, liquidity, farming, live activity monitoring, and community growth tooling.
 
-## ✅ Completed (Q1 2026)
+## Completed and Live
 
-- [x] AMM launch (EonFactory, EonRouter, EonPair)
-- [x] ESTF token deployment (1B max supply)
+- [x] AMM core deployment on Base (`EonFactory`, `EonRouter`, `EonPair`)
+- [x] ESTF token deployment
 - [x] ESR reward token deployment
 - [x] MasterChef farming contracts
-- [x] Initial liquidity pools (ESTF/WETH, ESR/WETH)
-- [x] Airdrop system with Merkle proofs
-- [x] Vesting vault for team tokens
-- [x] Fee treasury implementation
-- [x] BaseScan contract verification
+- [x] ESTF/WETH liquidity pool
+- [x] Fee treasury deployment
+- [x] Vesting vault deployment
+- [x] Contract verification on BaseScan
+- [x] Swap page
+- [x] Liquidity page with pool discovery and create-pool flow
+- [x] Farm page with LP staking and harvest flows
+- [x] Activity page for indexed on-chain actions
+- [x] Leaderboard page for ranked wallet activity and volume
+- [x] Referral page with referral link and stats flow
+- [x] Status page for relay, RPC, and transaction monitoring
+- [x] Docs, FAQ, and support pages
+- [x] Responsive UI across desktop and mobile
 
-## 🚀 Current Focus (Q2 2026)
+## Live but Still Rolling Out
 
+- [x] Airdrop page and claim infrastructure
+- [ ] Airdrop campaign activation on current deployment
+- [x] Stake page shell for xESTF / veESTF
+- [ ] ESTF staking rewards and governance flows
+
+## Current Focus
+
+- [ ] Additional liquidity pools beyond the initial Base deployment
 - [ ] Additional farming pools
+- [ ] Richer analytics for volume, fees, LP growth, and wallet trends
 - [ ] Governance voting system
-- [ ] Enhanced analytics dashboard
-- [ ] Mobile-optimized UI improvements
-- [ ] Multi-language support
-- [ ] Advanced trading features (limit orders)
+- [ ] Deeper protocol health and monitoring insights
+- [ ] Production activation for airdrop claims
 
-## 📋 Next Phase (Q3 2026)
+## Next Phase
 
-- [ ] ESTF staking with revenue sharing
-- [ ] Launchpad for new projects
-- [ ] NFT integration
-- [ ] Base ecosystem expansion
-- [ ] CEX listing preparations
+- [ ] xESTF staking
+- [ ] veESTF governance
+- [ ] Revenue sharing mechanics
 - [ ] DAO treasury activation
+- [ ] More advanced trading features
+- [ ] Ecosystem integrations on Base
 
-## 🔮 Future Vision (Q4 2026+)
+## Future Vision
 
-- [ ] Perpetual trading
-- [ ] Lending/borrowing protocol
-- [ ] Aggregator integration
+- [ ] Launchpad for new projects
+- [ ] NFT integrations
+- [ ] Aggregator integrations
 - [ ] Mobile app
-- [ ] Institutional features
+- [ ] Institutional and pro trading features
+
+## Product Status Snapshot
+
+| Area | Current Status |
+|------|----------------|
+| Swap | Live |
+| Liquidity | Live |
+| Farm | Live |
+| Activity | Live |
+| Leaderboard | Live |
+| Referral | Live |
+| Status | Live |
+| Airdrop | Page live, campaign not active |
+| Stake | Page live, feature not active |
+| Governance | Planned |
 
 ## Token Distribution Timeline
 
-| Phase | Timeline | Tokens Released |
-|-------|----------|-----------------|
-| Initial Liquidity | Launch | 50M ESTF |
-| Airdrop 1 | Q1 2026 | 10M ESTF |
-| Farm Emissions Y1 | Year 1 | 100M ESTF |
-| Airdrop 2 | Q2 2026 | 20M ESTF |
-| Team Vesting Start | +12 months | Linear over 36 months |
+| Phase | Timeline | Status |
+|------|----------|--------|
+| Initial liquidity deployment | Completed | Live |
+| Farm emissions | Active era | Live |
+| Airdrop activation | Pending campaign | Not active yet |
+| xESTF / veESTF rollout | Future phase | Planned |
+| DAO treasury activation | Future phase | Planned |
 
 ---
 
-*Roadmap is subject to change based on community feedback and market conditions.*
+Roadmap may evolve as deployment priorities, Base ecosystem opportunities, and community feedback change.
