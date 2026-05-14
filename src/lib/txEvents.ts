@@ -23,7 +23,7 @@ export async function sendTxEventToRelay(payload: TxEventPayload): Promise<void>
   if (!relayUrl) return
 
   try {
-    await fetch(`${relayUrl}/events/tx`, {
+    const response = await fetch(`${relayUrl}/events/tx`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -31,7 +31,18 @@ export async function sendTxEventToRelay(payload: TxEventPayload): Promise<void>
       },
       body: JSON.stringify(payload),
     })
+
+    if (!response.ok) {
+      console.warn('[relay] tx event rejected', {
+        status: response.status,
+        relayUrl,
+        txHash: payload.txHash,
+      })
+    }
   } catch {
-    // non-blocking telemetry
+    console.warn('[relay] failed to send tx event', {
+      relayUrl,
+      txHash: payload.txHash,
+    })
   }
 }

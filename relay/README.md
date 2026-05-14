@@ -37,6 +37,8 @@ Optional env:
 - `RELAY_EVENTS_MAX_BODY_BYTES` (default `262144`)
 - `RELAY_ADMIN_SECRET` (optional; required for `GET /admin/activities`)
 - `RELAY_ACTIVITY_LOG_PATH` (optional; default `relay/data/activities.jsonl`)
+- `UPSTASH_REDIS_REST_URL` (optional; enables shared Redis cache for relay subgraph queries)
+- `UPSTASH_REDIS_REST_TOKEN` (optional; Upstash REST token paired with the URL above)
 - `THE_GRAPH_API_KEY` (optional but recommended; server-side The Graph Gateway API key)
 - `THE_GRAPH_SUBGRAPH_ID` (default `FoKBv95x7Z8uMuBZsBTkHKyHFGE9DTVVicwHp3U3eT5s`)
 - `THE_GRAPH_SUBGRAPH_URL` (optional; endpoint without API key, used with `Authorization: Bearer <THE_GRAPH_API_KEY>`)
@@ -80,6 +82,8 @@ THE_GRAPH_API_KEY=...
 THE_GRAPH_SUBGRAPH_ID=FoKBv95x7Z8uMuBZsBTkHKyHFGE9DTVVicwHp3U3eT5s
 THE_GRAPH_SUBGRAPH_URL=https://gateway.thegraph.com/api/subgraphs/id/FoKBv95x7Z8uMuBZsBTkHKyHFGE9DTVVicwHp3U3eT5s
 THE_GRAPH_CACHE_MS=30000
+UPSTASH_REDIS_REST_URL=...
+UPSTASH_REDIS_REST_TOKEN=...
 ```
 
 Do not put the Graph API key in frontend `VITE_*` variables. The frontend should keep using `VITE_MONITOR_RELAY_URL`, and the relay will proxy/cache subgraph reads.

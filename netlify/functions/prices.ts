@@ -1,4 +1,5 @@
 import type { Handler, HandlerEvent } from '@netlify/functions'
+import { getRedisJson, isRedisCacheConfigured, setRedisJson } from '../../lib/serverRedisCache'
 
 const COINGECKO_API = 'https://api.coingecko.com/api/v3'
 
@@ -20,9 +21,21 @@ const SYMBOL_TO_COINGECKO: Record<string, string> = {
   WBTC: 'wrapped-bitcoin',
 }
 
-// Cache for prices (5 minute TTL)
-const priceCache = new Map<string, { price: number; timestamp: number }>()
-const CACHE_TTL = 5 * 60 * 1000
+type PriceCacheEntry = { price: number; timestamp: number }
+
+const PRICE_CACHE_NAMESPACE = 'eonswap:prices:v1'
+// Shared memory cache for warm instances; Redis extends this across instances.
+const priceCache = new Map<string, PriceCacheEntry>()
+const CACHE_TTL_MS = 5 * 60 * 1000
+const CACHE_TTL_SECONDS = Math.floor(CACHE_TTL_MS / 1000)
+
+function buildCacheKey(id: string, vsCurrency: string): string {
+  return `${PRICE_CACHE_NAMESPACE}:${vsCurrency}:${id}`
+}
+
+function isFresh(entry: PriceCacheEntry | null | undefined, now: number): entry is PriceCacheEntry {
+  return Boolean(entry && now - entry.timestamp < CACHE_TTL_MS)
+}
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
@@ -122,24 +135,36 @@ export const handler: Handler = async (event: HandlerEvent) => {
     const now = Date.now()
     const prices: Record<string, number> = {}
     const idsToFetch: string[] = []
+    let cacheStatus = isRedisCacheConfigured() ? 'MISS' : 'LOCAL_ONLY'
 
     for (const id of coingeckoIds) {
-      const cacheKey = `${id}:${vsCurrency}`
+      const cacheKey = buildCacheKey(id, vsCurrency)
       const cached = priceCache.get(cacheKey)
-      if (cached && now - cached.timestamp < CACHE_TTL) {
+      if (isFresh(cached, now)) {
         prices[id] = cached.price
+        cacheStatus = cacheStatus === 'MISS' ? 'LOCAL_HIT' : cacheStatus
       } else {
-        idsToFetch.push(id)
+        const redisCached = await getRedisJson<PriceCacheEntry>(cacheKey)
+        if (isFresh(redisCached, now)) {
+          prices[id] = redisCached.price
+          priceCache.set(cacheKey, redisCached)
+          cacheStatus = 'REDIS_HIT'
+        } else {
+          idsToFetch.push(id)
+        }
       }
     }
 
     if (idsToFetch.length > 0) {
       const freshPrices = await fetchCoinGeckoPrices(idsToFetch, vsCurrency)
 
-      for (const [id, price] of Object.entries(freshPrices)) {
+      await Promise.all(Object.entries(freshPrices).map(async ([id, price]) => {
         prices[id] = price
-        priceCache.set(`${id}:${vsCurrency}`, { price, timestamp: now })
-      }
+        const entry = { price, timestamp: now }
+        const cacheKey = buildCacheKey(id, vsCurrency)
+        priceCache.set(cacheKey, entry)
+        await setRedisJson(cacheKey, entry, CACHE_TTL_SECONDS)
+      }))
     }
 
     const result: Record<string, { price: number; currency: string }> = {}
@@ -156,7 +181,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
 
     return {
       statusCode: 200,
-      headers,
+      headers: { ...headers, 'X-Cache': cacheStatus },
       body: JSON.stringify({
         data: result,
         timestamp: new Date().toISOString(),

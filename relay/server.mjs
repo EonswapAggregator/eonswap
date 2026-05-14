@@ -7,6 +7,11 @@ import {
   ReferralTrackerService,
 } from "./referralTracker.mjs";
 import { createAmmIndexerFromEnv } from "./ammIndexer.mjs";
+import {
+  getRedisJson,
+  isRedisCacheConfigured,
+  setRedisJson,
+} from "./redisCache.mjs";
 import { TelegramRetryQueue } from "./telegramQueue.mjs";
 
 // Global tracker instance for on-chain tracking
@@ -47,6 +52,9 @@ const THE_GRAPH_CACHE_MS = Number(process.env.THE_GRAPH_CACHE_MS || 30_000);
 console.log(
   `[relay] The Graph gateway ${isTheGraphConfigured() ? "configured" : "not configured"} ` +
     `(subgraph=${THE_GRAPH_SUBGRAPH_ID}, cacheMs=${THE_GRAPH_CACHE_MS})`,
+);
+console.log(
+  `[relay] Redis cache ${isRedisCacheConfigured() ? "configured" : "not configured"} for shared relay cache`,
 );
 
 const PORT = Number(process.env.PORT || process.env.RELAY_PORT || 8787);
@@ -176,6 +184,7 @@ const leaderboardRateMap = new Map();
 const referralRateMap = new Map();
 const recentTxEvents = new Map();
 const subgraphCache = new Map();
+const SUBGRAPH_CACHE_NAMESPACE = "eonswap:relay:subgraph:v1";
 
 function getTheGraphEndpoint() {
   if (THE_GRAPH_SUBGRAPH_URL) return THE_GRAPH_SUBGRAPH_URL;
@@ -223,6 +232,10 @@ function graphCacheSet(key, value, ttlMs = THE_GRAPH_CACHE_MS) {
   });
 }
 
+function graphRedisCacheKey(key) {
+  return `${SUBGRAPH_CACHE_NAMESPACE}:${key}`;
+}
+
 async function queryTheGraph(
   query,
   variables = {},
@@ -235,6 +248,12 @@ async function queryTheGraph(
   if (cacheKey) {
     const cached = graphCacheGet(cacheKey);
     if (cached) return cached;
+
+    const redisCached = await getRedisJson(graphRedisCacheKey(cacheKey));
+    if (redisCached) {
+      graphCacheSet(cacheKey, redisCached, cacheTtlMs);
+      return redisCached;
+    }
   }
 
   const headers = {
@@ -260,7 +279,16 @@ async function queryTheGraph(
     throw new Error(String(payload.errors[0]?.message || "The Graph query failed").slice(0, 180));
   }
   const data = payload?.data || {};
-  if (cacheKey) graphCacheSet(cacheKey, data, cacheTtlMs);
+  if (cacheKey) {
+    graphCacheSet(cacheKey, data, cacheTtlMs);
+    if (cacheTtlMs > 0) {
+      await setRedisJson(
+        graphRedisCacheKey(cacheKey),
+        data,
+        Math.max(1, Math.floor(cacheTtlMs / 1000)),
+      );
+    }
+  }
   return data;
 }
 
