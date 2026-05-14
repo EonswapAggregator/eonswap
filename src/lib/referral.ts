@@ -17,6 +17,9 @@ export interface ReferralStats {
   pendingRewards: number;
   tier: ReferralTier;
   referredAddresses: ReferredUser[];
+  source?: "subgraph" | "relay-log" | "local";
+  updatedAt?: number;
+  subgraphError?: string;
 }
 
 export interface ReferredUser {
@@ -184,6 +187,7 @@ export async function loadReferralStats(
     pendingRewards: 0,
     tier: "bronze",
     referredAddresses: [],
+    source: "local",
   };
 
   if (!code) return emptyStats;
@@ -193,22 +197,31 @@ export async function loadReferralStats(
     const base = getMonitorRelayBaseUrl();
     if (base) {
       try {
-        const res = await fetch(`${base}/referral/stats?address=${address}`, {
-          headers: { accept: "application/json" },
-        });
-        if (res.ok) {
-          const json = await res.json();
-          if (json.ok) {
-            return {
-              totalReferrals: Number(json.totalReferrals) || 0,
-              activeReferrals: Number(json.activeReferrals) || 0,
-              totalEarnings: Number(json.totalEarnings) || 0,
-              pendingRewards: Number(json.pendingRewards) || 0,
-              tier: json.tier || "bronze",
-              referredAddresses: Array.isArray(json.referredAddresses)
-                ? json.referredAddresses
-                : [],
-            };
+        const paths = [
+          `/public/referral/stats?address=${address}`,
+          `/referral/stats?address=${address}`,
+        ];
+        for (const path of paths) {
+          const res = await fetch(`${base}${path}`, {
+            headers: { accept: "application/json" },
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (json.ok) {
+              return {
+                totalReferrals: Number(json.totalReferrals) || 0,
+                activeReferrals: Number(json.activeReferrals) || 0,
+                totalEarnings: Number(json.totalEarnings) || 0,
+                pendingRewards: Number(json.pendingRewards) || 0,
+                tier: json.tier || "bronze",
+                referredAddresses: Array.isArray(json.referredAddresses)
+                  ? json.referredAddresses
+                  : [],
+                source: json.source || "relay-log",
+                updatedAt: Number(json.updatedAt) || undefined,
+                subgraphError: json.subgraphError,
+              };
+            }
           }
         }
       } catch {
@@ -223,6 +236,7 @@ export async function loadReferralStats(
     if (stored) {
       const data = JSON.parse(stored) as ReferralStats;
       data.tier = calculateTier(data.totalReferrals);
+      data.source = "local";
       return data;
     }
   } catch {
@@ -294,6 +308,7 @@ export async function registerReferral(
         pendingRewards: 0,
         tier: "bronze",
         referredAddresses: [],
+        source: "local",
       };
     }
 

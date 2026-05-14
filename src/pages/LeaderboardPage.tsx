@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowRight, Copy, Loader2, RefreshCw, Sparkles, Trophy, Users } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { ArrowRight, ChevronLeft, ChevronRight, Copy, Loader2, RefreshCw, Sparkles, Trophy, Users } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePublicClient } from 'wagmi'
 import {
@@ -27,6 +27,7 @@ import {
   leaderboardToolbarTitleClass,
   leaderboardTrClass,
 } from '../lib/leaderboard'
+import { fetchSimplePricesUsd } from '../lib/coingecko'
 import { getMonitorRelayBaseUrl } from '../lib/monitorRelayUrl'
 import { useEonAmmSwapRealtime } from '../hooks/useEonRealtimeEvents'
 
@@ -70,6 +71,30 @@ function formatBigIntMetric(value?: string): string {
   return fractionText ? `${whole}.${fractionText}` : whole.toString()
 }
 
+function parseWethVolume(value?: string): number {
+  if (!value) return 0
+  try {
+    const raw = BigInt(value)
+    if (raw === 0n) return 0
+    return Number(raw) / 1e18
+  } catch {
+    return 0
+  }
+}
+
+function formatUsdVolume(value: string | undefined, ethUsd: number | null): string {
+  const weth = parseWethVolume(value)
+  if (weth <= 0) return '$0'
+  if (ethUsd == null || ethUsd <= 0) return '...'
+  const usd = weth * ethUsd
+  return new Intl.NumberFormat('en', {
+    style: 'currency',
+    currency: 'USD',
+    notation: usd >= 1_000_000 ? 'compact' : 'standard',
+    maximumFractionDigits: usd >= 100 ? 0 : 2,
+  }).format(usd)
+}
+
 function getActivityTotal(row: LeaderboardEntry): number {
   return row.activityCount ?? row.successCount
 }
@@ -77,15 +102,15 @@ function getActivityTotal(row: LeaderboardEntry): number {
 function getTierClass(tier?: string): string {
   switch ((tier || '').toLowerCase()) {
     case 'diamond':
-      return 'border-cyan-400/25 bg-cyan-400/10 text-cyan-200'
+      return 'border-cyan-300/45 bg-cyan-400/15 text-cyan-100 shadow-[0_0_18px_rgba(34,211,238,0.12)]'
     case 'platinum':
-      return 'border-violet-400/25 bg-violet-400/10 text-violet-200'
+      return 'border-fuchsia-300/40 bg-fuchsia-400/15 text-fuchsia-100 shadow-[0_0_18px_rgba(217,70,239,0.12)]'
     case 'gold':
-      return 'border-amber-400/25 bg-amber-400/10 text-amber-200'
+      return 'border-amber-300/45 bg-amber-400/15 text-amber-100 shadow-[0_0_18px_rgba(251,191,36,0.12)]'
     case 'silver':
-      return 'border-slate-300/25 bg-slate-300/10 text-slate-200'
+      return 'border-slate-200/40 bg-slate-300/15 text-slate-100 shadow-[0_0_18px_rgba(203,213,225,0.08)]'
     default:
-      return 'border-neutral-500/25 bg-neutral-500/10 text-neutral-300'
+      return 'border-orange-300/40 bg-orange-400/15 text-orange-100 shadow-[0_0_18px_rgba(251,146,60,0.12)]'
   }
 }
 
@@ -102,15 +127,91 @@ function formatActivityBreakdown(row: LeaderboardEntry): string {
 function LeaderboardColGroup() {
   return (
     <colgroup>
-      <col className="w-20" />
-      <col className="w-48" />
+      <col className="w-16" />
+      <col className="w-44" />
+      <col className="w-28" />
+      <col className="w-28" />
       <col className="w-28" />
       <col className="w-32" />
-      <col className="w-28" />
-      <col className="w-36" />
-      <col className="w-56" />
+      <col />
       <col className="w-32" />
     </colgroup>
+  )
+}
+
+const LEADERBOARD_PAGE_SIZE = 10
+
+function LeaderboardLoadingCards() {
+  return (
+    <div className="divide-y divide-uni-border/60 md:hidden">
+      {Array.from({ length: 5 }, (_, i) => (
+        <div key={i} className="px-4 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="h-4 w-20 animate-pulse rounded bg-uni-surface-2" />
+              <div className="mt-3 h-4 w-40 max-w-full animate-pulse rounded bg-uni-surface-2" />
+            </div>
+            <div className="h-7 w-20 animate-pulse rounded-full bg-uni-surface-2" />
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="h-14 animate-pulse rounded-xl bg-uni-surface-2" />
+            <div className="h-14 animate-pulse rounded-xl bg-uni-surface-2" />
+            <div className="h-14 animate-pulse rounded-xl bg-uni-surface-2" />
+          </div>
+          <div className="mt-3 h-4 w-48 max-w-full animate-pulse rounded bg-uni-surface-2" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function LeaderboardPaginationControls({
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+}: {
+  currentPage: number
+  totalPages: number
+  totalItems: number
+  pageSize: number
+  onPageChange: (page: number) => void
+}) {
+  const start = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1
+  const end = Math.min(totalItems, currentPage * pageSize)
+
+  return (
+    <div className="hidden items-center justify-between border-t border-uni-border bg-uni-bg/50 px-5 py-3 md:flex">
+      <p className="text-xs text-neutral-500">
+        Showing <span className="font-medium text-neutral-300">{start}</span>-
+        <span className="font-medium text-neutral-300">{end}</span> of{' '}
+        <span className="font-medium text-neutral-300">{totalItems}</span>
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage <= 1}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-uni-border bg-uni-surface text-neutral-300 transition hover:border-uni-pink/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Previous leaderboard page"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="min-w-20 text-center text-xs font-medium text-neutral-400">
+          Page {currentPage} / {totalPages}
+        </span>
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage >= totalPages}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-uni-border bg-uni-surface text-neutral-300 transition hover:border-uni-pink/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Next leaderboard page"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -119,6 +220,8 @@ export function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [leaderboardPage, setLeaderboardPage] = useState(1)
+  const [ethUsd, setEthUsd] = useState<number | null>(null)
   const [sourceLabel, setSourceLabel] = useState('Indexed on-chain activity')
   const [watchedPairAddresses, setWatchedPairAddresses] = useState<
     `0x${string}`[]
@@ -135,6 +238,7 @@ export function LeaderboardPage() {
       const relay = await fetchRelayLeaderboard(50)
       if (relay.ok && relay.entries.length > 0) {
         setEntries(relay.entries)
+        setLeaderboardPage(1)
         setSourceLabel('Indexed on-chain activity')
         setLoading(false)
         return
@@ -143,6 +247,7 @@ export function LeaderboardPage() {
         relayError = relay.error
       } else if (!publicClient) {
         setEntries(relay.entries)
+        setLeaderboardPage(1)
         setSourceLabel('Indexed on-chain activity')
         setLoading(false)
         return
@@ -155,11 +260,13 @@ export function LeaderboardPage() {
       const onChain = await fetchBlockchainSwapLeaderboard(publicClient, 50)
       if (onChain.ok && onChain.entries.length > 0) {
         setEntries(onChain.entries)
+        setLeaderboardPage(1)
         setSourceLabel('Direct on-chain fallback')
         setLoading(false)
         return
       }
       setEntries([])
+      setLeaderboardPage(1)
       setError(onChain.ok ? relayError : relayError || onChain.error)
       setSourceLabel(
         relayConfigured ? 'Indexed activity fallback' : 'Direct on-chain fallback',
@@ -169,6 +276,7 @@ export function LeaderboardPage() {
     }
 
     setEntries([])
+    setLeaderboardPage(1)
     setError(relayError)
     setLoading(false)
   }, [publicClient, relayConfigured])
@@ -176,6 +284,23 @@ export function LeaderboardPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    let alive = true
+    fetchSimplePricesUsd(['ethereum'])
+      .then((prices) => {
+        const price = Number(prices.ethereum ?? 0)
+        if (alive && Number.isFinite(price) && price > 0) {
+          setEthUsd(price)
+        }
+      })
+      .catch(() => {
+        if (alive) setEthUsd(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   useEonAmmSwapRealtime({
     chainId: EON_BASE_MAINNET.chainId,
@@ -220,6 +345,26 @@ export function LeaderboardPage() {
       color: 'text-emerald-400',
     },
   ] as const
+
+  const desktopTotalPages = Math.max(
+    1,
+    Math.ceil(entries.length / LEADERBOARD_PAGE_SIZE),
+  )
+  const safeLeaderboardPage = Math.min(leaderboardPage, desktopTotalPages)
+  const desktopEntries = useMemo(
+    () =>
+      entries.slice(
+        (safeLeaderboardPage - 1) * LEADERBOARD_PAGE_SIZE,
+        safeLeaderboardPage * LEADERBOARD_PAGE_SIZE,
+      ),
+    [entries, safeLeaderboardPage],
+  )
+
+  useEffect(() => {
+    if (leaderboardPage > desktopTotalPages) {
+      setLeaderboardPage(desktopTotalPages)
+    }
+  }, [desktopTotalPages, leaderboardPage])
 
   return (
     <div className="relative min-w-0 max-w-full overflow-hidden">
@@ -402,7 +547,9 @@ export function LeaderboardPage() {
                   <p>Select Refresh to retry.</p>
                 </div>
               ) : loading && entries.length === 0 ? (
-                <div className="min-w-[min(100%,1120px)]">
+                <>
+                  <LeaderboardLoadingCards />
+                  <div className="hidden md:block">
                   <table className={`${leaderboardTableClass} table-fixed`}>
                     <LeaderboardColGroup />
                     <caption className="sr-only">Loading rankings</caption>
@@ -410,31 +557,34 @@ export function LeaderboardPage() {
                       <tr className={leaderboardTheadRowClass}>
                         <th
                           scope="col"
-                          className={`${leaderboardThClass} pl-4 md:pl-5`}
+                          className={`${leaderboardThClass} pl-4 text-center md:pl-5`}
                         >
                           Rank
                         </th>
                         <th scope="col" className={leaderboardThClass}>
                           Wallet
                         </th>
-                        <th scope="col" className={leaderboardThClass}>
+                        <th
+                          scope="col"
+                          className={`${leaderboardThClass} text-center`}
+                        >
                           Tier
                         </th>
                         <th
                           scope="col"
-                          className={`${leaderboardThClass} text-right`}
+                          className={`${leaderboardThClass} text-center`}
                         >
                           Points
                         </th>
                         <th
                           scope="col"
-                          className={`${leaderboardThClass} text-right`}
+                          className={`${leaderboardThClass} text-center`}
                         >
                           Activity
                         </th>
                         <th
                           scope="col"
-                          className={`${leaderboardThClass} text-right`}
+                          className={leaderboardThClass}
                         >
                           Volume
                         </th>
@@ -453,24 +603,24 @@ export function LeaderboardPage() {
                       {Array.from({ length: LEADERBOARD_SKELETON_ROWS }, (_, i) => (
                         <tr key={i} className={leaderboardTrClass}>
                           <td
-                            className={`${leaderboardTdClass} pl-4 md:pl-5`}
+                            className={`${leaderboardTdClass} pl-4 text-center md:pl-5`}
                           >
-                            <div className="h-4 w-6 animate-pulse rounded bg-uni-surface" />
+                            <div className="mx-auto h-4 w-6 animate-pulse rounded bg-uni-surface" />
                           </td>
                           <td className={leaderboardTdClass}>
                             <div className="h-4 w-36 max-w-full animate-pulse rounded bg-uni-surface" />
                           </td>
+                          <td className={`${leaderboardTdClass} text-center`}>
+                            <div className="mx-auto h-5 w-16 animate-pulse rounded-full bg-uni-surface" />
+                          </td>
+                          <td className={`${leaderboardTdClass} text-center`}>
+                            <div className="mx-auto h-4 w-14 animate-pulse rounded bg-uni-surface" />
+                          </td>
+                          <td className={`${leaderboardTdClass} text-center`}>
+                            <div className="mx-auto h-4 w-10 animate-pulse rounded bg-uni-surface" />
+                          </td>
                           <td className={leaderboardTdClass}>
-                            <div className="h-5 w-16 animate-pulse rounded-full bg-uni-surface" />
-                          </td>
-                          <td className={`${leaderboardTdClass} text-right`}>
-                            <div className="ml-auto h-4 w-14 animate-pulse rounded bg-uni-surface" />
-                          </td>
-                          <td className={`${leaderboardTdClass} text-right`}>
-                            <div className="ml-auto h-4 w-10 animate-pulse rounded bg-uni-surface" />
-                          </td>
-                          <td className={`${leaderboardTdClass} text-right`}>
-                            <div className="ml-auto h-4 w-14 animate-pulse rounded bg-uni-surface" />
+                            <div className="h-4 w-14 animate-pulse rounded bg-uni-surface" />
                           </td>
                           <td className={leaderboardTdClass}>
                             <div className="h-4 w-32 animate-pulse rounded bg-uni-surface" />
@@ -486,11 +636,94 @@ export function LeaderboardPage() {
                   </table>
                   <div className="flex items-center justify-center gap-2 border-t border-uni-border py-4 text-neutral-500">
                     <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-                    <span className="text-sm">Loading…</span>
+                    <span className="text-sm">Loading...</span>
                   </div>
-                </div>
+                  </div>
+                </>
               ) : !error ? (
-                <table className={`${leaderboardTableClass} min-w-[1120px] table-fixed`}>
+                <>
+                  <div className="divide-y divide-uni-border/60 md:hidden">
+                    {entries.length === 0 ? (
+                      <div className="px-5 py-12 text-center text-sm text-neutral-500">
+                        No results yet. Wallets will appear here after confirmed
+                        EonSwap activity is indexed.
+                      </div>
+                    ) : null}
+                    {entries.map((row, index) => (
+                      <article key={row.address} className="min-w-0 px-4 py-4">
+                        <div className="flex min-w-0 items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span
+                                className={`font-mono text-sm font-semibold ${
+                                  index < 3
+                                    ? 'text-uni-pink'
+                                    : 'text-neutral-400'
+                                }`}
+                              >
+                                #{row.rank}
+                              </span>
+                              <span className="h-1 w-1 shrink-0 rounded-full bg-neutral-700" />
+                              <span className="min-w-0 truncate font-mono text-xs text-neutral-200">
+                                {formatLeaderboardAddressShort(row.address)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => copy(row.address)}
+                                className="shrink-0 rounded-md p-1 text-neutral-500 transition hover:bg-white/10 hover:text-neutral-200"
+                                title="Copy address"
+                                aria-label={`Copy ${row.address}`}
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <p className="mt-1 text-xs text-neutral-500">
+                              Last seen{' '}
+                              {formatLeaderboardRelativeTime(row.lastSuccessAt)}
+                            </p>
+                          </div>
+                          <span
+                            className={`inline-flex shrink-0 justify-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getTierClass(row.tier)}`}
+                          >
+                            {row.tier || 'Bronze'}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+                          <div className="min-w-0 rounded-xl border border-uni-border/70 bg-uni-surface-2 px-2.5 py-2">
+                            <p className="font-semibold uppercase tracking-wide text-neutral-600">
+                              Points
+                            </p>
+                            <p className="mt-1 truncate font-semibold tabular-nums text-emerald-300">
+                              {formatBigIntMetric(row.totalPoints)}
+                            </p>
+                          </div>
+                          <div className="min-w-0 rounded-xl border border-uni-border/70 bg-uni-surface-2 px-2.5 py-2">
+                            <p className="font-semibold uppercase tracking-wide text-neutral-600">
+                              Activity
+                            </p>
+                            <p className="mt-1 truncate font-semibold tabular-nums text-uni-pink">
+                              {formatCompactNumber(getActivityTotal(row))}
+                            </p>
+                          </div>
+                          <div className="min-w-0 rounded-xl border border-uni-border/70 bg-uni-surface-2 px-2.5 py-2">
+                            <p className="font-semibold uppercase tracking-wide text-neutral-600">
+                              Volume
+                            </p>
+                            <p className="mt-1 truncate tabular-nums text-neutral-300">
+                              {formatUsdVolume(row.totalWethVolume, ethUsd)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <p className="mt-3 truncate text-xs text-neutral-400">
+                          {formatActivityBreakdown(row)}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+
+                  <table className={`${leaderboardTableClass} hidden table-fixed md:table`}>
                   <LeaderboardColGroup />
                   <caption className="sr-only">
                     Top addresses by confirmed EonSwap activity
@@ -499,31 +732,34 @@ export function LeaderboardPage() {
                     <tr className={leaderboardTheadRowClass}>
                       <th
                         scope="col"
-                        className={`${leaderboardThClass} pl-4 md:pl-5`}
+                        className={`${leaderboardThClass} pl-4 text-center md:pl-5`}
                       >
                         Rank
                       </th>
                       <th scope="col" className={leaderboardThClass}>
                         Wallet
                       </th>
-                      <th scope="col" className={leaderboardThClass}>
+                      <th
+                        scope="col"
+                        className={`${leaderboardThClass} text-center`}
+                      >
                         Tier
                       </th>
                       <th
                         scope="col"
-                        className={`${leaderboardThClass} text-right`}
+                        className={`${leaderboardThClass} text-center`}
                       >
                         Points
                       </th>
                       <th
                         scope="col"
-                        className={`${leaderboardThClass} text-right`}
+                        className={`${leaderboardThClass} text-center`}
                       >
                         Activity
                       </th>
                       <th
                         scope="col"
-                        className={`${leaderboardThClass} text-right`}
+                        className={leaderboardThClass}
                       >
                         Volume
                       </th>
@@ -550,12 +786,12 @@ export function LeaderboardPage() {
                         </td>
                       </tr>
                     ) : null}
-                    {entries.map((row, index) => (
-                      <tr key={row.address} className={leaderboardTrClass}>
-                        <td
-                          className={`${leaderboardTdClass} pl-4 font-mono md:pl-5`}
-                        >
-                          <span className={index < 3 ? 'text-uni-pink font-semibold' : 'text-neutral-400'}>
+                      {desktopEntries.map((row) => (
+                        <tr key={row.address} className={leaderboardTrClass}>
+                          <td
+                            className={`${leaderboardTdClass} pl-4 text-center font-mono md:pl-5`}
+                          >
+                          <span className={row.rank <= 3 ? 'text-uni-pink font-semibold' : 'text-neutral-400'}>
                             {row.rank}
                           </span>
                         </td>
@@ -575,7 +811,7 @@ export function LeaderboardPage() {
                             </button>
                           </div>
                         </td>
-                        <td className={`${leaderboardTdClass} text-left`}>
+                        <td className={`${leaderboardTdClass} text-center`}>
                           <span
                             className={`inline-flex min-w-16 justify-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getTierClass(row.tier)}`}
                           >
@@ -583,19 +819,19 @@ export function LeaderboardPage() {
                           </span>
                         </td>
                         <td
-                          className={`${leaderboardTdClass} text-right font-semibold tabular-nums text-emerald-300`}
+                          className={`${leaderboardTdClass} text-center font-semibold tabular-nums text-emerald-300`}
                         >
                           {formatBigIntMetric(row.totalPoints)}
                         </td>
                         <td
-                          className={`${leaderboardTdClass} text-right font-semibold tabular-nums text-uni-pink`}
+                          className={`${leaderboardTdClass} text-center font-semibold tabular-nums text-uni-pink`}
                         >
                           {formatCompactNumber(getActivityTotal(row))}
                         </td>
                         <td
-                          className={`${leaderboardTdClass} text-right tabular-nums text-neutral-300`}
+                          className={`${leaderboardTdClass} tabular-nums text-neutral-300`}
                         >
-                          {formatBigIntMetric(row.totalWethVolume)} WETH
+                          {formatUsdVolume(row.totalWethVolume, ethUsd)}
                         </td>
                         <td className={`${leaderboardTdClass} text-neutral-400`}>
                           <span className="block truncate">
@@ -610,9 +846,19 @@ export function LeaderboardPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                  </table>
+                </>
               ) : null}
             </div>
+            {!error && !loading && entries.length > 0 && (
+              <LeaderboardPaginationControls
+                currentPage={safeLeaderboardPage}
+                totalPages={desktopTotalPages}
+                totalItems={entries.length}
+                pageSize={LEADERBOARD_PAGE_SIZE}
+                onPageChange={setLeaderboardPage}
+              />
+            )}
           </div>
         </motion.div>
       </section>

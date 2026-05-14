@@ -2,23 +2,24 @@ node_modules
 dist
 documentation/docs/.vitepress/.temp/
 documentation/docs/.vitepress/cache/
+documentation/docs/.vitepress/dist/
 *.local
 .DS_Store
 .env
 .env.*
 !.env.example
-logs/*.log
-logs/*.err.log
+!.env.production
+logs/
 .codex-run-logs/
-relay/data/*.jsonl
-relay/data/*.json
-relay/data/indexer/
-relay/data/indexer-test-*/
+relay/data/*
+!relay/data/.gitkeep
 test-results/
+playwright-report/
+coverage/
 .vscode/
 subgraph/
 
 # Local QA / manual check screenshots (not for version control)
 desktop-*-check.png
-.vercel
+.vercel/
 tsc_output.txt

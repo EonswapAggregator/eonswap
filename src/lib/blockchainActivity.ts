@@ -59,6 +59,8 @@ type SerializedBlockchainSwapActivity = Omit<
   points?: string;
 };
 
+type IndexedActivityRecord = Partial<SerializedBlockchainSwapActivity>;
+
 type ActivityCache = {
   chainId: number;
   factory: `0x${string}`;
@@ -91,7 +93,7 @@ type PairInfo = {
 
 type IndexedActivityResponse = {
   ok?: boolean;
-  data?: SerializedBlockchainSwapActivity[];
+  data?: IndexedActivityRecord[];
   error?: string;
   message?: string;
 };
@@ -111,18 +113,72 @@ function serializeActivity(
   };
 }
 
-function deserializeActivity(
-  activity: SerializedBlockchainSwapActivity,
-): BlockchainSwapActivity {
+function normalizeIndexedAddress(
+  value: unknown,
+  fallback: `0x${string}` = "0x0000000000000000000000000000000000000000",
+): `0x${string}` {
+  return typeof value === "string" && /^0x[a-fA-F0-9]{40}$/u.test(value)
+    ? (value as `0x${string}`)
+    : fallback;
+}
+
+function normalizeIndexedHash(value: unknown): `0x${string}` {
+  return typeof value === "string" && /^0x[a-fA-F0-9]{64}$/u.test(value)
+    ? (value as `0x${string}`)
+    : "0x0000000000000000000000000000000000000000000000000000000000000000";
+}
+
+function parseIndexedBigInt(value: unknown): bigint {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return BigInt(Math.max(0, Math.floor(value)));
+  }
+  if (typeof value === "string" && value.trim()) {
+    try {
+      return BigInt(value);
+    } catch {
+      return 0n;
+    }
+  }
+  return 0n;
+}
+
+function deserializeActivity(activity: IndexedActivityRecord): BlockchainSwapActivity {
+  const amount0In = parseIndexedBigInt(activity.amount0In);
+  const amount1In = parseIndexedBigInt(activity.amount1In);
+  const amount0Out = parseIndexedBigInt(activity.amount0Out);
+  const amount1Out = parseIndexedBigInt(activity.amount1Out);
+  const amount0 = activity.amount0 != null ? parseIndexedBigInt(activity.amount0) : undefined;
+  const amount1 = activity.amount1 != null ? parseIndexedBigInt(activity.amount1) : undefined;
+  const txHash = normalizeIndexedHash(activity.txHash);
+  const logId =
+    typeof activity.id === "string" && activity.id.trim()
+      ? activity.id
+      : `${txHash}-${activity.blockNumber ?? 0}`;
+
   return {
     ...activity,
-    amount0: activity.amount0 != null ? BigInt(activity.amount0) : undefined,
-    amount1: activity.amount1 != null ? BigInt(activity.amount1) : undefined,
-    amount0In: BigInt(activity.amount0In),
-    amount1In: BigInt(activity.amount1In),
-    amount0Out: BigInt(activity.amount0Out),
-    amount1Out: BigInt(activity.amount1Out),
-    points: activity.points != null ? BigInt(activity.points) : undefined,
+    id: logId,
+    kind: activity.kind ?? "SWAP",
+    pair: normalizeIndexedAddress(activity.pair, EON_BASE_MAINNET.amm.pairEstfWeth),
+    token0: normalizeIndexedAddress(activity.token0, EON_BASE_MAINNET.token.address),
+    token1: normalizeIndexedAddress(activity.token1, EON_BASE_MAINNET.amm.weth),
+    symbol0: activity.symbol0 ?? EON_BASE_MAINNET.token.symbol,
+    symbol1: activity.symbol1 ?? "WETH",
+    decimals0: Number(activity.decimals0 ?? 18),
+    decimals1: Number(activity.decimals1 ?? 18),
+    txHash,
+    blockNumber: Number(activity.blockNumber ?? 0),
+    timestamp: Number(activity.timestamp ?? Date.now()),
+    from: normalizeIndexedAddress(activity.from),
+    amount0,
+    amount1,
+    amount0In,
+    amount1In,
+    amount0Out,
+    amount1Out,
+    points: activity.points != null ? parseIndexedBigInt(activity.points) : undefined,
+    to: normalizeIndexedAddress(activity.to),
   };
 }
 

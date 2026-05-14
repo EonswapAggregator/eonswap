@@ -210,7 +210,12 @@ function graphCacheSet(key, value, ttlMs = THE_GRAPH_CACHE_MS) {
   });
 }
 
-async function queryTheGraph(query, variables = {}, cacheKey = "") {
+async function queryTheGraph(
+  query,
+  variables = {},
+  cacheKey = "",
+  cacheTtlMs = THE_GRAPH_CACHE_MS,
+) {
   if (!isTheGraphConfigured()) {
     throw new Error("The Graph gateway is not configured");
   }
@@ -242,7 +247,7 @@ async function queryTheGraph(query, variables = {}, cacheKey = "") {
     throw new Error(String(payload.errors[0]?.message || "The Graph query failed").slice(0, 180));
   }
   const data = payload?.data || {};
-  if (cacheKey) graphCacheSet(cacheKey, data);
+  if (cacheKey) graphCacheSet(cacheKey, data, cacheTtlMs);
   return data;
 }
 
@@ -626,17 +631,93 @@ function getTierRewardPct(tier) {
   return pcts[tier] || 5;
 }
 
+function scaledBigIntToNumber(value, decimals = 18) {
+  try {
+    const raw = BigInt(String(value || "0"));
+    const scale = 10n ** BigInt(decimals);
+    const whole = raw / scale;
+    const fraction = raw % scale;
+    return Number(whole) + Number(fraction) / Number(scale);
+  } catch {
+    return 0;
+  }
+}
+
+function emptyReferralStats(source = "relay") {
+  return {
+    ok: true,
+    source,
+    totalReferrals: 0,
+    activeReferrals: 0,
+    totalEarnings: 0,
+    pendingRewards: 0,
+    tier: "bronze",
+    referredAddresses: [],
+  };
+}
+
+async function fetchSubgraphReferralStats(address) {
+  const referrer = normalizeGraphAddress(address, "");
+  if (!referrer) throw new Error("Invalid referral address");
+
+  const query = `
+    query EonSwapReferralStats($referrer: String!) {
+      wallet(id: $referrer) {
+        id
+        referralCount
+        referralPoints
+        updatedAt
+      }
+      referrals(first: 1000, orderBy: updatedAt, orderDirection: desc, where: { referrer: $referrer }) {
+        id
+        referee { id }
+        joinedAt
+        swapCount
+        totalVolumeUsd
+        totalReward
+        updatedAt
+      }
+    }
+  `;
+  const data = await queryTheGraph(
+    query,
+    { referrer },
+    `referral-stats:${referrer}`,
+    10_000,
+  );
+  const referrals = Array.isArray(data.referrals) ? data.referrals : [];
+  const referredAddresses = referrals.map((referral) => ({
+    address: normalizeGraphAddress(referral?.referee?.id || referral?.id),
+    joinedAt: normalizeTimestampMs(referral?.joinedAt),
+    swapCount: Number(referral?.swapCount || 0),
+    volumeUsd: scaledBigIntToNumber(referral?.totalVolumeUsd),
+    rewardEarned: scaledBigIntToNumber(referral?.totalReward),
+  }));
+  const walletReferralCount = Number(data.wallet?.referralCount || 0);
+  const totalReferrals = Math.max(walletReferralCount, referredAddresses.length);
+  const activeReferrals = referredAddresses.filter((r) => r.swapCount > 0).length;
+  const totalEarnings = referredAddresses.reduce(
+    (sum, r) => sum + r.rewardEarned,
+    0,
+  );
+
+  return {
+    ok: true,
+    source: "subgraph",
+    totalReferrals,
+    activeReferrals,
+    totalEarnings,
+    pendingRewards: 0,
+    tier: calculateTier(totalReferrals),
+    referredAddresses,
+    updatedAt: normalizeTimestampMs(data.wallet?.updatedAt),
+  };
+}
+
 async function buildReferralStats(address) {
   const code = generateReferralCode(address);
   if (!code) {
-    return {
-      totalReferrals: 0,
-      activeReferrals: 0,
-      totalEarnings: 0,
-      pendingRewards: 0,
-      tier: "bronze",
-      referredAddresses: [],
-    };
+    return emptyReferralStats();
   }
 
   const records = await readReferralsMerged();
@@ -678,6 +759,8 @@ async function buildReferralStats(address) {
   const tier = calculateTier(referrals.length);
 
   return {
+    ok: true,
+    source: "relay-log",
     totalReferrals: referrals.length,
     activeReferrals: referredAddresses.filter((r) => r.swapCount > 0).length,
     totalEarnings,
@@ -685,6 +768,19 @@ async function buildReferralStats(address) {
     tier,
     referredAddresses,
   };
+}
+
+async function getReferralStats(address) {
+  try {
+    return await fetchSubgraphReferralStats(address);
+  } catch (error) {
+    const fallback = await buildReferralStats(address);
+    return {
+      ...fallback,
+      source: fallback.source || "relay-log",
+      subgraphError: classifyError(error),
+    };
+  }
 }
 
 async function readJsonBody(req, maxBytes = EVENT_MAX_BODY_BYTES) {
@@ -1803,8 +1899,13 @@ createServer(async (req, res) => {
     }
   }
 
-  // GET /referral/stats?address=0x... - Get referral stats for an address
-  if (req.method === "GET" && u.pathname === "/referral/stats") {
+  // GET /public/referral/stats?address=0x... - Get referral stats from subgraph, with relay-log fallback.
+  // Legacy /referral/stats is kept for existing frontend deployments.
+  if (
+    req.method === "GET" &&
+    (u.pathname === "/public/referral/stats" ||
+      u.pathname === "/referral/stats")
+  ) {
     if (isReferralRateLimited(req)) {
       return json(req, res, 429, { ok: false, error: "Rate limited" });
     }
@@ -1815,12 +1916,12 @@ createServer(async (req, res) => {
     if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) {
       return json(req, res, 400, { ok: false, error: "Invalid address" });
     }
-    const stats = await buildReferralStats(address);
+    const stats = await getReferralStats(address);
     return json(
       req,
       res,
       200,
-      { ok: true, ...stats },
+      stats,
       { cacheControl: "public, max-age=10" },
     );
   }

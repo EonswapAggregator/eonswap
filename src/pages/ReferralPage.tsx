@@ -129,45 +129,61 @@ export function ReferralPage() {
       hash: claimHash,
     });
 
-  // Load referral stats (try contract first, fallback to API)
-  useEffect(() => {
-    async function loadStats() {
-      if (!address) {
-        setStats(null);
-        return;
-      }
-
-      // Try contract first
-      if (contractStats) {
-        const [
-          totalReferrals,
-          totalEarnings,
-          pendingRewards,
-          _claimedRewards,
-          tier,
-        ] = contractStats;
-        setStats({
-          totalReferrals: Number(totalReferrals),
-          activeReferrals: Number(totalReferrals), // Simplified
-          totalEarnings: Number(formatUnits(totalEarnings, 18)),
-          pendingRewards: Number(formatUnits(pendingRewards, 18)),
-          tier: getTierName(tier as Tier),
-          referredAddresses: [],
-        });
-      } else {
-        // Fallback to API
-        const apiStats = await loadReferralStats(address);
-        setStats(apiStats);
-      }
+  const refreshReferralStats = useCallback(async () => {
+    if (!address) {
+      setStats(null);
+      return;
     }
 
-    void loadStats();
+    const apiStats = await loadReferralStats(address);
+    if (!contractStats) {
+      setStats(apiStats);
+      return;
+    }
+
+    const [
+      totalReferrals,
+      totalEarnings,
+      pendingRewards,
+      _claimedRewards,
+      tier,
+    ] = contractStats;
+    const contractReferralCount = Number(totalReferrals);
+    const contractEarnings = Number(formatUnits(totalEarnings, 18));
+
+    setStats({
+      ...apiStats,
+      totalReferrals: Math.max(contractReferralCount, apiStats.totalReferrals),
+      activeReferrals: Math.min(
+        Math.max(apiStats.activeReferrals, 0),
+        Math.max(contractReferralCount, apiStats.totalReferrals),
+      ),
+      totalEarnings: contractEarnings || apiStats.totalEarnings,
+      pendingRewards: Number(formatUnits(pendingRewards, 18)),
+      tier: getTierName(tier as Tier),
+    });
   }, [address, contractStats]);
+
+  // Load referral stats from subgraph/relay and merge contract values for claimable rewards.
+  useEffect(() => {
+    void refreshReferralStats();
+  }, [refreshReferralStats]);
+
+  // Keep referral data fresh without forcing users to reload the page.
+  useEffect(() => {
+    if (!address) return;
+    const timer = window.setInterval(() => {
+      void refetchStats();
+      void refreshReferralStats();
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [address, refetchStats, refreshReferralStats]);
 
   // Refetch stats after successful claim
   useEffect(() => {
     if (isClaimSuccess) {
       void refetchStats();
+      void refreshReferralStats();
       if (claimActivityId.current) {
         patchActivity(claimActivityId.current, {
           status: "success",
@@ -181,7 +197,13 @@ export function ReferralPage() {
       });
       claimToastId.current = undefined;
     }
-  }, [isClaimSuccess, refetchStats, patchActivity, claimHash]);
+  }, [
+    isClaimSuccess,
+    refetchStats,
+    refreshReferralStats,
+    patchActivity,
+    claimHash,
+  ]);
 
   // Check if user is already registered on-chain
   const isRegisteredOnChain =

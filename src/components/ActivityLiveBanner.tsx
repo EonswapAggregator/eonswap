@@ -33,16 +33,17 @@ export function ActivityLiveBanner({
 
   const name = getEonChain(activeChainId)?.name ?? `Chain ${activeChainId}`;
   const chainLogo = nativeChainDisplayLogoUrl(activeChainId);
+  const blockLabel = block != null ? `#${block.toLocaleString()}` : "Loading...";
 
   return (
     <div className="overflow-hidden rounded-2xl border border-uni-pink/20 bg-gradient-to-r from-uni-pink/[0.08] via-uni-surface to-uni-surface">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-3 px-5 py-4">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 flex-col gap-3 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-4 sm:gap-y-3 sm:px-5 sm:py-4">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
           {/* Activity Tabs */}
           {onViewModeChange && (
             <>
               <div
-                className="flex min-w-0 gap-1 rounded-2xl border border-uni-border bg-uni-surface p-1"
+                className="grid w-full min-w-0 grid-cols-2 gap-1 rounded-2xl border border-uni-border bg-uni-surface p-1 sm:w-auto sm:grid-cols-none sm:flex"
                 role="tablist"
                 aria-label="Activity view"
               >
@@ -51,28 +52,30 @@ export function ActivityLiveBanner({
                   role="tab"
                   aria-selected={viewMode === "global"}
                   onClick={() => onViewModeChange("global")}
-                  className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition sm:min-h-0 ${
+                  className={`inline-flex min-h-[44px] min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-semibold transition sm:min-h-0 sm:px-4 ${
                     viewMode === "global"
                       ? "bg-uni-pink text-white shadow-glow"
                       : "text-neutral-500 hover:bg-white/[0.05] hover:text-neutral-300"
                   }`}
                 >
-                  <Globe className="h-4 w-4" />
-                  Global Activity
+                  <Globe className="h-4 w-4 shrink-0" />
+                  <span className="sm:hidden">Global</span>
+                  <span className="hidden sm:inline">Global Activity</span>
                 </button>
                 <button
                   type="button"
                   role="tab"
                   aria-selected={viewMode === "my"}
                   onClick={() => onViewModeChange("my")}
-                  className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition sm:min-h-0 ${
+                  className={`inline-flex min-h-[44px] min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-semibold transition sm:min-h-0 sm:px-4 ${
                     viewMode === "my"
                       ? "bg-uni-pink text-white shadow-glow"
                       : "text-neutral-500 hover:bg-white/[0.05] hover:text-neutral-300"
                   }`}
                 >
-                  <User className="h-4 w-4" />
-                  My Activity
+                  <User className="h-4 w-4 shrink-0" />
+                  <span className="sm:hidden">My</span>
+                  <span className="hidden sm:inline">My Activity</span>
                 </button>
               </div>
               <span
@@ -85,56 +88,58 @@ export function ActivityLiveBanner({
           {!walletRequired && (
             <>
               {/* Live Indicator */}
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-3 w-3 shrink-0">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-uni-pink/60" />
-                  <span className="relative inline-flex h-3 w-3 rounded-full bg-uni-pink shadow-[0_0_12px_rgba(255,0,122,0.6)]" />
-                </span>
-                <span className="text-sm font-bold text-uni-pink">LIVE</span>
-              </div>
-
-              <span
-                className="hidden h-5 w-px bg-uni-border sm:block"
-                aria-hidden
-              />
-
-              {/* Network */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                  Network
-                </span>
-                <span className="inline-flex items-center gap-2 rounded-lg bg-uni-surface-2 px-3 py-1.5 ring-1 ring-uni-border">
-                  <img
-                    src={chainLogo ?? undefined}
-                    alt={name}
-                    className="h-5 w-5 rounded-full object-cover ring-1 ring-white/10"
-                    loading="lazy"
-                  />
-                  <span className="text-sm font-semibold text-white">
-                    {name}
+              <div className="grid w-full min-w-0 grid-cols-3 gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:items-center sm:gap-3">
+                <div className="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-uni-border bg-uni-surface-2 px-2.5 py-2 sm:justify-start sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
+                  <span className="relative flex h-3 w-3 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-uni-pink/60" />
+                    <span className="relative inline-flex h-3 w-3 rounded-full bg-uni-pink shadow-[0_0_12px_rgba(255,0,122,0.6)]" />
                   </span>
-                </span>
-              </div>
-
-              <span
-                className="hidden h-5 w-px bg-uni-border sm:block"
-                aria-hidden
-              />
-
-              {/* Block Number */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                  Block
-                </span>
-                {block != null ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-uni-pink/10 px-3 py-1.5 font-mono text-sm font-bold tabular-nums text-uni-pink ring-1 ring-uni-pink/20">
-                    #{block.toLocaleString()}
+                  <span className="truncate whitespace-nowrap text-xs font-bold text-uni-pink sm:text-sm">
+                    LIVE
                   </span>
-                ) : (
-                  <span className="rounded-lg bg-uni-surface-2 px-3 py-1.5 text-sm text-neutral-500">
-                    Loading...
+                </div>
+
+                <span
+                  className="hidden h-5 w-px bg-uni-border sm:block"
+                  aria-hidden
+                />
+
+                {/* Network */}
+                <div className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-uni-border bg-uni-surface-2 px-2 py-2 sm:justify-start sm:gap-2 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
+                  <span className="hidden text-xs font-medium uppercase tracking-wider text-neutral-500 sm:inline">
+                    Network
                   </span>
-                )}
+                  <span className="inline-flex min-w-0 items-center gap-1.5 rounded-lg sm:bg-uni-surface-2 sm:px-3 sm:py-1.5 sm:ring-1 sm:ring-uni-border">
+                    <img
+                      src={chainLogo ?? undefined}
+                      alt={name}
+                      className="h-5 w-5 shrink-0 rounded-full object-cover ring-1 ring-white/10"
+                      loading="lazy"
+                    />
+                    <span className="min-w-0 truncate whitespace-nowrap text-xs font-semibold text-white sm:text-sm">
+                      {name}
+                    </span>
+                  </span>
+                </div>
+
+                <span className="hidden h-5 w-px bg-uni-border sm:block" />
+
+                {/* Block Number */}
+                <div className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-uni-border bg-uni-surface-2 px-2 py-2 sm:justify-start sm:gap-2 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
+                  <span className="hidden text-xs font-medium uppercase tracking-wider text-neutral-500 sm:inline">
+                    Block
+                  </span>
+                  <span
+                    className={`min-w-0 truncate whitespace-nowrap rounded-lg px-2 py-1.5 text-center font-mono text-xs tabular-nums sm:px-3 sm:text-sm ${
+                      block != null
+                        ? "bg-uni-pink/10 font-bold text-uni-pink ring-1 ring-uni-pink/20"
+                        : "bg-uni-surface-2 text-neutral-500"
+                    }`}
+                    title={blockLabel}
+                  >
+                    {blockLabel}
+                  </span>
+                </div>
               </div>
             </>
           )}
@@ -146,7 +151,7 @@ export function ActivityLiveBanner({
             type="button"
             onClick={onRefresh}
             disabled={refreshLoading}
-            className="ml-auto inline-flex items-center gap-2 rounded-xl border border-uni-border bg-uni-surface px-4 py-2 text-sm font-medium text-neutral-400 transition hover:bg-uni-surface-2 hover:text-white disabled:opacity-50"
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-uni-border bg-uni-surface px-4 py-2 text-sm font-medium text-neutral-400 transition hover:bg-uni-surface-2 hover:text-white disabled:opacity-50 sm:ml-auto sm:w-auto sm:min-h-0"
           >
             <RefreshCw
               className={`h-4 w-4 ${refreshLoading ? "animate-spin" : ""}`}
@@ -156,12 +161,12 @@ export function ActivityLiveBanner({
         )}
       </div>
       {walletRequired && (
-        <div className="border-t border-uni-border px-5 py-5">
+        <div className="border-t border-uni-border px-4 py-5 sm:px-5">
           <div className="flex flex-col items-center justify-center gap-4 text-center sm:flex-row sm:text-left">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-uni-surface-2 ring-1 ring-uni-border">
               <Wallet className="h-6 w-6 text-neutral-500" />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-white">
                 Connect Your Wallet
               </p>
@@ -172,7 +177,7 @@ export function ActivityLiveBanner({
             </div>
             <Link
               to="/swap"
-              className="inline-flex items-center gap-2 rounded-xl bg-uni-pink px-5 py-2.5 text-sm font-semibold text-white shadow-glow transition hover:bg-uni-pink-light"
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-uni-pink px-5 py-2.5 text-sm font-semibold text-white shadow-glow transition hover:bg-uni-pink-light sm:w-auto"
             >
               Connect Wallet
             </Link>
