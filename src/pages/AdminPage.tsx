@@ -1878,22 +1878,22 @@ function PlatformTab() {
           {[
             {
               name: "Fee Treasury",
-              address: "0x7f10d2bb44eafa46669e0befc23fd54808046d77",
+              address: EON_BASE_MAINNET.ops.feeTreasury,
               role: "Collects swap fees",
             },
             {
               name: "Vesting Vault",
-              address: "0x5871de9b49198f8016932ffe6599a6199079c6b4",
+              address: EON_BASE_MAINNET.ops.vestingVault,
               role: "Token vesting",
             },
             {
               name: "Emission Governor",
-              address: "0x87fa28cf1e03cade52eaa26e24c4aecb00389944",
+              address: EON_BASE_MAINNET.ops.emissionGovernor,
               role: "Emission control",
             },
             {
               name: "Timelock",
-              address: "0x95c5b1c146dc2a3da953a99435395d311f6089ae",
+              address: EON_BASE_MAINNET.timelock,
               role: "48h delay",
             },
           ].map((wallet) => (

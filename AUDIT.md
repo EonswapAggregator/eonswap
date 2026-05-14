@@ -364,7 +364,7 @@ Scope: ESTF price chip redesign, StatusPage accessibility, comprehensive E2E tes
 
 Redesigned navbar ESTF price display with:
 - Gradient background (`from-uni-pink/10 via-purple-500/10 to-blue-500/10`)
-- Real ESTF token logo from `/tokens/0x7bd09674b3c721e35973993d5b6a79cda7da9c7f.svg`
+- Real ESTF token logo from `/tokens/0x295685df8e07a6d529a849ae7688c524494fd010.svg`
 - Price direction indicator (↑ green / ↓ red arrows when price changes)
 - Dynamic color coding based on price movement
 - Animated glow effect on hover
