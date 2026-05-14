@@ -33,6 +33,7 @@ export const EON_BASE_MAINNET = {
     feeTreasury: "0x35312a53E99a08df9b3747Ec786079C85675f8e4" as const,
     vestingVault: "0xDDfa6d58762E8841B6aCFDbbfde0Fb22CbeE88E3" as const,
     emissionGovernor: "0x281dB692B726b88f546Fe776e52B4216378b3644" as const,
+    multicall: "0x8B34F397a7E8170e93Ff93Cf65d1e1742409E3d2" as const,
   },
   timelock: "0x3e43C8894fa3e89d952E73bd72E46FFdaB95F986" as const,
 } as const;

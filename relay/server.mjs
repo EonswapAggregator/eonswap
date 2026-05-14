@@ -52,6 +52,10 @@ console.log(
 const PORT = Number(process.env.PORT || process.env.RELAY_PORT || 8787);
 /** Railway/Render/Fly expect HTTP on $PORT and often require binding all interfaces. */
 const LISTEN_HOST = process.env.HOST?.trim() || "0.0.0.0";
+const RELAY_STARTED_AT = Date.now();
+const BASE_MULTICALL_ADDRESS =
+  "0x8B34F397a7E8170e93Ff93Cf65d1e1742409E3d2";
+const BASE_MULTICALL_BLOCK_CREATED = 30_168_079;
 const CHECK_TIMEOUT_MS = 12_000;
 const POLL_MS = 300_000;
 const ALERT_WEBHOOK_URL = process.env.RELAY_ALERT_WEBHOOK_URL?.trim() || "";
@@ -462,6 +466,20 @@ function shortHex(value, start = 8, end = 6) {
   return v.length > start + end + 3
     ? `${v.slice(0, start)}...${v.slice(-end)}`
     : v;
+}
+
+function buildHealthPayload() {
+  return {
+    ok: true,
+    service: "eonswap-monitor-relay",
+    uptime: `${Math.max(0, Math.floor((Date.now() - RELAY_STARTED_AT) / 1000))}s`,
+    startedAt: RELAY_STARTED_AT,
+    multicall: {
+      chainId: 8453,
+      address: BASE_MULTICALL_ADDRESS,
+      blockCreated: BASE_MULTICALL_BLOCK_CREATED,
+    },
+  };
 }
 
 function parsePriceSnapshot(summary) {
@@ -1844,10 +1862,13 @@ createServer(async (req, res) => {
     }
   }
   if (u.pathname === "/healthz") {
-    return json(req, res, 200, { ok: true, service: "eonswap-monitor-relay" });
+    return json(req, res, 200, buildHealthPayload());
   }
   if (u.pathname === "/monitor/status") {
-    return json(req, res, 200, status);
+    return json(req, res, 200, {
+      ...status,
+      ...buildHealthPayload(),
+    });
   }
   if (u.pathname === "/monitor/fees") {
     const out = await buildFeeDashboard();

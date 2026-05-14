@@ -1,11 +1,19 @@
 import { base } from 'viem/chains'
 import { baseRpcUrls } from './rpcUrls'
+import { EON_BASE_MAINNET } from './eonBaseMainnet'
 
 /** Networks enabled in the app: Base mainnet only */
 const baseChain = {
   ...base,
   name: 'Base',
   shortName: 'Base',
+  contracts: {
+    ...(base.contracts ?? {}),
+    multicall3: {
+      address: EON_BASE_MAINNET.ops.multicall,
+      blockCreated: 30_168_079,
+    },
+  },
   rpcUrls: {
     ...base.rpcUrls,
     default: { http: baseRpcUrls() },

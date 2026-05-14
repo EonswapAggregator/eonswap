@@ -2,6 +2,7 @@ import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { http, fallback } from "wagmi";
 import { base } from "viem/chains";
 import { baseRpcUrls } from "./lib/rpcUrls";
+import { EON_BASE_MAINNET } from "./lib/eonBaseMainnet";
 
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
 
@@ -49,6 +50,13 @@ const baseChain = {
   ...base,
   name: "Base",
   shortName: "Base",
+  contracts: {
+    ...(base.contracts ?? {}),
+    multicall3: {
+      address: EON_BASE_MAINNET.ops.multicall,
+      blockCreated: 30_168_079,
+    },
+  },
   rpcUrls: {
     ...base.rpcUrls,
     default: { http: rpcUrls },

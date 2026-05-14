@@ -1,9 +1,7 @@
-import { createPublicClient, formatUnits, http, type Address } from 'viem'
-
-import { base } from 'viem/chains'
+import { formatUnits, type Address } from 'viem'
 
 import { fetchSimplePricesUsd } from './coingecko'
-import { getEonChain } from './chains'
+import { createEonPublicClient } from './eonPublicClient'
 import { EON_BASE_MAINNET } from './eonBaseMainnet'
 
 const ESTF_USD_CACHE_TTL_MS = 45_000
@@ -41,15 +39,13 @@ const PAIR_ABI = [
   },
 ] as const
 
-const chain = getEonChain(base.id) ?? base
-const rpcUrl = chain.rpcUrls.default.http[0] ?? null
-const client = rpcUrl
-  ? createPublicClient({
-      chain,
-      // Keep retries minimal to avoid request storms on public RPC limits.
-      transport: http(rpcUrl, { retryCount: 1, timeout: 8_000 }),
-    })
-  : null
+const client = (() => {
+  try {
+    return createEonPublicClient(EON_BASE_MAINNET.chainId)
+  } catch {
+    return null
+  }
+})()
 
 const pair = EON_BASE_MAINNET.amm.pairEstfWeth as Address
 const estfLc = EON_BASE_MAINNET.token.address.toLowerCase()

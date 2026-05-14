@@ -1,9 +1,9 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Activity, AlertTriangle, CheckCircle2, ChevronRight, Clock, Copy, ExternalLink, Fuel, Globe, Loader2, Radio, RefreshCw, Search, Server, Shield, TrendingUp, Wifi, Zap } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createPublicClient, http } from 'viem'
 import { eonChains } from '../lib/chains'
 import { fetchSimplePricesUsd } from '../lib/coingecko'
+import { createEonPublicClient, getEonMulticallSnapshot } from '../lib/eonPublicClient'
 import { toUserFacingErrorMessage } from '../lib/errors'
 import { truncateAddress } from '../lib/format'
 import { formatRelayUrlForDisplay, getMonitorRelayBaseUrl } from '../lib/monitorRelayUrl'
@@ -11,7 +11,14 @@ import { fetchEvmTxStatus, type EvmTxStatus } from '../lib/txStatus'
 
 type HealthStatus = 'checking' | 'ok' | 'degraded'
 type ApiHealth = { id: 'eonswap' | 'coingecko' | 'evm' | 'relay'; label: string; status: HealthStatus; detail: string; latency?: number }
-type RelayStats = { uptime?: string; lastCheck?: number; txCount?: number }
+type RelayStats = {
+  uptime?: string
+  lastCheck?: number
+  txCount?: number
+  multicallAddress?: string
+  multicallBlockCreated?: number | null
+  service?: string
+}
 type NetworkInfo = { gasPrice?: string; blockTime?: number; tps?: number }
 
 const fadeUp = {
@@ -73,6 +80,7 @@ export function StatusPage() {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [relayStats, setRelayStats] = useState<RelayStats>({})
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo>({})
+  const [activeMulticall, setActiveMulticall] = useState(() => getEonMulticallSnapshot(8453))
   const [uptimeHistory] = useState<Array<{ time: string; status: 'ok' | 'degraded' }>>([
     { time: '00:00', status: 'ok' }, { time: '04:00', status: 'ok' }, { time: '08:00', status: 'ok' },
     { time: '12:00', status: 'ok' }, { time: '16:00', status: 'ok' }, { time: '20:00', status: 'ok' },
@@ -136,8 +144,7 @@ export function StatusPage() {
     const rpcStart = performance.now()
     try {
       const chain = eonChains.find((c) => c.id === chainId) ?? eonChains[0]
-      const rpc = chain?.rpcUrls.default.http[0]
-      const client = createPublicClient({ chain, transport: http(rpc) })
+      const client = createEonPublicClient(chain.id)
       const [block, gasPrice] = await Promise.all([
         client.getBlockNumber(),
         client.getGasPrice().catch(() => 0n),
@@ -145,6 +152,7 @@ export function StatusPage() {
       const latency = Math.round(performance.now() - rpcStart)
       const gasPriceGwei = gasPrice > 0n ? (Number(gasPrice) / 1e9).toFixed(2) : 'N/A'
       setNetworkInfo({ gasPrice: gasPriceGwei, blockTime: 2, tps: Math.floor(Math.random() * 50 + 80) })
+      setActiveMulticall(getEonMulticallSnapshot(chain.id))
       checks.push({ id: 'evm', label: 'EVM RPC', status: block > 0n ? 'ok' : 'degraded', detail: block > 0n ? 'Block #' + block.toLocaleString() : 'No block', latency })
     } catch (e) { checks.push({ id: 'evm', label: 'EVM RPC', status: 'degraded', detail: toUserFacingErrorMessage(e, 'RPC failed') }) }
 
@@ -162,8 +170,18 @@ export function StatusPage() {
         const latency = Math.round(performance.now() - relayStart)
         if (res.ok) {
           const data = await res.json().catch(() => ({}))
-          setRelayStats({ uptime: data.uptime, lastCheck: Date.now(), txCount: data.txCount })
-          checks.push({ id: 'relay', label: 'Monitor Relay', status: 'ok', detail: 'Operational', latency })
+          setRelayStats({
+            uptime: data.uptime,
+            lastCheck: Date.now(),
+            txCount: data.txCount,
+            multicallAddress: data.multicall?.address,
+            multicallBlockCreated: data.multicall?.blockCreated ?? null,
+            service: data.service,
+          })
+          const relayDetail = data.multicall?.address
+            ? `Operational · ${truncateAddress(data.multicall.address, 8)}`
+            : 'Operational'
+          checks.push({ id: 'relay', label: 'Monitor Relay', status: 'ok', detail: relayDetail, latency })
         } else { checks.push({ id: 'relay', label: 'Monitor Relay', status: 'degraded', detail: 'HTTP ' + res.status, latency }) }
       }
     } catch (e) { checks.push({ id: 'relay', label: 'Monitor Relay', status: 'degraded', detail: toUserFacingErrorMessage(e, 'Connection failed') }) }
@@ -271,6 +289,62 @@ export function StatusPage() {
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">Service Health</h2>
             <span className="inline-flex items-center gap-1.5 text-xs text-neutral-500"><Clock className="h-3 w-3" />Auto-refresh: 30s</span>
+          </div>
+          <div className="mb-6 grid gap-4 lg:grid-cols-2">
+            <div className="overflow-hidden rounded-2xl border border-uni-border bg-uni-surface">
+              <div className="border-b border-uni-border bg-gradient-to-r from-uni-surface-2 to-uni-surface px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-uni-pink/[0.15] ring-1 ring-uni-pink/30">
+                    <Server className="h-5 w-5 text-uni-pink" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Frontend Multicall</h3>
+                    <p className="text-xs text-neutral-500">Base chain client runtime configuration</p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid gap-px bg-uni-border sm:grid-cols-2">
+                <div className="bg-uni-surface p-5">
+                  <div className="flex items-center gap-2 text-neutral-500"><Shield className="h-4 w-4" /><p className="text-[10px] font-semibold uppercase tracking-wider">Address</p></div>
+                  <p data-testid="frontend-multicall-address" className="mt-3 break-all font-mono text-sm text-white">
+                    {activeMulticall?.address ?? 'Not configured'}
+                  </p>
+                </div>
+                <div className="bg-uni-surface p-5">
+                  <div className="flex items-center gap-2 text-neutral-500"><Clock className="h-4 w-4" /><p className="text-[10px] font-semibold uppercase tracking-wider">Block Created</p></div>
+                  <p className="mt-3 text-sm font-medium text-white">
+                    {activeMulticall?.blockCreated?.toLocaleString() ?? 'Unknown'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-uni-border bg-uni-surface">
+              <div className="border-b border-uni-border bg-gradient-to-r from-uni-surface-2 to-uni-surface px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 ring-1 ring-cyan-500/20">
+                    <Wifi className="h-5 w-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Relay Multicall</h3>
+                    <p className="text-xs text-neutral-500">Health payload returned by monitor relay</p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid gap-px bg-uni-border sm:grid-cols-2">
+                <div className="bg-uni-surface p-5">
+                  <div className="flex items-center gap-2 text-neutral-500"><Globe className="h-4 w-4" /><p className="text-[10px] font-semibold uppercase tracking-wider">Address</p></div>
+                  <p data-testid="relay-multicall-address" className="mt-3 break-all font-mono text-sm text-white">
+                    {relayStats.multicallAddress ?? 'Awaiting relay response'}
+                  </p>
+                </div>
+                <div className="bg-uni-surface p-5">
+                  <div className="flex items-center gap-2 text-neutral-500"><Activity className="h-4 w-4" /><p className="text-[10px] font-semibold uppercase tracking-wider">Service</p></div>
+                  <p className="mt-3 text-sm font-medium text-white">
+                    {relayStats.service ?? 'Awaiting relay response'}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {apiHealth.map((item, idx) => (

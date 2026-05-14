@@ -1,8 +1,9 @@
-import { createPublicClient, encodeFunctionData, getAddress, http, formatUnits, type Address as ViemAddress } from 'viem'
+import { encodeFunctionData, getAddress, formatUnits, type Address as ViemAddress } from 'viem'
 
 import { getEonChain } from '../../chains'
 import { tokensForChain, isNativeToken } from '../../tokens'
 import { coingeckoIdForToken, fetchSimplePricesUsd } from '../../coingecko'
+import { createEonPublicClient } from '../../eonPublicClient'
 import { chainWrappedNative, pickRouter, EON_AMM_FACTORY } from '../config'
 import { routePath } from '../pathing'
 import type { EonAmmBuildParams, EonAmmBuildResult, EonAmmQuote, EonAmmQuoteParams } from '../types'
@@ -272,8 +273,6 @@ function validateAmountOut(amountIn: bigint, amountOut: bigint, _decimalsIn: num
 export async function fetchEonAmmQuoteFromRouter(params: EonAmmQuoteParams): Promise<EonAmmQuote> {
   const chain = getEonChain(params.chainId)
   if (!chain) throw new Error(`Unsupported chain for Eon AMM: ${params.chainId}`)
-  const rpcUrl = chain.rpcUrls.default.http[0]
-  if (!rpcUrl) throw new Error('No RPC URL configured for this chain.')
 
   const wrapMode = detectNativeWrapMode(params.tokenIn, params.tokenOut, params.chainId)
   if (wrapMode) {
@@ -304,7 +303,7 @@ export async function fetchEonAmmQuoteFromRouter(params: EonAmmQuoteParams): Pro
 
   const routerAddress = pickRouter(params.chainId)
   const path = routePath(params.tokenIn, params.tokenOut, params.chainId)
-  const client = createPublicClient({ chain, transport: http(rpcUrl) })
+  const client = createEonPublicClient(params.chainId)
   let amounts: readonly bigint[]
   try {
     amounts = await client.readContract({
@@ -383,8 +382,6 @@ export async function fetchEonAmmQuoteFromRouter(params: EonAmmQuoteParams): Pro
 export async function buildEonAmmSwapFromRouter(params: EonAmmBuildParams): Promise<EonAmmBuildResult> {
   const chain = getEonChain(params.chainId)
   if (!chain) throw new Error(`Unsupported chain for Eon AMM: ${params.chainId}`)
-  const rpcUrl = chain.rpcUrls.default.http[0]
-  if (!rpcUrl) throw new Error('No RPC URL configured for this chain.')
   const routerAddress = pickRouter(params.chainId, params.quote.routerAddress)
   const amountIn = BigInt(params.quote.amountIn || '0')
   const quotedOut = BigInt(params.quote.amountOut || '0')
@@ -404,7 +401,7 @@ export async function buildEonAmmSwapFromRouter(params: EonAmmBuildParams): Prom
             args: [amountIn],
           })
     const transactionValue = mode === 'wrap-native' ? amountIn.toString() : '0'
-    const client = createPublicClient({ chain, transport: http(rpcUrl) })
+    const client = createEonPublicClient(params.chainId)
     const gasEstimate = await client.estimateGas({
       account: getAddress(params.sender),
       to: weth,
@@ -444,7 +441,7 @@ export async function buildEonAmmSwapFromRouter(params: EonAmmBuildParams): Prom
         })
 
   const transactionValue = sellNative ? amountIn.toString() : '0'
-  const client = createPublicClient({ chain, transport: http(rpcUrl) })
+  const client = createEonPublicClient(params.chainId)
   const gasEstimate = await client.estimateGas({
     account: getAddress(params.sender),
     to: routerAddress,

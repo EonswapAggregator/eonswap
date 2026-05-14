@@ -23,6 +23,8 @@ test.describe('StatusPage', () => {
 
     // Service health section
     await expect(page.getByText('Service Health')).toBeVisible()
+    await expect(page.getByText('Frontend Multicall')).toBeVisible()
+    await expect(page.getByText('Relay Multicall')).toBeVisible()
     await expect(page.getByText('EonSwap API')).toBeVisible()
     await expect(page.getByText('CoinGecko')).toBeVisible()
     await expect(page.getByText('EVM RPC')).toBeVisible()
@@ -78,6 +80,12 @@ test.describe('StatusPage', () => {
     // Should show status indicators
     const statusDots = page.locator('[role="status"]')
     expect(await statusDots.count()).toBeGreaterThan(0)
+  })
+
+  test('shows configured frontend multicall address', async ({ page }) => {
+    await expect(page.getByTestId('frontend-multicall-address')).toContainText(
+      '0x8B34F397a7E8170e93Ff93Cf65d1e1742409E3d2',
+    )
   })
 
   test('copy button works for transaction hash', async ({ page }) => {

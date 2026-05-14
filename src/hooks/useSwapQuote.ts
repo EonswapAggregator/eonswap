@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { parseUnits } from 'viem'
-import { createPublicClient, formatUnits, http } from 'viem'
+import { formatUnits } from 'viem'
 import { useAccount, useChainId } from 'wagmi'
-import { getEonChain, isEonAmmSwapChain } from '../lib/chains'
+import { isEonAmmSwapChain } from '../lib/chains'
 import { fetchSimplePricesUsd } from '../lib/coingecko'
+import { createEonPublicClient } from '../lib/eonPublicClient'
 import { eonAmmRouteLabel, fetchEonAmmQuote } from '../lib/eonAmm'
 import { formatTokenAmountUi } from '../lib/format'
 import { useEonSwapStore } from '../store/useEonSwapStore'
@@ -22,10 +23,7 @@ const emptyQuoteMeta = {
 
 async function estimateGasUsdFallback(chainId: number): Promise<string> {
   try {
-    const chain = getEonChain(chainId)
-    const rpcUrl = chain?.rpcUrls.default.http[0]
-    if (!rpcUrl) return ''
-    const client = createPublicClient({ chain, transport: http(rpcUrl) })
+    const client = createEonPublicClient(chainId)
     const gasPrice = await client.getGasPrice()
     if (gasPrice <= 0n) return ''
     const nativeSpent = Number(formatUnits(gasPrice * SWAP_GAS_LIMIT_ESTIMATE, 18))

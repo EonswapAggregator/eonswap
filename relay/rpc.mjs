@@ -1,8 +1,19 @@
 import { createPublicClient, fallback, http, webSocket } from "viem";
 import { base, baseSepolia, sepolia } from "viem/chains";
 
+const baseWithEonMulticall = {
+  ...base,
+  contracts: {
+    ...(base.contracts ?? {}),
+    multicall3: {
+      address: "0x8B34F397a7E8170e93Ff93Cf65d1e1742409E3d2",
+      blockCreated: 30168079,
+    },
+  },
+};
+
 const CHAIN_CONFIGS = {
-  8453: base,
+  8453: baseWithEonMulticall,
   84532: baseSepolia,
   11155111: sepolia,
 };
