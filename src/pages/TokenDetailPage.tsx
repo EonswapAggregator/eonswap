@@ -13,7 +13,7 @@ import { base } from "viem/chains";
 import { useAccount, useBalance, useReadContracts } from "wagmi";
 
 import { TokenLogo } from "../components/TokenLogo";
-import { tokenByAddress, type Token } from "../lib/tokens";
+import { isNativeToken, tokenByAddress, type Token } from "../lib/tokens";
 
 const ERC20_METADATA_ABI = [
   {
@@ -106,10 +106,13 @@ export function TokenDetailPage() {
   const knownToken = tokenAddress
     ? tokenByAddress(base.id, tokenAddress)
     : undefined;
+  const isNative = tokenAddress ? isNativeToken(tokenAddress) : false;
 
   const { data: metadata, isLoading } = useReadContracts({
     contracts: tokenAddress
-      ? ([
+      ? isNative
+        ? []
+        : ([
           {
             address: tokenAddress,
             abi: ERC20_METADATA_ABI,
@@ -137,7 +140,7 @@ export function TokenDetailPage() {
         ] as const)
       : [],
     query: {
-      enabled: Boolean(tokenAddress),
+      enabled: Boolean(tokenAddress && !isNative),
       staleTime: 60_000,
     },
     allowFailure: true,
@@ -163,7 +166,7 @@ export function TokenDetailPage() {
 
   const { data: balance } = useBalance({
     address: walletAddress,
-    token: tokenAddress ?? undefined,
+    token: tokenAddress && !isNative ? tokenAddress : undefined,
     chainId: base.id,
     query: {
       enabled: Boolean(walletAddress && tokenAddress),
@@ -249,7 +252,7 @@ export function TokenDetailPage() {
                     {copied ? "Copied" : "Copy"}
                   </button>
                   <a
-                    href={`https://basescan.org/token/${token.address}`}
+                    href={isNative ? "https://basescan.org" : `https://basescan.org/token/${token.address}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 rounded-xl bg-uni-pink px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-uni-pink-light"

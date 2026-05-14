@@ -78,6 +78,9 @@ const features = [
   },
 ] as const;
 
+const REFERRAL_LOOKUP_CACHE_PREFIX = "eonswap.referral.lookup.v1:";
+const REFERRAL_REGISTERED_REFERRER_PREFIX = "eonswap.referral.registered.v1:";
+
 export function ReferralPage() {
   const prefersReducedMotion = useReducedMotion();
   const { address, isConnected, chain } = useAccount();
@@ -87,6 +90,7 @@ export function ReferralPage() {
   const claimToastId = useRef<string | number | undefined>(undefined);
   const registerToastId = useRef<string | number | undefined>(undefined);
   const claimActivityId = useRef<string | undefined>(undefined);
+  const skipNextContractRefreshRef = useRef(false);
 
   const addActivity = useEonSwapStore((s) => s.addActivity);
   const patchActivity = useEonSwapStore((s) => s.patchActivity);
@@ -129,14 +133,14 @@ export function ReferralPage() {
       hash: claimHash,
     });
 
-  const refreshReferralStats = useCallback(async () => {
+  const refreshReferralStats = useCallback(async (nextContractStats = contractStats) => {
     if (!address) {
       setStats(null);
       return;
     }
 
     const apiStats = await loadReferralStats(address);
-    if (!contractStats) {
+    if (!nextContractStats) {
       setStats(apiStats);
       return;
     }
@@ -147,7 +151,7 @@ export function ReferralPage() {
       pendingRewards,
       _claimedRewards,
       tier,
-    ] = contractStats;
+    ] = nextContractStats;
     const contractReferralCount = Number(totalReferrals);
     const contractEarnings = Number(formatUnits(totalEarnings, 18));
 
@@ -166,24 +170,33 @@ export function ReferralPage() {
 
   // Load referral stats from subgraph/relay and merge contract values for claimable rewards.
   useEffect(() => {
-    void refreshReferralStats();
-  }, [refreshReferralStats]);
+    if (skipNextContractRefreshRef.current) {
+      skipNextContractRefreshRef.current = false;
+      return;
+    }
+    void refreshReferralStats(contractStats);
+  }, [address, contractStats, refreshReferralStats]);
 
   // Keep referral data fresh without forcing users to reload the page.
   useEffect(() => {
     if (!address) return;
     const timer = window.setInterval(() => {
-      void refetchStats();
-      void refreshReferralStats();
+      if (document.visibilityState === "hidden") return;
+      skipNextContractRefreshRef.current = true;
+      void refetchStats().then((result) => {
+        void refreshReferralStats(result.data ?? contractStats);
+      });
     }, 15_000);
     return () => window.clearInterval(timer);
-  }, [address, refetchStats, refreshReferralStats]);
+  }, [address, contractStats, refetchStats, refreshReferralStats]);
 
   // Refetch stats after successful claim
   useEffect(() => {
     if (isClaimSuccess) {
-      void refetchStats();
-      void refreshReferralStats();
+      skipNextContractRefreshRef.current = true;
+      void refetchStats().then((result) => {
+        void refreshReferralStats(result.data ?? contractStats);
+      });
       if (claimActivityId.current) {
         patchActivity(claimActivityId.current, {
           status: "success",
@@ -201,6 +214,7 @@ export function ReferralPage() {
     isClaimSuccess,
     refetchStats,
     refreshReferralStats,
+    contractStats,
     patchActivity,
     claimHash,
   ]);
@@ -239,8 +253,25 @@ export function ReferralPage() {
     const refCode = parseReferralFromUrl() || getReferredBy();
     if (refCode && address) {
       storeReferredBy(refCode);
+      const lookupCacheKey = `${REFERRAL_LOOKUP_CACHE_PREFIX}${refCode.toLowerCase()}`;
+      const cachedReferrer =
+        typeof window !== "undefined"
+          ? window.sessionStorage.getItem(lookupCacheKey)
+          : null;
+      const lookupPromise = cachedReferrer
+        ? Promise.resolve(cachedReferrer)
+        : lookupReferrerAddress(refCode).then((referrerAddr) => {
+            if (referrerAddr && typeof window !== "undefined") {
+              try {
+                window.sessionStorage.setItem(lookupCacheKey, referrerAddr);
+              } catch {
+                // ignore storage errors
+              }
+            }
+            return referrerAddr;
+          });
       // Lookup referrer address from code
-      void lookupReferrerAddress(refCode).then((referrerAddr) => {
+      void lookupPromise.then((referrerAddr) => {
         if (
           referrerAddr &&
           referrerAddr.toLowerCase() !== address.toLowerCase()
@@ -292,7 +323,19 @@ export function ReferralPage() {
   // Register self as referrer in relay (for code → address mapping)
   useEffect(() => {
     if (address) {
+      const registerCacheKey = `${REFERRAL_REGISTERED_REFERRER_PREFIX}${address.toLowerCase()}`;
+      if (typeof window !== "undefined") {
+        const cached = window.localStorage.getItem(registerCacheKey);
+        if (cached === "1") return;
+      }
       void registerReferrerAddress(address);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(registerCacheKey, "1");
+        } catch {
+          // ignore storage errors
+        }
+      }
     }
   }, [address]);
 

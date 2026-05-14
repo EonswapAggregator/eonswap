@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Activity, AlertTriangle, CheckCircle2, ChevronRight, Clock, Copy, ExternalLink, Fuel, Globe, Loader2, Radio, RefreshCw, Search, Server, Shield, TrendingUp, Wifi, Zap } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { eonChains } from '../lib/chains'
 import { fetchSimplePricesUsd } from '../lib/coingecko'
 import { createEonPublicClient, getEonMulticallSnapshot } from '../lib/eonPublicClient'
@@ -69,6 +69,7 @@ function StatusDot({ status, pulse }: { status: HealthStatus; pulse?: boolean })
 }
 
 export function StatusPage() {
+  const healthRequestInFlightRef = useRef(false)
   const prefersReducedMotion = useReducedMotion()
   const [chainId, setChainId] = useState(8453)
   const [txHash, setTxHash] = useState('')
@@ -118,6 +119,8 @@ export function StatusPage() {
   }, [txHash])
 
   const refreshHealth = useCallback(async () => {
+    if (healthRequestInFlightRef.current) return
+    healthRequestInFlightRef.current = true
     setRefreshing(true)
     const checks: ApiHealth[] = []
     const eonStart = performance.now()
@@ -162,7 +165,10 @@ export function StatusPage() {
       if (!base) { checks.push({ id: 'relay', label: 'Monitor Relay', status: 'degraded', detail: 'Not configured' }) }
       else {
         const normalizedBase = base.replace(/\/$/u, '')
-        let res = await fetch(normalizedBase + '/healthz', { signal: AbortSignal.timeout(5000) })
+        let res = await fetch(normalizedBase + '/monitor/status', { signal: AbortSignal.timeout(5000) })
+        if (res.status === 404) {
+          res = await fetch(normalizedBase + '/healthz', { signal: AbortSignal.timeout(5000) })
+        }
         if (res.status === 404) {
           // Backward compatibility for older relay deployments.
           res = await fetch(normalizedBase + '/health', { signal: AbortSignal.timeout(5000) })
@@ -186,10 +192,26 @@ export function StatusPage() {
       }
     } catch (e) { checks.push({ id: 'relay', label: 'Monitor Relay', status: 'degraded', detail: toUserFacingErrorMessage(e, 'Connection failed') }) }
 
-    setApiHealth(checks); setLastRefresh(new Date()); setRefreshing(false)
+    setApiHealth(checks); setLastRefresh(new Date()); setRefreshing(false); healthRequestInFlightRef.current = false
   }, [chainId])
 
-  useEffect(() => { void refreshHealth(); const interval = setInterval(() => void refreshHealth(), 30000); return () => clearInterval(interval) }, [refreshHealth])
+  useEffect(() => {
+    void refreshHealth()
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'hidden') return
+      void refreshHealth()
+    }, 30000)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshHealth()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [refreshHealth])
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const hash = params.get('tx') || params.get('hash')

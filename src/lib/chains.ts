@@ -25,7 +25,6 @@ export const eonChains = [baseChain] as const
 
 export const eonBridgeChains = eonChains
 export const EON_LLAMA_CHAIN_IDS = new Set<number>([base.id])
-export const eonEarnChains = eonChains
 
 export type EonChain = (typeof eonChains)[number]
 

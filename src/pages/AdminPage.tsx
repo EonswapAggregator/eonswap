@@ -590,8 +590,20 @@ function AirdropTab() {
 
   useEffect(() => {
     fetchClaimStats();
-    const interval = setInterval(fetchClaimStats, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      void fetchClaimStats();
+    }, 30000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchClaimStats();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [fetchClaimStats]);
 
   // Realtime event subscription for claims

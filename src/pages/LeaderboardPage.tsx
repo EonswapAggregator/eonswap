@@ -140,6 +140,8 @@ function LeaderboardColGroup() {
 }
 
 const LEADERBOARD_PAGE_SIZE = 10
+const LEADERBOARD_ETH_PRICE_CACHE_KEY = 'eonswap.leaderboard.eth-usd.v1'
+const LEADERBOARD_ETH_PRICE_CACHE_MS = 5 * 60 * 1000
 
 function LeaderboardLoadingCards() {
   return (
@@ -255,8 +257,13 @@ export function LeaderboardPage() {
     }
 
     if (publicClient) {
-      const pairAddresses = await fetchEonAmmPairAddresses(publicClient)
-      setWatchedPairAddresses(pairAddresses)
+      const pairAddresses =
+        watchedPairAddresses.length > 0
+          ? watchedPairAddresses
+          : await fetchEonAmmPairAddresses(publicClient)
+      if (watchedPairAddresses.length === 0) {
+        setWatchedPairAddresses(pairAddresses)
+      }
       const onChain = await fetchBlockchainSwapLeaderboard(publicClient, 50)
       if (onChain.ok && onChain.entries.length > 0) {
         setEntries(onChain.entries)
@@ -279,19 +286,51 @@ export function LeaderboardPage() {
     setLeaderboardPage(1)
     setError(relayError)
     setLoading(false)
-  }, [publicClient, relayConfigured])
+  }, [publicClient, relayConfigured, watchedPairAddresses])
 
   useEffect(() => {
     void load()
   }, [load])
 
   useEffect(() => {
+    if (entries.length === 0) return
+
     let alive = true
+    const cachedRaw =
+      typeof window !== 'undefined'
+        ? window.sessionStorage.getItem(LEADERBOARD_ETH_PRICE_CACHE_KEY)
+        : null
+    if (cachedRaw) {
+      try {
+        const cached = JSON.parse(cachedRaw) as { fetchedAt?: number; price?: number }
+        if (
+          typeof cached.fetchedAt === 'number' &&
+          typeof cached.price === 'number' &&
+          Date.now() - cached.fetchedAt < LEADERBOARD_ETH_PRICE_CACHE_MS
+        ) {
+          setEthUsd(cached.price)
+          return
+        }
+      } catch {
+        // ignore invalid cache
+      }
+    }
+
     fetchSimplePricesUsd(['ethereum'])
       .then((prices) => {
         const price = Number(prices.ethereum ?? 0)
         if (alive && Number.isFinite(price) && price > 0) {
           setEthUsd(price)
+          if (typeof window !== 'undefined') {
+            try {
+              window.sessionStorage.setItem(
+                LEADERBOARD_ETH_PRICE_CACHE_KEY,
+                JSON.stringify({ fetchedAt: Date.now(), price }),
+              )
+            } catch {
+              // ignore storage errors
+            }
+          }
         }
       })
       .catch(() => {
@@ -300,7 +339,7 @@ export function LeaderboardPage() {
     return () => {
       alive = false
     }
-  }, [])
+  }, [entries.length])
 
   useEonAmmSwapRealtime({
     chainId: EON_BASE_MAINNET.chainId,

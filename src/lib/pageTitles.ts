@@ -2,7 +2,7 @@
 const TITLES: Record<string, string> = {
   '/': 'EonSwap - Base execution desk.',
   '/swap': 'EonSwap - Swap',
-  '/tokens': 'EonSwap - Token Details',
+  '/token-detail': 'EonSwap - Token Details',
   '/liquidity': 'EonSwap - Liquidity',
   '/pools': 'EonSwap - Pool Details',
   '/pool': 'EonSwap - Liquidity',
@@ -35,7 +35,7 @@ const DEFAULT_DESCRIPTION =
 const DESCRIPTIONS: Record<string, string> = {
   '/': DEFAULT_DESCRIPTION,
   '/swap': 'Swap crypto assets across supported chains with smart route discovery and wallet-first execution.',
-  '/tokens': 'View token metadata, contract details, supply, and wallet balance on Base.',
+  '/token-detail': 'View token metadata, contract details, supply, and wallet balance on Base.',
   '/liquidity': 'Explore liquidity and yield opportunities across supported ecosystems.',
   '/pools': 'View Eon AMM pool reserves, LP supply, token pair details, and wallet position on Base.',
   '/pool': 'Explore liquidity and yield opportunities across supported ecosystems.',
@@ -64,14 +64,14 @@ const DESCRIPTIONS: Record<string, string> = {
 
 export function titleForPathname(pathname: string): string {
   const key = pathname.replace(/\/+$/, '') || '/'
-  if (key.startsWith('/tokens/')) return TITLES['/tokens'] ?? NOT_FOUND_TITLE
+  if (key.startsWith('/tokens/')) return TITLES['/token-detail'] ?? NOT_FOUND_TITLE
   if (key.startsWith('/pools/')) return TITLES['/pools'] ?? NOT_FOUND_TITLE
   return TITLES[key] ?? NOT_FOUND_TITLE
 }
 
 export function descriptionForPathname(pathname: string): string {
   const key = pathname.replace(/\/+$/, '') || '/'
-  if (key.startsWith('/tokens/')) return DESCRIPTIONS['/tokens'] ?? DEFAULT_DESCRIPTION
+  if (key.startsWith('/tokens/')) return DESCRIPTIONS['/token-detail'] ?? DEFAULT_DESCRIPTION
   if (key.startsWith('/pools/')) return DESCRIPTIONS['/pools'] ?? DEFAULT_DESCRIPTION
   return DESCRIPTIONS[key] ?? DEFAULT_DESCRIPTION
 }
